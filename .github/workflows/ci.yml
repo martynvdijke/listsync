@@ -1,0 +1,108 @@
+name: Tests
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }}
+    # The 3.9 pin that kept this on ubuntu-24.04 is gone with the floor, so this
+    # follows ubuntu-latest again.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 is what the Dockerfile ships and the floor in pyproject.toml.
+        # 3.13 catches standard-library removals before a release does - it is
+        # how the imghdr breakage in the image proxy was found.
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: tests/requirements.txt
+
+      - name: Install test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tests/requirements.txt
+
+      - name: Show resolved versions
+        # tests/requirements.txt is unpinned, so recording what was actually
+        # installed makes a version-specific failure legible.
+        run: pip list
+
+      - name: Run test suites
+        run: python tests/run_all.py
+
+  # The check branch protection should require, rather than the matrix jobs
+  # themselves. Those are named after the Python version they run, so every
+  # version bump renames them and silently invalidates the required-check list:
+  # the old name can never report again, and a fully green pull request blocks
+  # forever on a check that no longer exists. That is exactly what the 3.9 ->
+  # 3.12 bump did. This name does not move when the matrix does.
+  tests-passed:
+    name: Tests
+    needs: test
+    # always(), so a failed, cancelled or skipped matrix still reports a result
+    # here. A required check that is skipped never reports at all, which blocks
+    # a pull request the same way a renamed one does.
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every matrix leg to have passed
+        # needs.test.result is the aggregate over the whole matrix: 'success'
+        # only when every leg succeeded.
+        run: |
+          echo "test matrix result: ${{ needs.test.result }}"
+          [ "${{ needs.test.result }}" = "success" ]
+
+  lint:
+    name: Ruff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # Version matches .pre-commit-config.yaml so local and CI agree.
+      - name: Install ruff
+        run: pip install ruff==0.6.7
+
+      # The tree carries thousands of pre-existing findings under the config in
+      # pyproject.toml, so this reports instead of gating - turning it on as a
+      # gate today would just fail every pull request. --output-format=github
+      # annotates the diff, which puts findings on the lines a reviewer is
+      # already looking at, without blocking the merge.
+      - name: Report findings
+        run: ruff check --output-format=github --exit-zero .
+
+      - name: Summarise
+        if: always()
+        run: |
+          total=$(ruff check --output-format=concise --exit-zero . | wc -l)
+          echo "### Ruff: $total findings" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Reported, not gated - the tree has pre-existing findings." >> "$GITHUB_STEP_SUMMARY"
+          echo "Findings on changed lines appear as annotations on the diff." >> "$GITHUB_STEP_SUMMARY"

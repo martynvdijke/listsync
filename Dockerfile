@@ -2,7 +2,7 @@
 # Includes: ListSync Core Service + FastAPI Backend + Nuxt 3 Frontend 
 
 # Use specific Python version
-ARG PYTHON_VERSION=3.9
+ARG PYTHON_VERSION=3.12
 ARG NODE_VERSION=20
 
 # Stage 1: Python Builder (ListSync + API)

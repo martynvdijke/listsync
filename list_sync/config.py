@@ -21,46 +21,165 @@ from .utils.logger import DATA_DIR
 # Define paths for config and database
 CONFIG_FILE = os.path.join(DATA_DIR, "config.enc")
 
+# Overseerr and Jellyseerr became Seerr (https://seerr.dev), so the settings
+# are named SEERR_* now. The OVERSEERR_* names still work: an existing install
+# keeps running after an upgrade without anyone editing a .env file.
+LEGACY_ENV_NAMES = {
+    "SEERR_URL": "OVERSEERR_URL",
+    "SEERR_API_KEY": "OVERSEERR_API_KEY",
+    "SEERR_USER_ID": "OVERSEERR_USER_ID",
+    "SEERR_4K": "OVERSEERR_4K",
+}
+
+# Which old names have already been mentioned, so a long-running process says
+# it once rather than on every read.
+_reported_legacy_names = set()
+
+
+def get_seerr_env(name: str, default: Optional[str] = None) -> Optional[str]:
+    """
+    Read a SEERR_* setting, accepting its old OVERSEERR_* name.
+
+    The current name wins if both are set, so a half-migrated environment
+    behaves predictably rather than depending on which is read first.
+
+    Args:
+        name (str): The current variable name, such as SEERR_URL
+        default (Optional[str]): Returned when neither name is set
+
+    Returns:
+        Optional[str]: The value, or default
+    """
+    import logging
+
+    # An empty value counts as unset. docker-compose passes ${SEERR_URL:-},
+    # which defines the variable as an empty string when the user has not set
+    # it, and treating that as a real value would shadow the old name and
+    # break the very installs this fallback exists for.
+    def _set(raw):
+        return raw is not None and raw.strip() != ""
+
+    value = os.getenv(name)
+    if _set(value):
+        return value
+
+    legacy_name = LEGACY_ENV_NAMES.get(name)
+    if legacy_name:
+        value = os.getenv(legacy_name)
+        if _set(value):
+            if legacy_name not in _reported_legacy_names:
+                _reported_legacy_names.add(legacy_name)
+                logging.warning(
+                    f"{legacy_name} is the old name for {name}. It still works, "
+                    f"but rename it when convenient - Overseerr is Seerr now."
+                )
+            return value
+
+    return default
+
+# Marks a config.enc written with a salt and a key derivation function. Files
+# without it predate that and are read with the old scheme below.
+_CONFIG_MAGIC = b"LSCFG1"
+_CONFIG_SALT_BYTES = 16
+_CONFIG_KDF_ROUNDS = 600_000  # OWASP's 2023 floor for PBKDF2-HMAC-SHA256
+
+
+def _legacy_key(password):
+    """
+    Reproduce the original key derivation, for reading existing files.
+
+    The password was padded to 32 bytes and used as the key directly: no salt,
+    no work factor, so a stolen config.enc could be brute-forced at the speed
+    the attacker's hardware could try passwords. New files use _derive_key
+    instead; this exists only so an install written by an older version still
+    opens.
+
+    Args:
+        password (str): The password the file was encrypted with
+
+    Returns:
+        bytes: A Fernet key
+    """
+    return base64.urlsafe_b64encode(password.encode().ljust(32)[:32])
+
+
+def _derive_key(password, salt):
+    """
+    Derive a Fernet key from a password and a salt.
+
+    Args:
+        password (str): The password to derive from
+        salt (bytes): Random salt, stored alongside the ciphertext
+
+    Returns:
+        bytes: A Fernet key
+    """
+    # Imported here rather than at module scope: the test suites stand in a stub
+    # for cryptography that provides Fernet and nothing else.
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=_CONFIG_KDF_ROUNDS,
+    )
+    return base64.urlsafe_b64encode(kdf.derive(password.encode()))
+
+
 def encrypt_config(data, password):
     """
     Encrypt configuration data with a password.
-    
+
     Args:
         data (dict): Configuration data
         password (str): Encryption password
-        
+
     Returns:
-        bytes: Encrypted data
+        bytes: Encrypted data, prefixed with the salt it was derived with
     """
-    key = base64.urlsafe_b64encode(password.encode().ljust(32)[:32])
-    fernet = Fernet(key)
-    return fernet.encrypt(json.dumps(data).encode())
+    salt = os.urandom(_CONFIG_SALT_BYTES)
+    fernet = Fernet(_derive_key(password, salt))
+    return _CONFIG_MAGIC + salt + fernet.encrypt(json.dumps(data).encode())
 
 def decrypt_config(encrypted_data, password):
     """
     Decrypt configuration data with a password.
-    
+
+    Reads both the current format and files written before key derivation was
+    added, so an existing config.enc keeps opening after an upgrade. Such a file
+    is rewritten in the current format the next time it is saved.
+
     Args:
         encrypted_data (bytes): Encrypted configuration data
         password (str): Decryption password
-        
+
     Returns:
         dict: Decrypted configuration data
     """
-    key = base64.urlsafe_b64encode(password.encode().ljust(32)[:32])
-    fernet = Fernet(key)
-    return json.loads(fernet.decrypt(encrypted_data).decode())
+    if encrypted_data.startswith(_CONFIG_MAGIC):
+        offset = len(_CONFIG_MAGIC)
+        salt = encrypted_data[offset:offset + _CONFIG_SALT_BYTES]
+        token = encrypted_data[offset + _CONFIG_SALT_BYTES:]
+        key = _derive_key(password, salt)
+    else:
+        token = encrypted_data
+        key = _legacy_key(password)
 
-def save_config(overseerr_url, api_key, requester_user_id):
+    fernet = Fernet(key)
+    return json.loads(fernet.decrypt(token).decode())
+
+def save_config(seerr_url, api_key, requester_user_id):
     """
     Save configuration to encrypted file.
     
     Args:
-        overseerr_url (str): Overseerr URL
+        seerr_url (str): Seerr URL
         api_key (str): API key
         requester_user_id (str): Requester user ID
     """
-    config = {"overseerr_url": overseerr_url, "api_key": api_key, "requester_user_id": requester_user_id}
+    config = {"overseerr_url": seerr_url, "api_key": api_key, "requester_user_id": requester_user_id}
     print(color_gradient("🔐  Enter a password to encrypt your API details: ", "#ff0000", "#aa0000"), end="")
     password = getpass.getpass("")
     encrypted_config = encrypt_config(config, password)
@@ -73,7 +192,7 @@ def load_config() -> Tuple[Optional[str], Optional[str], Optional[str]]:
     Load configuration from encrypted file.
     
     Returns:
-        Tuple[Optional[str], Optional[str], Optional[str]]: Overseerr URL, API key, and requester user ID
+        Tuple[Optional[str], Optional[str], Optional[str]]: Seerr URL, API key, and requester user ID
     """
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "rb") as f:
@@ -101,10 +220,10 @@ def load_config() -> Tuple[Optional[str], Optional[str], Optional[str]]:
                     return None, None, None
     return None, None, None
 
-def test_overseerr_api(overseerr_url, api_key):
-    """Test Overseerr API connection."""
+def test_overseerr_api(seerr_url, api_key):
+    """Test Seerr API connection."""
     headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
-    test_url = f"{overseerr_url}/api/v1/status"
+    test_url = f"{seerr_url}/api/v1/status"
     spinner = Halo(text=color_gradient("🔍  Testing API connection...", "#ffaa00", "#ff5500"), spinner="dots")
     spinner.start()
     try:
@@ -112,17 +231,17 @@ def test_overseerr_api(overseerr_url, api_key):
         response.raise_for_status()
         spinner.succeed(color_gradient("🎉  API connection successful!", "#00ff00", "#00aa00"))
         import logging
-        logging.info("Overseerr API connection successful!")
+        logging.info("Seerr API connection successful!")
     except Exception as e:
-        spinner.fail(color_gradient(f"❌  Overseerr API connection failed. Error: {str(e)}", "#ff0000", "#aa0000"))
+        spinner.fail(color_gradient(f"❌  Seerr API connection failed. Error: {str(e)}", "#ff0000", "#aa0000"))
         import logging
-        logging.error(f"Overseerr API connection failed. Error: {str(e)}")
+        logging.error(f"Seerr API connection failed. Error: {str(e)}")
         raise
 
-def set_requester_user(overseerr_url, api_key):
+def set_requester_user(seerr_url, api_key):
     """Set the requester user for API requests."""
     headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
-    users_url = f"{overseerr_url}/api/v1/user"
+    users_url = f"{seerr_url}/api/v1/user"
     try:
         requester_user_id = "1"
         response = requests.get(users_url, headers=headers)
@@ -142,7 +261,7 @@ def set_requester_user(overseerr_url, api_key):
         return requester_user_id
     except Exception as e:
         import logging
-        logging.error(f"Overseerr API connection failed. Error: {str(e)}")
+        logging.error(f"Seerr API connection failed. Error: {str(e)}")
         return 1
 
 def get_trakt_client_id() -> Optional[str]:
@@ -216,7 +335,7 @@ def load_env_config() -> Tuple[Optional[str], Optional[str], Optional[str], floa
     Load configuration from database or environment variables (database preferred).
     
     Returns:
-        Tuple: Overseerr URL, API key, user ID, sync interval (float), automated mode flag, 4K flag
+        Tuple: Seerr URL, API key, user ID, sync interval (float), automated mode flag, 4K flag
     """
     import logging
     
@@ -261,8 +380,8 @@ def load_env_config() -> Tuple[Optional[str], Optional[str], Optional[str], floa
                 logging.info("Configuration loaded from database")
                 return url, api_key, user_id, sync_interval, automated_mode, is_4k
             except Exception as e:
-                logging.error(f"Error testing Overseerr API with database config: {e}")
-                print(color_gradient(f"\n❌  Error testing Overseerr API: {e}", "#ff0000", "#aa0000"))
+                logging.error(f"Error testing Seerr API with database config: {e}")
+                print(color_gradient(f"\n❌  Error testing Seerr API: {e}", "#ff0000", "#aa0000"))
         
         return None, None, None, 0.0, False, False
         
@@ -274,12 +393,12 @@ def load_env_config() -> Tuple[Optional[str], Optional[str], Optional[str], floa
         if os.path.exists('.env'):
             load_dotenv()
             
-        url = os.getenv('OVERSEERR_URL')
-        api_key = os.getenv('OVERSEERR_API_KEY')
-        user_id = os.getenv('OVERSEERR_USER_ID', '1')
+        url = get_seerr_env('SEERR_URL')
+        api_key = get_seerr_env('SEERR_API_KEY')
+        user_id = get_seerr_env('SEERR_USER_ID', '1')
         sync_interval = os.getenv('SYNC_INTERVAL', '12')
         automated_mode = os.getenv('AUTOMATED_MODE', 'true').lower() == 'true'
-        is_4k = os.getenv('OVERSEERR_4K', 'false').lower() == 'true'
+        is_4k = get_seerr_env('SEERR_4K', 'false').lower() == 'true'
         discord_webhook_url = os.getenv('DISCORD_WEBHOOK_URL')
         
         # Log if Discord webhook is configured
@@ -294,24 +413,62 @@ def load_env_config() -> Tuple[Optional[str], Optional[str], Optional[str], floa
                 logging.info("Configuration loaded from environment variables")
                 return url, api_key, user_id, float(sync_interval), automated_mode, is_4k
             except Exception as e:
-                logging.error(f"Error testing Overseerr API with environment variables: {e}")
-                print(color_gradient(f"\n❌  Error testing Overseerr API: {e}", "#ff0000", "#aa0000"))
+                logging.error(f"Error testing Seerr API with environment variables: {e}")
+                print(color_gradient(f"\n❌  Error testing Seerr API: {e}", "#ff0000", "#aa0000"))
         
         return None, None, None, 0.0, False, False
+
+# Separator between a list ID and the Seerr user it should request as, in
+# the *_LISTS environment variables. Two colons, because a single colon already
+# means something in Trakt special lists ("trending:movies") and appears in URLs.
+LIST_USER_SEPARATOR = "::"
+
+
+def parse_list_entry(raw_entry: str) -> Tuple[str, Optional[str]]:
+    """
+    Split one entry of a *_LISTS environment variable into list ID and user.
+
+    Entries are either a bare list ID ("ls123456789") or a list ID with the
+    Seerr user that should request its items ("ls123456789::7").
+
+    Args:
+        raw_entry (str): One comma-separated entry from a *_LISTS variable
+
+    Returns:
+        Tuple[str, Optional[str]]: (list ID, user ID or None if unspecified)
+    """
+    entry = (raw_entry or "").strip()
+    if not entry:
+        return "", None
+
+    if LIST_USER_SEPARATOR not in entry:
+        return entry, None
+
+    list_part, _, user_part = entry.rpartition(LIST_USER_SEPARATOR)
+    list_part = list_part.strip()
+    user_part = user_part.strip()
+
+    # Only treat the tail as a user if it actually looks like a user ID,
+    # so a stray "::" in a URL doesn't silently truncate the list.
+    if list_part and user_part.isdigit():
+        return list_part, user_part
+
+    return entry, None
+
 
 def load_env_lists() -> bool:
     """
     Load lists from database configuration or environment variables and add them to the database.
     Only adds new lists that don't already exist - preserves existing lists.
-    
+
     Returns:
         bool: True if any new lists were added, False otherwise
     """
-    from .database import save_list_id, load_list_ids, DB_FILE
+    from .database import save_list_id, load_list_ids, normalize_list_id, DB_FILE
     import logging
-    
+
     lists_added = False
-    
+
     try:
         # Try to use ConfigManager for settings
         try:
@@ -320,76 +477,94 @@ def load_env_lists() -> bool:
         except:
             # Fallback to environment if ConfigManager fails
             get_list_setting = lambda key: os.getenv(key.upper(), '')
-        
+
         # Get existing lists from database to avoid duplicates
         existing_lists = load_list_ids()
-        existing_set = {(list_info['type'], list_info['id']) for list_info in existing_lists}
-        
+        # Match on canonical IDs so a list stored as a URL isn't re-added as a
+        # bare ID (and vice versa), which would duplicate it under user 1.
+        existing_set = {
+            (list_info['type'], normalize_list_id(list_info['type'], list_info['id']))
+            for list_info in existing_lists
+        }
+
+        # Lists added from the environment request as the globally configured
+        # user unless the entry names one, rather than always the admin account.
+        default_user_id = str(get_list_setting('overseerr_user_id') or '').strip() or None
+
         logging.info(f"Found {len(existing_lists)} existing lists in database")
-        
+
         # Helper function to add list if it doesn't exist
-        def add_list_if_new(list_id: str, list_type: str):
+        def add_list_if_new(list_id: str, list_type: str, user_id: Optional[str] = None):
             nonlocal lists_added
-            if (list_type, list_id) not in existing_set:
-                save_list_id(list_id, list_type)
+            requester = user_id or default_user_id
+            if (list_type, normalize_list_id(list_type, list_id)) not in existing_set:
+                save_list_id(list_id, list_type, user_id=requester)
                 lists_added = True
-                logging.info(f"Added new {list_type.upper()} list: {list_id}")
-                print(f"✅ Added new {list_type.upper()} list: {list_id}")
+                as_user = f" (requests as user {requester})" if requester else ""
+                logging.info(f"Added new {list_type.upper()} list: {list_id}{as_user}")
+                print(f"✅ Added new {list_type.upper()} list: {list_id}{as_user}")
+            elif user_id:
+                # The entry names a user explicitly, so keep the stored list in
+                # step with the configuration file it came from.
+                from .database import get_list_user_id, update_list_user_id
+                current = get_list_user_id(list_type, list_id)
+                if current != str(user_id):
+                    update_list_user_id(list_type, list_id, user_id)
+                    print(f"🔄 {list_type.upper()} list {list_id} now requests as user {user_id}")
             else:
                 logging.info(f"Skipping existing {list_type.upper()} list: {list_id}")
-        
+
+        def add_lists_from_setting(setting_value: str, list_type: str):
+            """Add every comma-separated entry of a *_LISTS setting."""
+            for raw_entry in setting_value.split(','):
+                list_id, user_id = parse_list_entry(raw_entry)
+                if list_id:
+                    add_list_if_new(list_id, list_type, user_id)
+
         # Process IMDB lists
         if imdb_lists := get_list_setting('imdb_lists'):
-            for list_id in imdb_lists.split(','):
-                if list_id.strip():
-                    add_list_if_new(list_id.strip(), "imdb")
-        
+            add_lists_from_setting(imdb_lists, "imdb")
+
         # Process Trakt lists
         if trakt_lists := get_list_setting('trakt_lists'):
-            for list_id in trakt_lists.split(','):
-                if list_id.strip():
-                    add_list_if_new(list_id.strip(), "trakt")
-                    
+            add_lists_from_setting(trakt_lists, "trakt")
+
         # Process special Trakt lists
         if trakt_special_lists := get_list_setting('trakt_special_lists'):
-            for list_id in trakt_special_lists.split(','):
-                if list_id.strip():
-                    add_list_if_new(list_id.strip(), "trakt_special")
-                    if (("trakt_special", list_id.strip()) not in existing_set):
+            for raw_entry in trakt_special_lists.split(','):
+                list_id, user_id = parse_list_entry(raw_entry)
+                if list_id:
+                    is_new = ("trakt_special", normalize_list_id("trakt_special", list_id)) not in existing_set
+                    add_list_if_new(list_id, "trakt_special", user_id)
+                    if is_new:
                         trakt_limit = get_list_setting('trakt_special_items_limit') or '20'
                         logging.info(f"Special Trakt list configured with max {trakt_limit} items")
-        
+
         # Process Letterboxd lists
         if letterboxd_lists := get_list_setting('letterboxd_lists'):
-            for list_id in letterboxd_lists.split(','):
-                if list_id.strip():
-                    add_list_if_new(list_id.strip(), "letterboxd")
-        
+            add_lists_from_setting(letterboxd_lists, "letterboxd")
+
         # Process AniList lists
         if anilist_lists := get_list_setting('anilist_lists'):
-            for list_id in anilist_lists.split(','):
-                if list_id.strip():
-                    add_list_if_new(list_id.strip(), "anilist")
-        
+            add_lists_from_setting(anilist_lists, "anilist")
+
         # Process MDBList lists
         if mdblist_lists := get_list_setting('mdblist_lists'):
-            for list_id in mdblist_lists.split(','):
-                if list_id.strip():
-                    add_list_if_new(list_id.strip(), "mdblist")
-        
+            add_lists_from_setting(mdblist_lists, "mdblist")
+
         # Process Steven Lu lists
         if stevenlu_lists := get_list_setting('stevenlu_lists'):
             if 'stevenlu' in stevenlu_lists.lower():
-                add_list_if_new("stevenlu", "stevenlu")
-                if (("stevenlu", "stevenlu") not in existing_set):
+                _, stevenlu_user = parse_list_entry(stevenlu_lists)
+                is_new = ("stevenlu", normalize_list_id("stevenlu", "stevenlu")) not in existing_set
+                add_list_if_new("stevenlu", "stevenlu", stevenlu_user)
+                if is_new:
                     logging.info("Steven Lu popular movies list configured")
-        
+
         # Process TMDB lists
         if tmdb_lists := get_list_setting('tmdb_lists'):
-            for list_id in tmdb_lists.split(','):
-                if list_id.strip():
-                    add_list_if_new(list_id.strip(), "tmdb")
-        
+            add_lists_from_setting(tmdb_lists, "tmdb")
+
         # Process Simkl lists (API-only, requires authentication)
         simkl_client_id = get_list_setting('simkl_client_id')
         simkl_user_token = get_list_setting('simkl_user_token')
@@ -405,9 +580,7 @@ def load_env_lists() -> bool:
         # Only process SIMKL if both credentials are provided
         if simkl_client_id and simkl_user_token:
             if simkl_lists:
-                for list_id in simkl_lists.split(','):
-                    if list_id.strip():
-                        add_list_if_new(list_id.strip(), "simkl")
+                add_lists_from_setting(simkl_lists, "simkl")
             else:
                 # Default to authenticated user watchlist if no specific lists provided
                 add_list_if_new("user_watchlist", "simkl")
@@ -417,10 +590,8 @@ def load_env_lists() -> bool:
         
         # Process TVDB lists
         if tvdb_lists := get_list_setting('tvdb_lists'):
-            for list_id in tvdb_lists.split(','):
-                if list_id.strip():
-                    add_list_if_new(list_id.strip(), "tvdb")
-        
+            add_lists_from_setting(tvdb_lists, "tvdb")
+
         if lists_added:
             logging.info(f"Environment sync complete: {len([l for l in existing_lists])} existing + {sum(1 for _ in [True for _ in range(len(load_list_ids()) - len(existing_lists))])} new lists")
             print(f"📊 Environment sync complete: preserved {len(existing_lists)} existing lists, added new lists")
@@ -646,11 +817,11 @@ class ConfigManager:
         logging.info("Starting environment to database migration")
         
         settings_to_migrate = {
-            # Overseerr
-            'overseerr_url': os.getenv('OVERSEERR_URL', ''),
-            'overseerr_api_key': os.getenv('OVERSEERR_API_KEY', ''),
-            'overseerr_user_id': os.getenv('OVERSEERR_USER_ID', '1'),
-            'overseerr_4k': os.getenv('OVERSEERR_4K', 'false').lower() == 'true',
+            # Seerr
+            'overseerr_url': get_seerr_env('SEERR_URL', ''),
+            'overseerr_api_key': get_seerr_env('SEERR_API_KEY', ''),
+            'overseerr_user_id': get_seerr_env('SEERR_USER_ID', '1'),
+            'overseerr_4k': get_seerr_env('SEERR_4K', 'false').lower() == 'true',
             
             # Trakt
             'trakt_client_id': os.getenv('TRAKT_CLIENT_ID', ''),
@@ -703,7 +874,7 @@ class ConfigManager:
             return False
         
         load_dotenv()
-        return bool(os.getenv('OVERSEERR_URL') and os.getenv('OVERSEERR_API_KEY'))
+        return bool(get_seerr_env('SEERR_URL') and get_seerr_env('SEERR_API_KEY'))
     
     def reload(self):
         """Reload configuration from database."""

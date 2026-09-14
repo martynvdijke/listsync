@@ -32,7 +32,7 @@ This guide provides detailed installation instructions for ListSync, covering bo
   - Internet connection
 
 ### Common Requirements
-- **Overseerr Instance**: Running and accessible
+- **Seerr Instance**: Running and accessible
 - **Network Access**: To IMDb, Trakt, Letterboxd, MDBList, and other list providers
 
 ## 🐳 Docker Installation (Recommended)
@@ -43,7 +43,7 @@ Docker installation provides the easiest setup with all dependencies pre-configu
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/Woahai321/list-sync.git
+   git clone https://github.com/KaHooli/list-sync.git
    cd list-sync
    ```
 
@@ -231,7 +231,7 @@ brew install --cask google-chrome
 
 1. **Clone and setup**:
    ```bash
-   git clone https://github.com/Woahai321/list-sync.git
+   git clone https://github.com/KaHooli/list-sync.git
    cd list-sync
    ```
 
@@ -349,7 +349,7 @@ pm2 startup
 
 ### Initial Configuration
 
-1. **Test Overseerr connection**:
+1. **Test Seerr connection**:
    ```bash
    # Using curl
    curl -H "X-Api-Key: your-api-key" http://your-overseerr-url/api/v1/status
@@ -431,7 +431,7 @@ flowchart TD
     TestDashboard --> OpenBrowser[Open localhost:3222<br/>in browser]
     OpenBrowser --> DashWorks{Dashboard loads?}
     DashWorks -->|No| CheckFrontend[Check port 3222<br/>Check frontend logs]
-    DashWorks -->|Yes| TestOverseerr[Test Overseerr Connection]
+    DashWorks -->|Yes| TestOverseerr[Test Seerr Connection]
     
     TestOverseerr --> ConfigOverseerr[Check .env:<br/>OVERSEERR_URL<br/>OVERSEERR_API_KEY]
     ConfigOverseerr --> ConnTest{Connection OK<br/>in dashboard?}
@@ -583,7 +583,7 @@ docker-compose ps
 python3 --version
 
 # Install newer Python (Ubuntu)
-sudo apt install python3.9
+sudo apt install python3.12
 ```
 
 **Chrome/Selenium issues**:
@@ -619,7 +619,7 @@ npm install
 
 ### Network Issues
 
-**Cannot connect to Overseerr**:
+**Cannot connect to Seerr**:
 ```bash
 # Test connectivity
 curl -v http://your-overseerr-url/api/v1/status

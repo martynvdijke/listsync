@@ -2,13 +2,445 @@
 IMDb list provider for ListSync.
 """
 
+import gzip
+import io
+import json
 import logging
 import re
-from typing import List, Dict, Any
+import time
+import urllib.error
+import urllib.request
+import zlib
+from typing import List, Dict, Any, Optional
 
 from seleniumbase import SB
 
 from . import register_provider, check_and_raise_if_cancelled, SyncCancelledException
+
+# IMDb renders lists client-side but ships the whole list as JSON in the initial
+# HTML response. Reading that is one HTTP request with no browser, no CSS
+# selectors and no pagination, so it's tried before falling back to Selenium.
+_BROWSER_HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
+_IMDB_ID_RE = re.compile(r"^tt\d{7,9}$")
+_IMDB_ID_ANYWHERE_RE = re.compile(rb"tt\d{7,9}")
+
+# IMDb sits behind AWS WAF, which answers unrecognised clients with a
+# JavaScript challenge rather than the page. Naming it in the log saves the
+# next person working out why a perfectly good HTTP request returns 2KB.
+_AWS_WAF_RE = re.compile(rb"awswaf|AwsWafIntegration|gokuProps", re.IGNORECASE)
+
+# Keys IMDb has used for a title's ID, its display title, and its year. Several
+# are checked because the exact shape changes between page rewrites; the walker
+# below doesn't depend on where in the tree these appear.
+_ID_KEYS = ("id", "const", "titleId", "tconst")
+_TITLE_KEYS = ("titleText", "originalTitleText", "primaryTitle", "title", "text", "name")
+_YEAR_KEYS = ("releaseYear", "year", "startYear")
+
+# IMDb title types that are episodic
+_TV_TITLE_TYPES = {
+    "tvseries", "tvminiseries", "tvepisode", "tvspecial", "tvshort",
+}
+
+
+# IMDb answers plain HTTP clients with a small bot-check interstitial rather
+# than the list. Once that's been seen, back off for a while: retrying wastes a
+# request per list and puts avoidable bot-detection pressure on the same IP the
+# browser fetch is about to use. Time-boxed rather than permanent so a
+# long-lived process picks it up again if IMDb's behaviour changes, without
+# needing a restart.
+_DIRECT_FETCH_BLOCKED_UNTIL = 0.0
+_DIRECT_FETCH_BACKOFF_SECONDS = 30 * 60
+
+# An interstitial is short and carries no titles; a real list page is far
+# larger. Used only to label the log line, never to decide correctness.
+_INTERSTITIAL_MAX_BYTES = 20_000
+
+
+def _http_get(url: str, timeout: int = 30) -> Optional[bytes]:
+    """
+    Fetch a URL with a browser-like User-Agent, returning None on any failure.
+
+    Any problem here is non-fatal: the caller falls back to the browser path.
+    """
+    request = urllib.request.Request(url, headers=_BROWSER_HEADERS)
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read()
+            encoding = (response.headers.get("Content-Encoding") or "").lower()
+            if encoding == "gzip":
+                raw = gzip.GzipFile(fileobj=io.BytesIO(raw)).read()
+            elif encoding == "deflate":
+                raw = zlib.decompress(raw, -zlib.MAX_WBITS)
+
+            # A 2xx that is too small to be a list page is the bot check.
+            # AWS WAF now answers with HTTP 202 + x-amzn-waf-action: challenge and an
+            # empty (0-byte) body - the old body-regex alone misses it. Check
+            # headers/status first so a 202 never leaks through as "success".
+            waf_action = (response.headers.get("x-amzn-waf-action") or
+                          response.headers.get("X-Amzn-Waf-Action") or "").lower()
+            is_waf_challenge = (
+                waf_action == "challenge"
+                or response.status == 202
+                or _AWS_WAF_RE.search(raw or b"") is not None
+            )
+            if response.status != 200 or len(raw) < _INTERSTITIAL_MAX_BYTES or is_waf_challenge:
+                if not _IMDB_ID_ANYWHERE_RE.search(raw or b""):
+                    if is_waf_challenge:
+                        logging.info(
+                            f"IMDb served an AWS WAF JavaScript challenge (HTTP "
+                            f"{response.status}, x-amzn-waf-action={waf_action or 'n/a'}, "
+                            f"{len(raw)} bytes) instead of the list. "
+                            f"Solving it requires executing challenge.js to obtain an "
+                            f"aws-waf-token, so a real browser is needed - falling back "
+                            f"to Selenium. Swapping the TLS fingerprint does not help."
+                        )
+                    else:
+                        logging.info(
+                            f"IMDb answered the direct fetch with HTTP {response.status} and "
+                            f"{len(raw)} bytes containing no titles - this is its bot check, "
+                            f"not the list. Using the browser instead."
+                        )
+                    return None
+
+            return raw
+    except urllib.error.HTTPError as e:
+        logging.info(f"IMDb direct fetch returned HTTP {e.code} for {url}")
+        return None
+    except Exception as e:
+        logging.info(f"IMDb direct fetch failed for {url}: {type(e).__name__}: {e}")
+        return None
+
+
+def _first_string(node: Any, keys) -> Optional[str]:
+    """
+    Read the first usable string from a node, following IMDb's habit of
+    wrapping display text one level down (e.g. {"titleText": {"text": "..."}}).
+    """
+    if not isinstance(node, dict):
+        return None
+    for key in keys:
+        value = node.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+        if isinstance(value, dict):
+            for inner in ("text", "value", "title"):
+                nested = value.get(inner)
+                if isinstance(nested, str) and nested.strip():
+                    return nested.strip()
+    return None
+
+
+def _first_year(node: Any) -> Optional[int]:
+    """Read a release year from a node, unwrapping IMDb's nested shapes."""
+    if not isinstance(node, dict):
+        return None
+    for key in _YEAR_KEYS:
+        value = node.get(key)
+        if isinstance(value, int) and 1800 < value < 2200:
+            return value
+        if isinstance(value, str) and value[:4].isdigit():
+            return int(value[:4])
+        if isinstance(value, dict):
+            for inner in ("year", "text", "value"):
+                nested = value.get(inner)
+                if isinstance(nested, int) and 1800 < nested < 2200:
+                    return nested
+                if isinstance(nested, str) and nested[:4].isdigit():
+                    return int(nested[:4])
+    return None
+
+
+def _media_type_from_node(node: Any) -> str:
+    """Classify a title node as tv or movie, defaulting to movie."""
+    if isinstance(node, dict):
+        title_type = node.get("titleType")
+        raw = None
+        if isinstance(title_type, str):
+            raw = title_type
+        elif isinstance(title_type, dict):
+            raw = title_type.get("id") or title_type.get("text")
+            if title_type.get("isSeries") is True:
+                return "tv"
+        if isinstance(raw, str) and raw.replace(" ", "").replace("_", "").lower() in _TV_TITLE_TYPES:
+            return "tv"
+    return "movie"
+
+
+def _walk_for_titles(node: Any, found: Dict[str, Dict[str, Any]], depth: int = 0) -> None:
+    """
+    Walk arbitrary JSON collecting every title that carries an IMDb ID.
+
+    Deliberately schema-agnostic: IMDb reshuffles where the list lives between
+    page rewrites, and pinning the path is what makes scrapers brittle. Anything
+    shaped like a title is collected wherever it sits in the tree.
+    """
+    if depth > 30:
+        return
+
+    if isinstance(node, list):
+        for child in node:
+            _walk_for_titles(child, found, depth + 1)
+        return
+
+    if not isinstance(node, dict):
+        return
+
+    # Does this node identify a title?
+    imdb_id = None
+    for key in _ID_KEYS:
+        value = node.get(key)
+        if isinstance(value, str) and _IMDB_ID_RE.match(value):
+            imdb_id = value
+            break
+
+    if imdb_id:
+        title = _first_string(node, _TITLE_KEYS)
+        year = _first_year(node)
+        media_type = _media_type_from_node(node)
+
+        existing = found.get(imdb_id)
+        # Keep the richest record seen for a given ID - the same title can
+        # appear both as a bare reference and as a full node.
+        if existing is None or (title and not existing.get("title")):
+            found[imdb_id] = {
+                "title": title,
+                "imdb_id": imdb_id,
+                "media_type": media_type,
+                "year": year,
+            }
+        elif existing and year and not existing.get("year"):
+            existing["year"] = year
+
+    for child in node.values():
+        _walk_for_titles(child, found, depth + 1)
+
+
+def _extract_titles_from_html(html: bytes) -> List[Dict[str, Any]]:
+    """
+    Pull every title out of the JSON IMDb embeds in a list page.
+
+    Returns [] when nothing usable is found, which tells the caller to fall
+    back to the browser.
+    """
+    if not html:
+        return []
+
+    found: Dict[str, Dict[str, Any]] = {}
+
+    blocks = []
+    match = re.search(rb'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
+    if match:
+        blocks.append(match.group(1))
+    blocks.extend(re.findall(rb'<script[^>]+type="application/(?:ld\+)?json"[^>]*>(.*?)</script>', html, re.DOTALL))
+    match = re.search(rb'IMDbReactInitialState[^=]*=\s*(\{.*?\});\s*</script>', html, re.DOTALL)
+    if match:
+        blocks.append(match.group(1))
+
+    for block in blocks:
+        try:
+            data = json.loads(block.decode("utf-8", "replace"))
+        except (ValueError, AttributeError):
+            continue
+        _walk_for_titles(data, found)
+
+    if found:
+        return list(found.values())
+
+    # Nothing parsed. If the raw HTML nonetheless carries many title IDs the
+    # data is there in a shape this doesn't understand - say so loudly rather
+    # than silently falling back, because that's a cheap fix worth making.
+    raw_ids = {m.decode() for m in _IMDB_ID_ANYWHERE_RE.findall(html)}
+    if len(raw_ids) > 5:
+        logging.warning(
+            f"IMDb page contains {len(raw_ids)} title IDs but none were in a recognised "
+            f"JSON block - the embedded format has changed. Falling back to the browser."
+        )
+
+    return []
+
+
+def fetch_imdb_list_via_http(url: str) -> Optional[List[Dict[str, Any]]]:
+    """
+    Try to read an IMDb list with a single HTTP request and no browser.
+
+    Args:
+        url (str): Full IMDb list, watchlist or chart URL
+
+    Returns:
+        Optional[List[Dict[str, Any]]]: Media items, or None if this route
+            didn't work and the caller should fall back to Selenium.
+    """
+    global _DIRECT_FETCH_BLOCKED_UNTIL
+
+    now = time.monotonic()
+    if now < _DIRECT_FETCH_BLOCKED_UNTIL:
+        logging.debug(
+            f"Skipping IMDb direct fetch - backing off for another "
+            f"{int(_DIRECT_FETCH_BLOCKED_UNTIL - now)}s"
+        )
+        return None
+
+    logging.info(f"Trying IMDb direct fetch (no browser): {url}")
+    html = _http_get(url)
+    if not html:
+        _DIRECT_FETCH_BLOCKED_UNTIL = now + _DIRECT_FETCH_BACKOFF_SECONDS
+        return None
+
+    items = _extract_titles_from_html(html)
+    if not items:
+        _DIRECT_FETCH_BLOCKED_UNTIL = now + _DIRECT_FETCH_BACKOFF_SECONDS
+        return None
+
+    with_titles = sum(1 for i in items if i.get("title"))
+    logging.info(
+        f"IMDb direct fetch recovered {len(items)} title(s) "
+        f"({with_titles} with a display title) - no browser needed"
+    )
+    return items
+
+
+def _count_rendered_items(sb) -> int:
+    """How many list rows are currently in the DOM."""
+    for selector in ("li.ipc-metadata-list-summary-item", ".ipc-metadata-list-summary-item"):
+        try:
+            found = sb.find_elements("css selector", selector)
+            if found:
+                return len(found)
+        except Exception:
+            continue
+    return 0
+
+
+def _is_waf_challenge_page(sb, timeout: int = 2) -> bool:
+    """Return True if the current DOM is an AWS WAF challenge interstitial."""
+    try:
+        source = sb.get_page_source() or ""
+        low = source.lower()
+        if "awswaf" in low or "awswafin" in low or "gokuprops" in low or "challenge.js" in low:
+            return True
+        # CloudFront challenge also injects a form with x-amzn-waf-action in meta
+        if 'x-amzn-waf-action' in low:
+            return True
+        # Empty list page + WAF marker in URL (defence in depth)
+        cur_url = ""
+        try:
+            cur_url = sb.get_current_url() or ""
+        except Exception:
+            pass
+        if "waf" in cur_url.lower():
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _wait_for_waf_challenge(sb, max_wait: int = 30) -> None:
+    """If on a WAF challenge, poll until it resolves or timeout."""
+    if not _is_waf_challenge_page(sb):
+        return
+    logging.info("AWS WAF challenge detected in browser - waiting for challenge.js to solve (up to %ds)", max_wait)
+    for i in range(max_wait):
+        sb.sleep(1)
+        check_and_raise_if_cancelled()
+        if not _is_waf_challenge_page(sb):
+            logging.info("WAF challenge cleared after %ds", i + 1)
+            # Give IMDb a moment to render the real list
+            sb.sleep(3)
+            return
+        # Nudge the challenge JS - some variants need a scroll/click to trigger
+        if i == 5:
+            try:
+                sb.execute_script("window.scrollTo(0, 100);")
+            except Exception:
+                pass
+    logging.warning("WAF challenge still present after %ds - proceeding anyway, selectors will likely fail", max_wait)
+
+
+def _scroll_for_more_items(sb, current_count: int, max_scrolls: int = 40) -> bool:
+    """
+    Scroll an infinite-scroll IMDb list until more rows appear.
+
+    IMDb watchlists and personal lists render a first batch and load the rest
+    as you reach the bottom. `?page=N` does nothing on those pages, so scrolling
+    is the only way to see the whole list.
+
+    Args:
+        sb: SeleniumBase instance
+        current_count (int): Rows already rendered before scrolling
+        max_scrolls (int): Give up after this many attempts, so a list that
+            stops responding can't spin forever
+
+    Returns:
+        bool: True if new rows appeared, False if the list is fully loaded
+    """
+    stalled = 0
+
+    for attempt in range(max_scrolls):
+        check_and_raise_if_cancelled()
+
+        try:
+            sb.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        except Exception as e:
+            logging.warning(f"Could not scroll IMDb list: {e}")
+            return False
+
+        sb.sleep(2)
+
+        new_count = _count_rendered_items(sb)
+        if new_count > current_count:
+            logging.info(f"Scrolled: {current_count} -> {new_count} rows rendered")
+            return True
+
+        # Nothing new yet. Give the lazy load a couple of chances before
+        # concluding we're at the end, since it fetches asynchronously.
+        stalled += 1
+        if stalled >= 3:
+            return False
+
+        sb.sleep(2)
+
+    logging.warning(
+        f"Stopped scrolling after {max_scrolls} attempts with {current_count} rows - "
+        f"the list may be longer than what was collected"
+    )
+    return False
+
+
+def _resolve_imdb_url(list_id: str):
+    """
+    Turn a list ID, chart name or URL into a full IMDb URL.
+
+    Args:
+        list_id (str): IMDb list ID, chart name, or URL
+
+    Returns:
+        tuple: (url, is_chart)
+
+    Raises:
+        ValueError: If the list ID or URL format is not recognised
+    """
+    if list_id.startswith(('http://', 'https://')):
+        url = list_id.rstrip('/')
+        if '/chart/' in url:
+            return url, True
+        if '/list/' in url or '/user/' in url:
+            return url, False
+        raise ValueError("Invalid IMDb URL format")
+
+    if list_id in ['top', 'boxoffice', 'moviemeter', 'tvmeter']:
+        return f"https://www.imdb.com/chart/{list_id}", True
+    if list_id.startswith("ls"):
+        return f"https://www.imdb.com/list/{list_id}", False
+    if list_id.startswith("ur"):
+        return f"https://www.imdb.com/user/{list_id}/watchlist", False
+
+    raise ValueError("Invalid IMDb list ID format")
 
 
 @register_provider("imdb")
@@ -27,32 +459,25 @@ def fetch_imdb_list(list_id: str) -> List[Dict[str, Any]]:
     """
     media_items = []
     logging.info(f"Fetching IMDb list: {list_id}")
-    
+
+    url, is_chart = _resolve_imdb_url(list_id)
+
+    # Prefer the browser-free route. It reads the JSON IMDb embeds in the page,
+    # which avoids Chrome, the CSS selectors and the pagination entirely.
+    # Anything less than a clean result falls through to Selenium below.
+    try:
+        direct_items = fetch_imdb_list_via_http(url)
+    except Exception as e:
+        logging.warning(f"IMDb direct fetch raised, falling back to browser: {e}")
+        direct_items = None
+
+    if direct_items:
+        return direct_items
+
+    logging.info("Falling back to browser-based IMDb scrape")
+
     try:
         with SB(uc=True, headless=True) as sb:
-            # Handle full URLs vs list IDs
-            if list_id.startswith(('http://', 'https://')):
-                url = list_id.rstrip('/')  # Use the provided URL directly
-                if '/chart/' in url:
-                    is_chart = True
-                elif '/list/' in url or '/user/' in url:
-                    is_chart = False
-                else:
-                    raise ValueError("Invalid IMDb URL format")
-            else:
-                # Existing logic for list IDs
-                if list_id in ['top', 'boxoffice', 'moviemeter', 'tvmeter']:
-                    url = f"https://www.imdb.com/chart/{list_id}"
-                    is_chart = True
-                elif list_id.startswith("ls"):
-                    url = f"https://www.imdb.com/list/{list_id}"
-                    is_chart = False
-                elif list_id.startswith("ur"):
-                    url = f"https://www.imdb.com/user/{list_id}/watchlist"
-                    is_chart = False
-                else:
-                    raise ValueError("Invalid IMDb list ID format")
-            
             logging.info(f"Attempting to load URL: {url}")
             sb.open(url)
             
@@ -62,6 +487,11 @@ def fetch_imdb_list(list_id: str) -> List[Dict[str, Any]]:
             
             # Initial wait for page load
             sb.sleep(5)  # Longer initial wait to ensure page starts loading
+
+            # AWS WAF challenge (HTTP 202 + x-amzn-waf-action: challenge) serves
+            # an interstitial that needs challenge.js to run and set aws-waf-token.
+            # SeleniumBase uc=True should solve it, but it needs extra time.
+            _wait_for_waf_challenge(sb, max_wait=30)
             
             # Add some human-like scrolling behavior to avoid bot detection
             try:
@@ -74,6 +504,8 @@ def fetch_imdb_list(list_id: str) -> List[Dict[str, Any]]:
             
             # Wait for any potential captcha/anti-bot verification to load
             sb.sleep(3)
+            # Second WAF check after scroll - challenge sometimes renders lazily
+            _wait_for_waf_challenge(sb, max_wait=15)
             
             # Check for cancellation before processing
             check_and_raise_if_cancelled()
@@ -107,6 +539,22 @@ def _process_imdb_chart(sb) -> List[Dict[str, Any]]:
     Returns:
         List[Dict[str, Any]]: List of media items
     """
+    # Fast path: JSON-LD in page source is far more robust than CSS selectors.
+    # IMDb charts embed a complete ItemList in <script type="application/ld+json">.
+    try:
+        html = (sb.get_page_source() or "").encode("utf-8", "replace")
+        ld_items = _extract_titles_from_html(html)
+        if ld_items and len(ld_items) > 5:
+            logging.info(f"IMDb chart recovered {len(ld_items)} title(s) from embedded JSON - bypassing selectors")
+            return ld_items
+        # Also try regex fallback on raw HTML for /title/tt ids when JSON shape changes
+        if not ld_items:
+            raw_ids = re.findall(r'/title/(tt\d{7,9})', html.decode("utf-8", "replace"))
+            if len(set(raw_ids)) > 10:
+                logging.warning(f"JSON-LD empty but page contains {len(set(raw_ids))} tt IDs - selectors will be tried")
+    except Exception as e:
+        logging.debug(f"JSON-LD fast path for chart failed: {e}")
+
     media_items = []
     chart_found = False
     
@@ -340,6 +788,8 @@ def _process_imdb_chart(sb) -> List[Dict[str, Any]]:
             imdb_id = None
             link_selectors = [
                 "a.ipc-title-link-wrapper",
+                "a.ipc-lockup-overlay",
+                "a[href*='/title/tt']",
                 "a[href*='/title/']",
                 "a"  # Most generic selector
             ]
@@ -357,6 +807,16 @@ def _process_imdb_chart(sb) -> List[Dict[str, Any]]:
                                 break
                     if imdb_id:
                         break
+                except Exception:
+                    pass
+            
+            if not imdb_id:
+                try:
+                    outer = item.get_attribute("outerHTML") or ""
+                    m = re.search(r'/title/(tt\d{7,9})', outer)
+                    if m:
+                        imdb_id = m.group(1)
+                        logging.info("Found IMDb ID via outerHTML regex fallback (chart)")
                 except Exception:
                     pass
             
@@ -395,6 +855,17 @@ def _process_imdb_list(sb, url) -> List[Dict[str, Any]]:
     Returns:
         List[Dict[str, Any]]: List of media items
     """
+    # Fast path: lists also embed JSON-LD / __NEXT_DATA__; try it before selectors.
+    try:
+        html = (sb.get_page_source() or "").encode("utf-8", "replace")
+        ld_items = _extract_titles_from_html(html)
+        if ld_items:
+            # For lists, require >0; log and return immediately.
+            logging.info(f"IMDb list recovered {len(ld_items)} title(s) from embedded JSON - bypassing selectors")
+            return ld_items
+    except Exception as e:
+        logging.debug(f"JSON-LD fast path for list failed: {e}")
+
     media_items = []
     
     try:
@@ -549,7 +1020,19 @@ def _process_imdb_list(sb, url) -> List[Dict[str, Any]]:
             expected_pages = None
     
     current_page = 1
-    
+
+    # Track what we've already collected so a page that doesn't actually
+    # advance can be detected. IMDb watchlists paginate by infinite scroll and
+    # ignore ?page=N, so the fallback navigation below re-serves the same page
+    # forever; without this the loop never terminates and re-adds the same
+    # titles on every pass.
+    seen_imdb_ids = set()
+
+    # Absolute ceiling, in case a list paginates in some way that defeats both
+    # the expected-page count and the no-progress check. At 250 items per page
+    # this still allows lists far larger than IMDb permits.
+    MAX_PAGES = 200
+
     # Process items on the page
     while True:
         # Check for cancellation at the start of each page
@@ -587,11 +1070,14 @@ def _process_imdb_list(sb, url) -> List[Dict[str, Any]]:
                 logging.warning(f"Could not find items via parent: {str(e)}")
         
         logging.info(f"Processing page {current_page}: Found {len(items)} items")
-        
+
+        # Baseline for the no-progress check after this page is parsed
+        items_before_page = len(media_items)
+
         if not items:
             logging.warning("No items found on this page, attempting to continue to next page")
             # We might need to try the next page
-            if current_page < (expected_pages or 2):  # Try at least page 2 if we don't know expected pages
+            if current_page < min(expected_pages or 2, MAX_PAGES):  # Try at least page 2 if we don't know expected pages
                 # Try to navigate to next page directly
                 next_page = current_page + 1
                 next_url = f"{url}/?page={next_page}"
@@ -683,6 +1169,8 @@ def _process_imdb_list(sb, url) -> List[Dict[str, Any]]:
                 imdb_id = None
                 link_selectors = [
                     "a.ipc-title-link-wrapper",
+                    "a.ipc-lockup-overlay",
+                    "a[href*='/title/tt']",
                     "a[href*='/title/']",
                     ".dli-title a"
                 ]
@@ -693,7 +1181,11 @@ def _process_imdb_list(sb, url) -> List[Dict[str, Any]]:
                         if title_link:
                             href = title_link.get_attribute("href")
                             if href and "/title/" in href:
-                                imdb_id = href.split("/")[4]
+                                m = re.search(r'/title/(tt\d{7,9})', href)
+                                if m:
+                                    imdb_id = m.group(1)
+                                else:
+                                    imdb_id = href.split("/")[4]
                                 logging.info(f"Found IMDb ID using selector: {selector}")
                                 break
                     except Exception:
@@ -706,9 +1198,24 @@ def _process_imdb_list(sb, url) -> List[Dict[str, Any]]:
                         for link in links:
                             href = link.get_attribute("href")
                             if href and "/title/" in href:
-                                imdb_id = href.split("/")[4]
+                                m = re.search(r'/title/(tt\d{7,9})', href)
+                                if m:
+                                    imdb_id = m.group(1)
+                                else:
+                                    imdb_id = href.split("/")[4]
                                 logging.info("Found IMDb ID from generic link")
                                 break
+                    except Exception:
+                        pass
+
+                if not imdb_id:
+                    # Final fallback: regex on the item's HTML (covers shadow/overlay cases)
+                    try:
+                        outer = item.get_attribute("outerHTML") or ""
+                        m = re.search(r'/title/(tt\d{7,9})', outer)
+                        if m:
+                            imdb_id = m.group(1)
+                            logging.info("Found IMDb ID via outerHTML regex fallback")
                     except Exception:
                         pass
                 
@@ -716,6 +1223,12 @@ def _process_imdb_list(sb, url) -> List[Dict[str, Any]]:
                     logging.warning(f"Could not find IMDb ID for {title}, skipping")
                     continue
                 
+                if imdb_id in seen_imdb_ids:
+                    # Already collected on an earlier page - the list re-served
+                    # content we've seen rather than advancing.
+                    continue
+
+                seen_imdb_ids.add(imdb_id)
                 media_items.append({
                     "title": title.strip(),
                     "imdb_id": imdb_id,
@@ -723,16 +1236,36 @@ def _process_imdb_list(sb, url) -> List[Dict[str, Any]]:
                     "year": year
                 })
                 logging.info(f"Added {media_type}: {title} ({year}) (IMDB ID: {imdb_id})")
-                
+
             except Exception as e:
                 logging.warning(f"Failed to parse IMDb item: {str(e)}")
                 continue
-        
+
+        # If a page contributed nothing new, pagination isn't advancing. This
+        # is the only stop condition that works when the total-item count
+        # couldn't be parsed, which is the normal case for watchlists.
+        new_this_page = len(media_items) - items_before_page
+        if new_this_page == 0:
+            logging.info(
+                f"Page {current_page} added no new titles ({len(items)} item(s) all seen before) - "
+                f"pagination is not advancing, stopping with {len(media_items)} item(s)"
+            )
+            break
+
+        logging.info(f"Page {current_page} added {new_this_page} new title(s), {len(media_items)} total")
+
         # Check if we've processed all expected pages
         if expected_pages and current_page >= expected_pages:
             logging.info(f"Reached final page {current_page} of {expected_pages}")
             break
-        
+
+        if current_page >= MAX_PAGES:
+            logging.warning(
+                f"Stopping at the {MAX_PAGES}-page safety limit with {len(media_items)} item(s). "
+                f"If this list really is larger, raise MAX_PAGES in the IMDb provider."
+            )
+            break
+
         # Try to navigate to next page
         try:
             # First try clicking the button using a more specific selector
@@ -776,15 +1309,24 @@ def _process_imdb_list(sb, url) -> List[Dict[str, Any]]:
                         sb.wait_for_element_present('[data-testid="list-page-mc-list-content"]', timeout=10)
                         sb.sleep(3)
             except Exception as e:
-                logging.info(f"Could not click next button: {str(e)}")
-                # Fall back to direct URL navigation
-                next_page = current_page + 1
-                next_url = f"{url}/?page={next_page}"
-                logging.info(f"Attempting to navigate directly to page {next_page}: {next_url}")
-                sb.open(next_url)
-                sb.wait_for_element_present('[data-testid="list-page-mc-list-content"]', timeout=10)
-                sb.sleep(3)
-            
+                # No pagination widget. Watchlists and personal lists load more
+                # by infinite scroll, so `?page=N` is simply ignored and returns
+                # the same content - scroll to pull the next batch instead.
+                logging.info(f"No pagination control ({str(e).splitlines()[0][:80]}); scrolling for more")
+                if not _scroll_for_more_items(sb, len(items)):
+                    # Scrolling did nothing. Older list pages did honour
+                    # ?page=N, so try that once before concluding we're done;
+                    # if it returns the same titles the no-new-items check
+                    # below ends the loop on the next pass.
+                    next_url = f"{url.rstrip('/')}/?page={current_page + 1}"
+                    logging.info(f"Scrolling loaded nothing; trying {next_url}")
+                    try:
+                        sb.open(next_url)
+                        sb.sleep(3)
+                    except Exception as nav_error:
+                        logging.info(f"Could not navigate to {next_url}: {nav_error}")
+                        break
+
             current_page += 1
             sb.sleep(2)
         except Exception as e:

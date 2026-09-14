@@ -2,7 +2,7 @@
 # Contains only the core Python synchronization application 
 # Excludes: FastAPI backend, Next.js frontend, Node.js dependencies
 
-ARG PYTHON_VERSION=3.9
+ARG PYTHON_VERSION=3.12
 
 FROM python:${PYTHON_VERSION}-slim AS runtime
 

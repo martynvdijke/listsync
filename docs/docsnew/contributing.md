@@ -21,7 +21,7 @@ This comprehensive guide covers how to contribute to ListSync, including develop
 Before contributing to ListSync, ensure you have:
 
 - **Git** for version control
-- **Python 3.9+** for backend development
+- **Python 3.12+** for backend development
 - **Node.js 18+** for frontend development
 - **Docker & Docker Compose** for containerized development
 - **Chrome/Chromium** for Selenium testing
@@ -157,7 +157,7 @@ list-sync/
 │   ├── database.py           # Database operations
 │   ├── api/                  # API package
 │   │   ├── __init__.py
-│   │   └── overseerr.py      # Overseerr API client
+│   │   └── overseerr.py      # Seerr API client
 │   ├── providers/            # List provider implementations
 │   │   ├── __init__.py
 │   │   ├── imdb.py
@@ -236,12 +236,12 @@ class IMDbProvider(ListProvider):
         """Fetch items from IMDb list"""
         pass
 
-# list_sync/api/overseerr.py - Overseerr client
+# list_sync/api/overseerr.py - Seerr client
 class OverseerrClient:
-    """Overseerr API client"""
+    """Seerr API client"""
     
     async def search_media(self, title: str, media_type: str, year: int) -> Dict[str, Any]:
-        """Search for media in Overseerr"""
+        """Search for media in Seerr"""
         pass
 ```
 
@@ -705,7 +705,7 @@ class TestSyncEngineIntegration:
             ]
             mock_registry.return_value.get.return_value = mock_provider
             
-            # Mock Overseerr responses
+            # Mock Seerr responses
             sync_engine.overseerr.search_media.return_value = {"id": 12345, "status": "available"}
             sync_engine.overseerr.request_media.return_value = {"success": True}
             

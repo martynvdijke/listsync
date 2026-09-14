@@ -3,7 +3,7 @@
 export interface SyncStats {
   total_processed: number      // Total items processed after deduplication
   successful_items: number     // requested + already_requested + already_available + skipped
-  total_requested: number      // Items actually requested to Overseerr
+  total_requested: number      // Items actually requested to Seerr
   total_errors: number         // error + not_found items
   success_rate: number
   duplicates_in_current_sync: number  // Duplicates found within the current sync session
@@ -27,6 +27,7 @@ export interface List {
   status?: string
   last_synced?: string
   user_id?: string
+  user_display_name?: string | null
 }
 
 export interface MediaItem {

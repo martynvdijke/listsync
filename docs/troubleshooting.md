@@ -37,7 +37,7 @@ flowchart TD
     
     SyncIssue --> CheckLists{Lists configured?}
     CheckLists -->|No| AddLists[Add lists via<br/>web UI or .env]
-    CheckLists -->|Yes| CheckOverseerr{Overseerr connected?}
+    CheckLists -->|Yes| CheckOverseerr{Seerr connected?}
     CheckOverseerr -->|No| FixConnection[Fix connection<br/>see Connection Problems]
     CheckOverseerr -->|Yes| CheckItems[Check for errors<br/>in specific items]
     
@@ -74,7 +74,7 @@ docker-compose ps
 # 3. Check logs for errors
 docker-compose logs --tail=50 listsync-full
 
-# 4. Verify Overseerr connection
+# 4. Verify Seerr connection
 curl -H "X-Api-Key: your-api-key" http://your-overseerr-url/api/v1/status
 ```
 
@@ -84,7 +84,7 @@ curl -H "X-Api-Key: your-api-key" http://your-overseerr-url/api/v1/status
 |-----------|---------|-----------|--------|
 | **Database** | ✅ Connected | ❌ Connection failed | File exists, writable |
 | **Process** | ✅ Running | ❌ Not running | ListSync process active |
-| **Overseerr** | ✅ Connected | ❌ Connection failed | API key valid, URL accessible |
+| **Seerr** | ✅ Connected | ❌ Connection failed | API key valid, URL accessible |
 | **Web UI** | ✅ Accessible | ❌ Not loading | Port 3222 accessible |
 | **API** | ✅ Responding | ❌ Not responding | Port 4222 accessible |
 
@@ -127,12 +127,12 @@ curl -H "X-Api-Key: your-api-key" http://your-overseerr-url/api/v1/status
 
 **Causes**:
 - Items already exist in your media library
-- Overseerr has different availability rules
+- Seerr has different availability rules
 - 4K vs standard quality mismatch
 
 **Solutions**:
-1. **Check Overseerr directly**:
-   - Log into Overseerr web interface
+1. **Check Seerr directly**:
+   - Log into Seerr web interface
    - Search for the specific titles
    - Verify their actual status
 
@@ -187,15 +187,15 @@ curl -H "X-Api-Key: your-api-key" http://your-overseerr-url/api/v1/status
 
 ```mermaid
 flowchart TD
-    Start[Cannot Connect to Overseerr] --> TestURL{Can you access<br/>Overseerr URL<br/>in browser?}
+    Start[Cannot Connect to Seerr] --> TestURL{Can you access<br/>Seerr URL<br/>in browser?}
     
-    TestURL -->|No| CheckOverseerr[Overseerr is down<br/>or URL is wrong]
+    TestURL -->|No| CheckOverseerr[Seerr is down<br/>or URL is wrong]
     TestURL -->|Yes| TestAPI{Does API<br/>endpoint work?}
     
     TestAPI -->|No| CheckAPIKey{Is API key valid?}
-    TestAPI -->|Yes| CheckFromContainer{Can container<br/>reach Overseerr?}
+    TestAPI -->|Yes| CheckFromContainer{Can container<br/>reach Seerr?}
     
-    CheckAPIKey -->|No| GetNewKey[Get new API key from<br/>Overseerr Settings]
+    CheckAPIKey -->|No| GetNewKey[Get new API key from<br/>Seerr Settings]
     CheckAPIKey -->|Yes| CheckFormat{Is URL format<br/>correct?}
     
     CheckFormat -->|No| FixFormat[Add http:// or https://<br/>Remove trailing slash]
@@ -204,7 +204,7 @@ flowchart TD
     CheckFromContainer -->|No| FixDockerNet[Check Docker network<br/>Use container name<br/>or host.docker.internal]
     CheckFromContainer -->|Yes| Success[Connection OK!<br/>Check other issues]
     
-    CheckOverseerr --> FixOverseerr[Start Overseerr<br/>Verify URL in .env]
+    CheckOverseerr --> FixOverseerr[Start Seerr<br/>Verify URL in .env]
     GetNewKey --> UpdateEnv[Update .env with<br/>new API key]
     FixFormat --> UpdateEnv
     UpdateEnv --> Restart[Restart ListSync<br/>docker-compose restart]
@@ -219,7 +219,7 @@ flowchart TD
     style Restart fill:#4CAF50
 ```
 
-### Cannot Connect to Overseerr
+### Cannot Connect to Seerr
 
 **Error Messages**:
 - "Connection refused"
@@ -239,7 +239,7 @@ flowchart TD
 
 2. **Check API key**:
    ```bash
-   # Get API key from Overseerr
+   # Get API key from Seerr
    # Settings → General → API Key
    
    # Test in browser
@@ -258,7 +258,7 @@ flowchart TD
 
 4. **Docker networking**:
    ```bash
-   # If Overseerr is also in Docker
+   # If Seerr is also in Docker
    OVERSEERR_URL=http://overseerr:5055  # Use container name
    
    # Check Docker network
@@ -322,13 +322,13 @@ flowchart TD
     CheckFormat -->|No| FixFormat[Check documentation<br/>for correct format]
     CheckFormat -->|Yes| CheckSelenium[Check Selenium/Chrome<br/>in container logs]
     
-    RequestFail --> CheckOverseerr{Overseerr<br/>connected?}
-    CheckOverseerr -->|No| FixOverseerr[Fix Overseerr connection<br/>See Connection Problems]
-    CheckOverseerr -->|Yes| CheckMatching{Items found<br/>in Overseerr?}
+    RequestFail --> CheckOverseerr{Seerr<br/>connected?}
+    CheckOverseerr -->|No| FixOverseerr[Fix Seerr connection<br/>See Connection Problems]
+    CheckOverseerr -->|Yes| CheckMatching{Items found<br/>in Seerr?}
     CheckMatching -->|No| MatchingIssue[Title matching issue<br/>Check year/title format]
     CheckMatching -->|Yes| CheckLogs[Check logs for<br/>specific errors]
     
-    AlreadyAvail --> VerifyOverseerr[Check items in<br/>Overseerr directly]
+    AlreadyAvail --> VerifyOverseerr[Check items in<br/>Seerr directly]
     VerifyOverseerr --> TrueAvail{Actually available?}
     TrueAvail -->|Yes| Working[Working as expected!<br/>Items already in library]
     TrueAvail -->|No| ClearCache[Clear cache:<br/>docker-compose restart]
@@ -385,6 +385,35 @@ flowchart TD
    docker-compose logs | grep -i "selenium\|chrome\|webdriver"
    ```
 
+### Stuck on "Sync in Progress"
+
+**Symptoms**: Every list card shows "Sync in Progress..." with the sync button
+disabled, and the sidebar reads "Syncing all", long after the lists finished
+syncing. Nothing clears it short of restarting the container.
+
+**Cause**: A sync that dies without finishing - a crash, a kill, a container
+restart mid-run - leaves its record in the database marked as in progress, and
+the dashboard reports that record as a running sync.
+
+**What happens now**: A running sync updates a heartbeat every 30 seconds. A
+record that stops being updated is closed out automatically as `interrupted`,
+so the dashboard returns to idle within about 15 minutes of the sync dying, and
+immediately when the process that owned it is gone.
+
+**Checking it**:
+
+```bash
+# Should read "is_running": false when no sync is running
+curl -s http://localhost:4222/api/sync/status/live
+
+# Records closed out automatically are logged
+docker-compose logs listsync-full | grep -i "stale sync record"
+```
+
+**Tuning**: Set `LISTSYNC_SYNC_STALE_MINUTES` to change how long a sync may go
+silent before its record is closed out. The default of 15 minutes suits most
+setups; raise it only if you see live syncs being marked interrupted.
+
 ### Slow Sync Performance
 
 **Symptoms**: Syncs take very long time to complete
@@ -421,8 +450,8 @@ flowchart TD
 
 **Debugging**:
 
-1. **Check Overseerr search**:
-   - Manually search for failing titles in Overseerr
+1. **Check Seerr search**:
+   - Manually search for failing titles in Seerr
    - Note any differences in title format
 
 2. **Enable debug logging**:
@@ -752,7 +781,7 @@ flowchart TD
    docker-compose up
    
    # Or run bash to debug
-   docker run -it --entrypoint bash ghcr.io/woahai321/list-sync:main
+   docker run -it --entrypoint bash ghcr.io/kahooli/list-sync:main
    ```
 
 ## 💻 Manual Installation Issues
@@ -771,7 +800,7 @@ flowchart TD
    python3 --version  # Should be 3.8+
    
    # Install newer Python if needed
-   sudo apt install python3.9 python3.9-venv
+   sudo apt install python3.12 python3.12-venv
    ```
 
 2. **Virtual environment issues**:

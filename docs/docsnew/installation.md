@@ -31,16 +31,16 @@ This comprehensive installation guide covers all deployment methods for ListSync
 - **Git**: For cloning the repository
 
 #### For Manual Installation
-- **Python**: Version 3.9 or higher
+- **Python**: Version 3.12 or higher
 - **Node.js**: Version 18 or higher (for web interface)
 - **Chrome/Chromium**: For Selenium web scraping
 - **Git**: For cloning the repository
 
-### Overseerr Requirements
-- **Overseerr Instance**: Running and accessible
-- **API Key**: Obtained from Overseerr settings
+### Seerr Requirements
+- **Seerr Instance**: Running and accessible
+- **API Key**: Obtained from Seerr settings
 - **User ID**: For making requests (usually 1)
-- **Network Access**: ListSync must be able to reach Overseerr
+- **Network Access**: ListSync must be able to reach Seerr
 
 ### Network Requirements
 - **Port 3222**: Web dashboard (configurable)
@@ -67,7 +67,7 @@ flowchart LR
 **Step-by-Step:**
 ```bash
 # 1. Clone and configure
-git clone https://github.com/Woahai321/list-sync.git
+git clone https://github.com/KaHooli/list-sync.git
 cd list-sync
 cp envsample.txt .env
 
@@ -146,7 +146,7 @@ Uses the pre-built image with web dashboard:
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/Woahai321/list-sync.git
+git clone https://github.com/KaHooli/list-sync.git
 cd list-sync
 
 # 2. Configure environment
@@ -315,7 +315,7 @@ brew install --cask google-chrome
 #### Python Environment Setup
 ```bash
 # 1. Clone repository
-git clone https://github.com/Woahai321/list-sync.git
+git clone https://github.com/KaHooli/list-sync.git
 cd list-sync
 
 # 2. Create Python virtual environment
@@ -345,7 +345,7 @@ cp envsample.txt .env
 
 # Edit configuration
 nano .env
-# Add your Overseerr URL, API key, and list configurations
+# Add your Seerr URL, API key, and list configurations
 ```
 
 ### Frontend Installation
@@ -443,14 +443,14 @@ pm2 startup
 
 ### Multi-Instance Deployments
 
-#### Multiple Overseerr Instances
+#### Multiple Seerr Instances
 ```yaml
 # docker-compose-multi.yml
 version: "3.8"
 
 services:
   listsync-main:
-    image: ghcr.io/woahai321/list-sync:main
+    image: ghcr.io/kahooli/list-sync:main
     container_name: listsync-main
     environment:
       - OVERSEERR_URL=https://overseerr.example.com
@@ -463,7 +463,7 @@ services:
     restart: unless-stopped
 
   listsync-4k:
-    image: ghcr.io/woahai321/list-sync:main
+    image: ghcr.io/kahooli/list-sync:main
     container_name: listsync-4k
     environment:
       - OVERSEERR_URL=https://overseerr-4k.example.com
@@ -485,7 +485,7 @@ version: "3.8"
 
 services:
   listsync-us:
-    image: ghcr.io/woahai321/list-sync:main
+    image: ghcr.io/kahooli/list-sync:main
     environment:
       - OVERSEERR_URL=https://us-overseerr.example.com
       - OVERSEERR_API_KEY=${US_API_KEY}
@@ -496,7 +496,7 @@ services:
       - ./data-us:/usr/src/app/data
 
   listsync-eu:
-    image: ghcr.io/woahai321/list-sync:main
+    image: ghcr.io/kahooli/list-sync:main
     environment:
       - OVERSEERR_URL=https://eu-overseerr.example.com
       - OVERSEERR_API_KEY=${EU_API_KEY}
@@ -514,7 +514,7 @@ version: "3.8"
 
 services:
   listsync-imdb:
-    image: ghcr.io/woahai321/list-sync:main
+    image: ghcr.io/kahooli/list-sync:main
     environment:
       - OVERSEERR_URL=${OVERSEERR_URL}
       - OVERSEERR_API_KEY=${API_KEY}
@@ -525,7 +525,7 @@ services:
       - ./data-imdb:/usr/src/app/data/logs
 
   listsync-trakt:
-    image: ghcr.io/woahai321/list-sync:main
+    image: ghcr.io/kahooli/list-sync:main
     environment:
       - OVERSEERR_URL=${OVERSEERR_URL}
       - OVERSEERR_API_KEY=${API_KEY}
@@ -600,7 +600,7 @@ server {
 
 ```mermaid
 flowchart TD
-    Start[Installation Complete] --> TestConnection[Test Overseerr Connection]
+    Start[Installation Complete] --> TestConnection[Test Seerr Connection]
     TestConnection --> ConnOK{Connection OK?}
     ConnOK -->|No| FixConnection[Fix Connection Issues<br/>- Check URL format<br/>- Verify API key<br/>- Test network access]
     ConnOK -->|Yes| AddFirstList[Add First List]
@@ -618,7 +618,7 @@ flowchart TD
     
     ConfigureSync --> TestSync[Test First Sync<br/>- Trigger manual sync<br/>- Monitor progress<br/>- Check results]
     TestSync --> SyncOK{Sync Successful?}
-    SyncOK -->|No| DebugSync[Debug Sync Issues<br/>- Check logs<br/>- Verify list access<br/>- Test Overseerr]
+    SyncOK -->|No| DebugSync[Debug Sync Issues<br/>- Check logs<br/>- Verify list access<br/>- Test Seerr]
     SyncOK -->|Yes| SetupComplete[✅ Setup Complete!<br/>Ready for production]
     
     DebugSync --> FixIssues[Fix Issues<br/>- Update configuration<br/>- Fix list access<br/>- Resolve errors]
@@ -633,12 +633,12 @@ flowchart TD
 
 ### Configuration Steps
 
-#### 1. Test Overseerr Connection
+#### 1. Test Seerr Connection
 ```bash
 # Test API connectivity
 curl -H "X-Api-Key: your-api-key" http://your-overseerr-url/api/v1/status
 
-# Expected response: JSON with Overseerr status
+# Expected response: JSON with Seerr status
 ```
 
 #### 2. Add Your First List
@@ -735,7 +735,7 @@ flowchart TD
     TestDashboard --> OpenBrowser[Open localhost:3222<br/>in browser]
     OpenBrowser --> DashWorks{Dashboard loads?}
     DashWorks -->|No| CheckFrontend[Check port 3222<br/>Check frontend logs]
-    DashWorks -->|Yes| TestOverseerr[Test Overseerr Connection]
+    DashWorks -->|Yes| TestOverseerr[Test Seerr Connection]
     
     TestOverseerr --> ConfigOverseerr[Check .env:<br/>OVERSEERR_URL<br/>OVERSEERR_API_KEY]
     ConfigOverseerr --> ConnTest{Connection OK<br/>in dashboard?}
@@ -1006,10 +1006,10 @@ docker-compose up -d
 python3 --version
 
 # Install newer Python (Ubuntu)
-sudo apt install python3.9 python3.9-venv
+sudo apt install python3.12 python3.12-venv
 
 # Use specific Python version
-python3.9 -m venv venv
+python3.12 -m venv venv
 ```
 
 **Chrome/Selenium Issues:**
@@ -1045,7 +1045,7 @@ npm install
 
 ### Network Issues
 
-**Cannot Connect to Overseerr:**
+**Cannot Connect to Seerr:**
 ```bash
 # Test connectivity
 curl -v http://your-overseerr-url/api/v1/status

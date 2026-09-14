@@ -1,0 +1,22 @@
+# Dependencies needed to run the suites in this directory.
+#
+# Deliberately smaller than the application's own requirements.txt: the suites
+# stub out seleniumbase, cryptography, python-dotenv, bs4 and halo, so CI does
+# not install a browser or build native extensions. That is what keeps the run
+# to a couple of seconds.
+#
+# Unpinned to match the project's own requirements.txt, so CI runs against
+# whatever a fresh install gets rather than a set frozen at some past date.
+
+requests>=2.32.4
+colorama>=0.4.6
+discord-webhook>=1.3.0
+psutil>=5.9.0
+
+# api_server imports these at module scope, so importing it needs them present
+# even for tests that never start a server.
+fastapi>=0.100.0
+uvicorn>=0.23.0
+
+# Required by fastapi.testclient.
+httpx>=0.24.0

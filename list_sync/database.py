@@ -14,6 +14,102 @@ from .utils.logger import DATA_DIR
 # Define database file path
 DB_FILE = os.path.join(DATA_DIR, "list_sync.db")
 
+# Default Seerr requester when a list has no user assigned (admin account)
+DEFAULT_REQUESTER_USER_ID = "1"
+
+
+def normalize_list_id(list_type: str, list_id: str) -> str:
+    """
+    Reduce a list identifier to a canonical form for comparison.
+
+    The same list can be stored either as a bare ID ("ls123456789") or as the
+    full URL a user pasted ("https://www.imdb.com/list/ls123456789/"). Callers
+    that look a list up by ID must not care which form was used, otherwise the
+    lookup silently misses and the list falls back to defaults.
+
+    Args:
+        list_type (str): Type of list (imdb, trakt, letterboxd, ...)
+        list_id (str): List ID or URL
+
+    Returns:
+        str: Canonical key for this list
+    """
+    if not list_id:
+        return ""
+
+    key = str(list_id).strip().rstrip('/')
+    lowered = key.lower()
+
+    # For IMDb, the list/user/chart token uniquely identifies the list, so pull
+    # it out of whatever URL form was supplied.
+    if (list_type or "").lower() == "imdb":
+        import re
+        match = re.search(r'\b(ls\d+|ur\d+)\b', lowered)
+        if match:
+            return match.group(1)
+        chart_match = re.search(r'/chart/([a-z0-9_-]+)', lowered)
+        if chart_match:
+            return chart_match.group(1)
+        return lowered
+
+    # Everything else: compare on the URL minus scheme/host boilerplate.
+    for prefix in ("https://", "http://"):
+        if lowered.startswith(prefix):
+            lowered = lowered.removeprefix(prefix)
+            break
+
+    return lowered.removeprefix("www.")
+
+
+def find_list_rows(cursor, list_type: str, list_id: str) -> List[tuple]:
+    """
+    Find every list row matching a type and ID, tolerating ID/URL form differences.
+
+    Older versions stored the same list under both its bare ID and its full URL,
+    so a logical list can occupy more than one row. Anything that mutates a list
+    should act on all of them.
+
+    Args:
+        cursor: An open sqlite3 cursor
+        list_type (str): Type of list
+        list_id (str): List ID or URL in any stored form
+
+    Returns:
+        List[tuple]: (rowid, stored_list_id) pairs, exact match first
+    """
+    # Fast path: exact match on the stored ID
+    cursor.execute(
+        "SELECT rowid, list_id FROM lists WHERE list_type = ? AND list_id = ?",
+        (list_type, list_id)
+    )
+    matches = cursor.fetchall()
+
+    target = normalize_list_id(list_type, list_id)
+    if not target:
+        return matches
+
+    # Slow path: compare canonical forms across this list type
+    seen = {row[0] for row in matches}
+    cursor.execute("SELECT rowid, list_id FROM lists WHERE list_type = ?", (list_type,))
+    for candidate_rowid, candidate_id in cursor.fetchall():
+        if candidate_rowid in seen:
+            continue
+        if normalize_list_id(list_type, candidate_id) == target:
+            matches.append((candidate_rowid, candidate_id))
+
+    return matches
+
+
+def find_list_row(cursor, list_type: str, list_id: str) -> Optional[tuple]:
+    """
+    Find a single list row by type and ID, tolerating ID/URL form differences.
+
+    Returns:
+        Optional[tuple]: (rowid, stored_list_id) or None if no list matches
+    """
+    matches = find_list_rows(cursor, list_type, list_id)
+    return matches[0] if matches else None
+
 
 def update_existing_list_urls():
     """Update URLs for existing lists that may have incorrect URLs stored."""
@@ -256,7 +352,7 @@ def init_database():
         
         # Add user_id column to lists if it doesn't exist (for per-list user assignment)
         try:
-            cursor.execute('ALTER TABLE lists ADD COLUMN user_id TEXT DEFAULT "1"')
+            cursor.execute("ALTER TABLE lists ADD COLUMN user_id TEXT DEFAULT '1'")
             logging.info("Added user_id column to lists table")
         except sqlite3.OperationalError:
             pass
@@ -345,6 +441,7 @@ def init_database():
                 list_type TEXT,
                 list_id TEXT,
                 pid INTEGER,
+                last_heartbeat TIMESTAMP,
                 total_items INTEGER DEFAULT 0,
                 items_requested INTEGER DEFAULT 0,
                 items_skipped INTEGER DEFAULT 0,
@@ -352,6 +449,15 @@ def init_database():
                 error_message TEXT
             )
         ''')
+
+        # Running syncs bump last_heartbeat so an abandoned in_progress row can
+        # be told apart from one that is still working.
+        try:
+            cursor.execute('ALTER TABLE sync_history ADD COLUMN last_heartbeat TIMESTAMP')
+            logging.info("✅ Added last_heartbeat column to sync_history table")
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
         
         # Sync items table - tracks individual items processed during each sync
         cursor.execute('''
@@ -385,7 +491,7 @@ def init_database():
             # Indexes might already exist
             pass
 
-        # Overseerr users table - stores synced Overseerr users
+        # Seerr users table - stores synced Seerr users
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS overseerr_users (
                 id TEXT PRIMARY KEY,
@@ -454,13 +560,20 @@ def init_database():
         logging.warning(f"Image migration check failed: {e}")
 
 
-def save_list_id(list_id: str, list_type: str, list_url: Optional[str] = None, item_count: Optional[int] = None, user_id: str = "1"):
-    """Save list ID, URL, item count, and user_id to database, converting URLs to IDs if needed."""
+def save_list_id(list_id: str, list_type: str, list_url: Optional[str] = None, item_count: Optional[int] = None, user_id: Optional[str] = None):
+    """
+    Save list ID, URL, item count, and user_id to database, converting URLs to IDs if needed.
+
+    Re-saving an existing list preserves the columns this call does not supply
+    (assigned user, last_synced, cached poster). Passing user_id=None means
+    "leave the assigned user alone", so callers that don't manage users can
+    never silently reset a list back to the admin account.
+    """
     from .utils.helpers import construct_list_url
-    
+
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        
+
         # For IMDb URLs, store the full URL
         if list_type == "imdb" and list_id.startswith(('http://', 'https://')):
             # Keep the full URL as is
@@ -485,12 +598,84 @@ def save_list_id(list_id: str, list_type: str, list_url: Optional[str] = None, i
         # Set default item count if not provided
         if item_count is None:
             item_count = 0
-            
-        cursor.execute(
-            "INSERT OR REPLACE INTO lists (list_type, list_id, list_url, item_count, user_id) VALUES (?, ?, ?, ?, ?)",
-            (list_type, id_to_save, list_url, item_count, user_id)
-        )
+
+        existing = find_list_row(cursor, list_type, id_to_save)
+
+        if existing:
+            # Update in place so last_synced, poster cache and (when the caller
+            # didn't specify one) the assigned user survive the re-save. The
+            # stored list_id is left as-is: it already identifies this list, and
+            # rewriting it could collide with a duplicate row holding the other
+            # ID form.
+            rowid = existing[0]
+            if user_id is None:
+                cursor.execute(
+                    "UPDATE lists SET list_url = ?, item_count = ? WHERE rowid = ?",
+                    (list_url, item_count, rowid)
+                )
+            else:
+                cursor.execute(
+                    "UPDATE lists SET list_url = ?, item_count = ?, user_id = ? WHERE rowid = ?",
+                    (list_url, item_count, str(user_id), rowid)
+                )
+        else:
+            cursor.execute(
+                "INSERT INTO lists (list_type, list_id, list_url, item_count, user_id) VALUES (?, ?, ?, ?, ?)",
+                (list_type, id_to_save, list_url, item_count,
+                 str(user_id) if user_id is not None else DEFAULT_REQUESTER_USER_ID)
+            )
+
         conn.commit()
+
+
+def get_list_user_id(list_type: str, list_id: str) -> Optional[str]:
+    """
+    Get the Seerr user a list requests as.
+
+    Args:
+        list_type (str): Type of list
+        list_id (str): List ID or URL in any form
+
+    Returns:
+        Optional[str]: The assigned user ID, or None if the list isn't configured
+    """
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        row = find_list_row(cursor, list_type, list_id)
+        if not row:
+            return None
+
+        cursor.execute("SELECT user_id FROM lists WHERE rowid = ?", (row[0],))
+        result = cursor.fetchone()
+        if not result or result[0] is None:
+            return DEFAULT_REQUESTER_USER_ID
+        return str(result[0])
+
+
+def update_list_user_id(list_type: str, list_id: str, user_id: str) -> bool:
+    """
+    Reassign which Seerr user a list requests as.
+
+    Args:
+        list_type (str): Type of list
+        list_id (str): List ID or URL in any form
+        user_id (str): Seerr user ID to request as
+
+    Returns:
+        bool: True if a list was updated, False if no matching list exists
+    """
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        rows = find_list_rows(cursor, list_type, list_id)
+        if not rows:
+            logging.warning(f"Cannot set user for {list_type}:{list_id} - list not found")
+            return False
+
+        for rowid, stored_id in rows:
+            cursor.execute("UPDATE lists SET user_id = ? WHERE rowid = ?", (str(user_id), rowid))
+            logging.info(f"List {list_type}:{stored_id} will now request as Seerr user {user_id}")
+        conn.commit()
+        return True
 
 
 def update_list_item_count(list_type: str, list_id: str, item_count: int):
@@ -554,11 +739,11 @@ def load_list_ids() -> List[Dict[str, str]]:
             else:
                 list_item["last_synced"] = None
             
-            # Add user_id (default to "1" if None for existing lists)
+            # Add user_id (default to admin if None for existing lists)
             if len(row) > 5 and row[5] is not None:
-                list_item["user_id"] = row[5]
+                list_item["user_id"] = str(row[5])
             else:
-                list_item["user_id"] = "1"
+                list_item["user_id"] = DEFAULT_REQUESTER_USER_ID
                 
             results.append(list_item)
         return results
@@ -619,7 +804,7 @@ def save_sync_result(title: str, media_type: str, imdb_id: Optional[str], overse
         title: Media title
         media_type: Media type (movie/tv)
         imdb_id: IMDb ID
-        overseerr_id: Overseerr ID
+        overseerr_id: Seerr ID
         status: Sync status
         year: Release year
         tmdb_id: TMDB ID
@@ -811,18 +996,121 @@ def start_sync_in_db(
         int: The sync_id (primary key) of the created sync record
     """
     import os
+
+    # A sync that died without cleaning up would otherwise leave its row
+    # in_progress forever, and the UI reports the newest such row as running.
+    try:
+        clear_stale_syncs()
+    except Exception as e:
+        logging.warning(f"Could not clear stale sync records before starting sync: {e}")
+
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO sync_history (
                 session_id, sync_type, in_progress, start_time,
-                list_type, list_id, pid, status
-            ) VALUES (?, ?, 1, CURRENT_TIMESTAMP, ?, ?, ?, 'running')
+                list_type, list_id, pid, status, last_heartbeat
+            ) VALUES (?, ?, 1, CURRENT_TIMESTAMP, ?, ?, ?, 'running', CURRENT_TIMESTAMP)
         ''', (session_id, sync_type, list_type, list_id, pid or os.getpid()))
         sync_id = cursor.lastrowid
         conn.commit()
         logging.info(f"Started sync in database: session_id={session_id}, sync_id={sync_id}")
         return sync_id
+
+
+def heartbeat_sync_in_db(session_id: str) -> bool:
+    """
+    Mark a running sync as still alive.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        bool: True if the sync record was updated
+    """
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE sync_history
+            SET last_heartbeat = CURRENT_TIMESTAMP
+            WHERE session_id = ? AND in_progress = 1
+        ''', (session_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+
+
+def cancel_sync_in_db(session_id: str) -> bool:
+    """
+    Mark a sync as cancelled and no longer in progress.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        bool: True if the sync record was updated
+    """
+    with sqlite3.connect(DB_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE sync_history
+            SET in_progress = 0,
+                status = 'cancelled',
+                end_time = CURRENT_TIMESTAMP
+            WHERE session_id = ? AND in_progress = 1
+        ''', (session_id,))
+        updated = cursor.rowcount > 0
+        conn.commit()
+        if updated:
+            logging.info(f"Marked sync session {session_id} as cancelled in database")
+        return updated
+
+
+def clear_stale_syncs(stale_after_seconds: Optional[int] = None) -> List[Dict[str, Any]]:
+    """
+    Close out in-progress sync records whose sync is no longer running.
+
+    A sync killed mid-run - by a crash, a container restart, or a kill - never
+    reaches end_sync_in_db, so its row stays in_progress and the dashboard keeps
+    reporting "Sync in Progress" indefinitely. This closes those records.
+
+    Args:
+        stale_after_seconds: Override for how long a record may go untouched
+
+    Returns:
+        list: The records that were closed out, each with a 'reason'
+    """
+    from .utils.sync_status import get_sync_staleness_reason
+
+    cleared = []
+    with sqlite3.connect(DB_FILE) as conn:
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM sync_history WHERE in_progress = 1')
+        records = [dict(row) for row in cursor.fetchall()]
+
+        for record in records:
+            reason = get_sync_staleness_reason(record, stale_after_seconds=stale_after_seconds)
+            if not reason:
+                continue
+
+            cursor.execute('''
+                UPDATE sync_history
+                SET in_progress = 0,
+                    status = 'interrupted',
+                    end_time = COALESCE(end_time, CURRENT_TIMESTAMP),
+                    error_message = COALESCE(error_message, ?)
+                WHERE session_id = ? AND in_progress = 1
+            ''', (f"Sync did not finish: {reason}", record.get('session_id')))
+            if cursor.rowcount > 0:
+                record['reason'] = reason
+                cleared.append(record)
+                logging.warning(
+                    f"Cleared stale sync record {record.get('session_id')}: {reason}"
+                )
+
+        conn.commit()
+
+    return cleared
 
 
 def update_sync_lists_in_db(
@@ -946,7 +1234,7 @@ def add_item_to_sync(
         year: Release year
         imdb_id: IMDB ID
         tmdb_id: TMDB ID
-        overseerr_id: Overseerr ID
+        overseerr_id: Seerr ID
     
     Returns:
         int: The sync_items record ID
@@ -965,13 +1253,23 @@ def add_item_to_sync(
         return item_record_id
 
 
-def get_current_sync_status() -> Optional[Dict[str, Any]]:
+def get_current_sync_status(clear_stale: bool = True) -> Optional[Dict[str, Any]]:
     """
     Get the current in-progress sync status from database.
-    
+
+    Args:
+        clear_stale: Close out abandoned records first, so a sync that died
+            without cleaning up is never reported as the current one
+
     Returns:
         dict: Current sync status or None if no sync in progress
     """
+    if clear_stale:
+        try:
+            clear_stale_syncs()
+        except Exception as e:
+            logging.warning(f"Could not clear stale sync records: {e}")
+
     with sqlite3.connect(DB_FILE) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
@@ -1042,10 +1340,12 @@ def cleanup_old_sync_results(days: int = 30):
     """Clean up sync results older than specified days."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
+        # Bound, not interpolated: today every caller passes an int, so the
+        # old .format() was safe by accident rather than by construction.
         cursor.execute('''
-            DELETE FROM synced_items 
-            WHERE last_synced < datetime('now', '-{} days')
-        '''.format(days))
+            DELETE FROM synced_items
+            WHERE last_synced < datetime('now', ?)
+        ''', (f'-{int(days)} days',))
         deleted_count = cursor.rowcount
         conn.commit()
         return deleted_count
@@ -1205,13 +1505,17 @@ def count_settings() -> int:
 
 
 # ============================================================================
-# Overseerr Users Management
+# Seerr Users Management
 # ============================================================================
 
-def save_overseerr_users(users: List[Dict[str, Any]]):
+def save_seerr_users(users: List[Dict[str, Any]]):
     """
-    Save Overseerr users to database, replacing existing users.
-    
+    Save Seerr users to database, replacing existing users.
+
+    The table is still called overseerr_users: renaming it would need a
+    migration on every existing install, which buys nothing since the name
+    never leaves this file.
+
     Args:
         users: List of user dictionaries with keys: id, display_name, email, avatar
     """
@@ -1234,12 +1538,12 @@ def save_overseerr_users(users: List[Dict[str, Any]]):
             ))
         
         conn.commit()
-        logging.info(f"Saved {len(users)} Overseerr users to database")
+        logging.info(f"Saved {len(users)} Seerr users to database")
 
 
-def get_overseerr_users() -> List[Dict[str, Any]]:
+def get_seerr_users() -> List[Dict[str, Any]]:
     """
-    Get all Overseerr users from database.
+    Get all Seerr users from database.
     
     Returns:
         List of user dictionaries with keys: id, display_name, email, avatar, last_synced
@@ -1267,7 +1571,7 @@ def get_overseerr_users() -> List[Dict[str, Any]]:
 
 def get_overseerr_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     """
-    Get a specific Overseerr user by ID.
+    Get a specific Seerr user by ID.
     
     Args:
         user_id: User ID to lookup
@@ -1296,13 +1600,13 @@ def get_overseerr_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def clear_overseerr_users():
-    """Clear all Overseerr users from database."""
+def clear_seerr_users():
+    """Clear all Seerr users from database."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM overseerr_users")
         conn.commit()
-        logging.info("Cleared all Overseerr users from database")
+        logging.info("Cleared all Seerr users from database")
 
 
 def save_collection_sync_result(franchise_name: str, item_count: Optional[int] = None):
@@ -1584,9 +1888,9 @@ def get_expired_cached_images(hours: int = 24) -> List[Dict[str, Any]]:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT * FROM cached_images
-            WHERE last_accessed < datetime('now', '-{} hours')
+            WHERE last_accessed < datetime('now', ?)
             ORDER BY last_accessed ASC
-        '''.format(hours))
+        ''', (f'-{int(hours)} hours',))
         return [dict(row) for row in cursor.fetchall()]
 
 
@@ -1608,8 +1912,8 @@ def cleanup_expired_images(hours: int = 24) -> int:
         # Get expired images with their file paths
         cursor.execute('''
             SELECT id, local_path FROM cached_images
-            WHERE last_accessed < datetime('now', '-{} hours')
-        '''.format(hours))
+            WHERE last_accessed < datetime('now', ?)
+        ''', (f'-{int(hours)} hours',))
         expired_images = cursor.fetchall()
         
         deleted_count = 0

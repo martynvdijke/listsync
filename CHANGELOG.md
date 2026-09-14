@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/martynvdijke/listsync/compare/v1.0.0...v1.1.0) (2026-09-14)
+
+
+### Features
+
+* add self-hosted Gotify notifications ([09c635a](https://github.com/martynvdijke/listsync/commit/09c635ab55c4b4036ca39e40f53587f6c05c81aa))
+
 # 1.0.0 (2026-09-14)
 
 

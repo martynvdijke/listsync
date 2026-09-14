@@ -335,6 +335,17 @@ export class ApiService {
     })
   }
 
+  async testGotifyNotification(url: string, token: string): Promise<{ success: boolean; message: string; timestamp: string }> {
+    return this.request<{ success: boolean; message: string; timestamp: string }>('/notifications/test', {
+      method: 'POST',
+      body: JSON.stringify({
+        service: 'gotify',
+        url,
+        token
+      })
+    })
+  }
+
   // ==========================================
   // Logs
   // ==========================================

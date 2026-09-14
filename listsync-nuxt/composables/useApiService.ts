@@ -420,6 +420,17 @@ export function useApiService() {
       })
     },
 
+    async testGotifyNotification(url: string, token: string) {
+      return apiCall(`${baseURL}/notifications/test`, {
+        method: 'POST',
+        body: {
+          service: 'gotify',
+          url,
+          token
+        }
+      })
+    },
+
     // Alias for consistency with setup wizard
     async testDiscordWebhook(webhookUrl: string) {
       return apiCall(`${baseURL}/notifications/test`, {

@@ -49,7 +49,7 @@ flowchart LR
 - [ ] Seerr URL and API key configured
 - [ ] At least one list provider configured (IMDb, Trakt, etc.)
 - [ ] Sync interval set to your preference
-- [ ] Optional: Discord webhook for notifications
+- [ ] Optional: Discord/Gotify notification webhook for notifications
 - [ ] Test sync operation completed successfully
 
 ## Web Dashboard
@@ -330,7 +330,7 @@ flowchart TD
     RetrySync -->|No| End[End]
     
     ResultBreakdown --> Notification{Notifications<br/>enabled?}
-    Notification -->|Yes| SendNotif[Send Discord/Email<br/>notification]
+    Notification -->|Yes| SendNotif[Send Discord/Gotify<br/>notification]
     Notification -->|No| Done[Sync complete!]
     SendNotif --> Done
     
@@ -369,7 +369,7 @@ flowchart TD
 - **Smart Retry** - Automatic retry on failures
 - **Rate Limiting** - Respectful API usage
 - **Error Recovery** - Resume from interruptions
-- **Progress Notifications** - Discord/email updates
+- **Progress Notifications** - Discord/Gotify updates
 
 ### Sync Status Monitoring
 
@@ -420,6 +420,7 @@ flowchart TD
 
 **Notification Settings:**
 - **Discord Webhooks** - Rich notifications with embeds
+- **Gotify Notifications** - Self-hosted push notifications via Gotify
 - **Email Alerts** - Simple text notifications
 - **Threshold Alerts** - Warnings when metrics exceed limits
 - **Schedule Notifications** - Regular status updates
@@ -469,7 +470,7 @@ STEVENLU_LISTS=stevenlu
 - **Connection Settings** - Seerr configuration
 - **Sync Settings** - Intervals and automation
 - **Provider Settings** - List configuration
-- **Notification Settings** - Discord/email setup
+- **Notification Settings** - Discord/Gotify setup
 - **Advanced Settings** - Performance tuning
 
 **Configuration Validation:**

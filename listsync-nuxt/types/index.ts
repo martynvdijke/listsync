@@ -59,6 +59,9 @@ export interface Config {
   automatedMode: boolean
   overseerr4K: boolean
   discordWebhookUrl?: string
+  gotifyUrl?: string
+  gotifyToken?: string
+  gotifyEnabled?: boolean
 }
 
 export interface ConnectionStatus {
@@ -89,6 +92,9 @@ export interface UpdateConfigRequest {
   automatedMode?: boolean
   overseerr4K?: boolean
   discordWebhookUrl?: string
+  gotifyUrl?: string
+  gotifyToken?: string
+  gotifyEnabled?: boolean
 }
 
 export interface ListValidation {

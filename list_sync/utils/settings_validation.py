@@ -29,6 +29,7 @@ _FETCHED_URL_SETTINGS = {
     # allowed here. Cloud metadata never is, whatever the sink.
     "overseerr_url": {"allow_private": True, "label": "Seerr URL"},
     "seerr_url": {"allow_private": True, "label": "Seerr URL"},
+    "gotify_url": {"allow_private": True, "label": "Gotify URL"},
 }
 
 # Settings that are only ever displayed or linked to, never fetched. They still
@@ -70,6 +71,22 @@ def validate_discord_webhook(value: str) -> str:
             "https://discord.com/api/webhooks/<id>/<token>"
         )
 
+    return ""
+
+
+def validate_gotify_url(value: str) -> str:
+    """
+    Check that a Gotify server URL is acceptable.
+
+    Args:
+        value (str): The Gotify URL to check
+
+    Returns:
+        str: An error message, or "" if the URL is acceptable
+    """
+    allowed, reason = validate_outbound_url(value, allow_private=True)
+    if not allowed:
+        return f"Invalid Gotify URL: {reason}"
     return ""
 
 

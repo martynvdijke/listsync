@@ -294,6 +294,21 @@ DISCORD_COLOR=0x00ff00
 2. Create a new webhook for the channel you want notifications in
 3. Copy the webhook URL to `DISCORD_WEBHOOK_URL`
 
+#### Gotify Notifications
+
+Sync completion summaries are POSTed to `{GOTIFY_URL}/message?token=...`. Gotify is optional and independent of Discord — you may enable either or both. It can also be configured in the dashboard under Settings -> Integrations (Notification Settings), where Gotify sits alongside Discord.
+
+```bash
+GOTIFY_URL=https://gotify.example.com  # Base URL of your self-hosted Gotify server
+GOTIFY_TOKEN=your_gotify_app_token      # Application token from Gotify's Apps page; both vars required to enable
+```
+
+**Setting up Gotify notifications:**
+1. Install and run your self-hosted Gotify server
+2. Open Gotify and create an Application in the Apps tab
+3. Copy its application token
+4. Set `GOTIFY_URL` and `GOTIFY_TOKEN` (both required to enable)
+
 #### Email Notifications (Advanced)
 ```bash
 # Enable email notifications

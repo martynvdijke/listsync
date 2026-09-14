@@ -100,7 +100,8 @@
           <!-- Notification Settings -->
           <NotificationSettings
             v-model="settings.notifications"
-            @test-notification="testNotification"
+            @test-discord="testDiscordNotification"
+            @test-gotify="testGotifyNotification"
           />
         </div>
 
@@ -191,7 +192,7 @@ const tabs = [
     id: 'integrations',
     label: 'Integrations',
     icon: BellIcon,
-    description: 'Discord notifications',
+    description: 'Discord and Gotify notifications',
   },
   {
     id: 'users',
@@ -237,7 +238,10 @@ const settings = ref({
   },
   notifications: {
     discordWebhook: '',
-    enabled: false,
+    discordEnabled: false,
+    gotifyUrl: '',
+    gotifyToken: '',
+    gotifyEnabled: false,
   },
   serviceEndpoints: {
     frontendDomain: '',
@@ -289,7 +293,10 @@ const loadSettings = async () => {
       
       settings.value.notifications = {
         discordWebhook: config.discord_webhook || '',
-        enabled: config.discord_enabled || false,
+        discordEnabled: config.discord_enabled || false,
+        gotifyUrl: config.gotify_url || '',
+        gotifyToken: config.gotify_token || '',
+        gotifyEnabled: config.gotify_enabled || false,
       }
       
       settings.value.serviceEndpoints = {
@@ -338,7 +345,10 @@ const handleSave = async () => {
       
       // Notifications
       discord_webhook: settings.value.notifications.discordWebhook,
-      discord_enabled: settings.value.notifications.enabled,
+      discord_enabled: settings.value.notifications.discordEnabled,
+      gotify_url: settings.value.notifications.gotifyUrl,
+      gotify_token: settings.value.notifications.gotifyToken,
+      gotify_enabled: settings.value.notifications.gotifyEnabled,
       
       // Service Endpoints
       frontend_domain: settings.value.serviceEndpoints.frontendDomain,
@@ -378,22 +388,33 @@ const testOverseerrConnection = async () => {
   }
 }
 
-// Test notification
-const testNotification = async () => {
+// Test Discord notification
+const testDiscordNotification = async () => {
   try {
-    // Validate webhook URL
     if (!settings.value.notifications.discordWebhook || !settings.value.notifications.discordWebhook.trim()) {
       showError('Webhook URL Required', 'Please enter a Discord webhook URL before testing')
       return
     }
-    
     showInfo('Sending Test', 'Sending test notification...')
-    
     const api = useApiService()
-    // Pass the webhook URL from the form to the test endpoint
     await api.testDiscordNotification(settings.value.notifications.discordWebhook)
-    
     showSuccess('Test Sent', 'Check your Discord channel for the test notification')
+  } catch (error: any) {
+    showError('Test Failed', error.message || 'Unable to send test notification')
+  }
+}
+
+// Test Gotify notification
+const testGotifyNotification = async () => {
+  try {
+    if (!settings.value.notifications.gotifyUrl?.trim() || !settings.value.notifications.gotifyToken?.trim()) {
+      showError('Gotify Config Required', 'Please enter both Gotify server URL and app token before testing')
+      return
+    }
+    showInfo('Sending Test', 'Sending test notification to Gotify...')
+    const api = useApiService()
+    await api.testGotifyNotification(settings.value.notifications.gotifyUrl, settings.value.notifications.gotifyToken)
+    showSuccess('Test Sent', 'Check your Gotify app for the test notification')
   } catch (error: any) {
     showError('Test Failed', error.message || 'Unable to send test notification')
   }

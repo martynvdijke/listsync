@@ -176,6 +176,7 @@ SENSITIVE_KEYS = {
     'tvdb_key',
     'simkl_client_id',
     'simkl_user_token',
+    'gotify_token',      # Gotify app token
 }
 
 

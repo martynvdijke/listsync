@@ -834,6 +834,9 @@ class ConfigManager:
             # Notifications
             'discord_webhook': os.getenv('DISCORD_WEBHOOK_URL', ''),
             'discord_enabled': bool(os.getenv('DISCORD_WEBHOOK_URL', '')),
+            'gotify_url': os.getenv('GOTIFY_URL', ''),
+            'gotify_token': os.getenv('GOTIFY_TOKEN', ''),
+            'gotify_enabled': bool(os.getenv('GOTIFY_URL') and os.getenv('GOTIFY_TOKEN')),
             
             # Service Endpoints
             'frontend_domain': os.getenv('FRONTEND_DOMAIN', 'http://localhost:3222'),

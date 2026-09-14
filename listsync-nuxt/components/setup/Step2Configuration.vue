@@ -184,6 +184,90 @@
       </div>
     </div>
 
+    <!-- Gotify Notifications (Optional) -->
+    <div class="p-3 sm:p-4 rounded-lg bg-gradient-to-br from-purple-600/20 to-purple-500/10 border border-purple-500/25 space-y-2.5 sm:space-y-3">
+      <div class="flex items-center justify-between mb-1">
+        <div class="flex items-center gap-2">
+          <component :is="ServerIcon" :size="16" class="text-purple-400" />
+          <span class="text-xs font-bold text-purple-300 uppercase tracking-wide">Gotify (Optional)</span>
+        </div>
+        <button
+          type="button"
+          class="touch-manipulation"
+          :class="[
+            'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
+            localValue.gotify_enabled ? 'bg-green-500' : 'bg-purple-500/20'
+          ]"
+          @click="localValue.gotify_enabled = !localValue.gotify_enabled"
+        >
+          <span
+            :class="[
+              'inline-block h-5 w-5 transform rounded-full bg-white transition-transform',
+              localValue.gotify_enabled ? 'translate-x-5' : 'translate-x-0.5'
+            ]"
+          />
+        </button>
+      </div>
+      
+      <div v-if="localValue.gotify_enabled" class="space-y-3">
+        <div>
+          <div class="flex items-center gap-1.5 mb-2">
+            <label class="text-xs font-semibold text-foreground">
+              Server URL
+              <span class="text-red-400 ml-1">*</span>
+            </label>
+            <Tooltip content="Base URL of your self-hosted Gotify server, e.g. https://gotify.example.com">
+              <HelpCircleIcon :size="14" class="text-purple-400/60 hover:text-purple-400 cursor-help transition-colors" />
+            </Tooltip>
+          </div>
+          <Input
+            v-model="localValue.gotify_url"
+            type="url"
+            placeholder="https://gotify.example.com"
+            :icon="ServerIcon"
+            :disabled="isValidating || isTestingGotify"
+          />
+          <p v-if="errors.gotify_url" class="text-xs text-red-400 mt-2 flex items-center gap-1.5 animate-fade-in">
+            <component :is="AlertCircleIcon" :size="14" />
+            {{ errors.gotify_url }}
+          </p>
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5 mb-2">
+            <label class="text-xs font-semibold text-foreground">
+              App Token
+              <span class="text-red-400 ml-1">*</span>
+            </label>
+            <Tooltip content="Gotify application token — create one in your Gotify dashboard under Apps">
+              <HelpCircleIcon :size="14" class="text-purple-400/60 hover:text-purple-400 cursor-help transition-colors" />
+            </Tooltip>
+          </div>
+          <Input
+            v-model="localValue.gotify_token"
+            type="password"
+            placeholder="••••••••••••••••"
+            :icon="KeyRoundIcon"
+            :disabled="isValidating || isTestingGotify"
+          />
+          <p v-if="errors.gotify_token" class="text-xs text-red-400 mt-2 flex items-center gap-1.5 animate-fade-in">
+            <component :is="AlertCircleIcon" :size="14" />
+            {{ errors.gotify_token }}
+          </p>
+          <p v-else-if="isTestingGotify" class="text-xs text-purple-400 mt-2 flex items-center gap-1.5">
+            <span class="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+            Validating Gotify...
+          </p>
+          <p v-else-if="gotifyValidated" class="text-xs text-green-400 mt-2 flex items-center gap-1.5 animate-fade-in">
+            <component :is="CheckCircleIcon" :size="14" />
+            <span class="font-medium">Gotify validated successfully</span>
+          </p>
+          <p v-else class="text-xs text-muted-foreground mt-1.5">
+            Self-hosted Gotify app token — create one in Gotify under Apps
+          </p>
+        </div>
+      </div>
+    </div>
+
     <!-- Action Buttons -->
     <div class="flex flex-col sm:flex-row justify-between gap-3 sm:gap-0 pt-3 sm:pt-4 border-t border-purple-500/10">
       <Button
@@ -199,18 +283,18 @@
       <div class="relative w-full sm:w-auto order-1 sm:order-2">
         <Button
           variant="primary"
-          :loading="isValidating || isTesting || isTestingTrakt"
+          :loading="isValidating || isTesting || isTestingTrakt || isTestingGotify"
           :disabled="!canProceed"
           @click="handleNext"
           class="w-full sm:w-auto touch-manipulation min-h-[44px]"
           :aria-label="canProceed ? 'Complete setup' : 'Fill in all required fields to complete setup'"
         >
-          {{ (isValidating || isTesting || isTestingTrakt) ? 'Validating...' : 'Complete Setup' }}
+          {{ (isValidating || isTesting || isTestingTrakt || isTestingGotify) ? 'Validating...' : 'Complete Setup' }}
         </Button>
         
         <!-- Tooltip for disabled state -->
         <Tooltip 
-          v-if="!canProceed && !isValidating && !isTesting && !isTestingTrakt"
+          v-if="!canProceed && !isValidating && !isTesting && !isTestingTrakt && !isTestingGotify"
           content="Please fill in all required fields to complete setup"
           placement="top"
         >
@@ -232,6 +316,8 @@ import {
   HelpCircle as HelpCircleIcon,
   AlertCircle as AlertCircleIcon,
   ExternalLink as ExternalLinkIcon,
+  Server as ServerIcon,
+  KeyRound as KeyRoundIcon,
 } from 'lucide-vue-next'
 
 interface Props {
@@ -241,6 +327,9 @@ interface Props {
     timezone: string
     discord_webhook: string
     discord_enabled: boolean
+    gotify_url: string
+    gotify_token: string
+    gotify_enabled: boolean
     trakt_client_id: string
   }
   isValidating: boolean
@@ -260,8 +349,10 @@ const localValue = computed({
 
 const isTesting = ref(false)
 const isTestingTrakt = ref(false)
+const isTestingGotify = ref(false)
 const discordValidated = ref(false)
 const traktValidated = ref(false)
+const gotifyValidated = ref(false)
 
 // Reset validation state when values change
 watch(() => localValue.value.discord_webhook, () => {
@@ -269,6 +360,15 @@ watch(() => localValue.value.discord_webhook, () => {
 })
 watch(() => localValue.value.discord_enabled, () => {
   discordValidated.value = false
+})
+watch(() => localValue.value.gotify_url, () => {
+  gotifyValidated.value = false
+})
+watch(() => localValue.value.gotify_token, () => {
+  gotifyValidated.value = false
+})
+watch(() => localValue.value.gotify_enabled, () => {
+  gotifyValidated.value = false
 })
 watch(() => localValue.value.trakt_client_id, () => {
   traktValidated.value = false
@@ -310,6 +410,11 @@ const canProceed = computed(() => {
   
   // If Discord is enabled, webhook must be provided
   if (localValue.value.discord_enabled && !localValue.value.discord_webhook?.trim()) {
+    return false
+  }
+
+  // If Gotify is enabled, url+token must be provided
+  if (localValue.value.gotify_enabled && (!localValue.value.gotify_url?.trim() || !localValue.value.gotify_token?.trim())) {
     return false
   }
   
@@ -365,7 +470,27 @@ const testDiscord = async () => {
   }
 }
 
-// Handle next button click - always validate Trakt and Discord if enabled
+// Test Gotify
+const testGotify = async () => {
+  if (!localValue.value.gotify_url?.trim() || !localValue.value.gotify_token?.trim()) return false
+
+  isTestingGotify.value = true
+  gotifyValidated.value = false
+
+  try {
+    await api.testGotifyNotification(localValue.value.gotify_url, localValue.value.gotify_token)
+    gotifyValidated.value = true
+    return true
+  } catch (error: any) {
+    gotifyValidated.value = false
+    showError('Gotify Test Failed', error.message || 'Failed to send test message to Gotify')
+    return false
+  } finally {
+    isTestingGotify.value = false
+  }
+}
+
+// Handle next button click - always validate Trakt and Discord/Gotify if enabled
 const handleNext = async () => {
   // Always validate Trakt Client ID
   const traktResult = await testTrakt()
@@ -384,9 +509,19 @@ const handleNext = async () => {
       return
     }
   }
+
+  // If Gotify is enabled, always validate
+  if (localValue.value.gotify_enabled && localValue.value.gotify_url?.trim() && localValue.value.gotify_token?.trim()) {
+    const gotifyResult = await testGotify()
+    if (!gotifyResult) {
+      return
+    }
+  }
   
   // Only proceed if validation passes
-  if (canProceed.value && traktValidated.value && (!localValue.value.discord_enabled || discordValidated.value)) {
+  const discordOk = !localValue.value.discord_enabled || discordValidated.value
+  const gotifyOk = !localValue.value.gotify_enabled || gotifyValidated.value
+  if (canProceed.value && traktValidated.value && discordOk && gotifyOk) {
     emit('next')
   }
 }

@@ -101,6 +101,8 @@ for payload, name in [
     ({"overseerr_url": "http://169.254.169.254"}, "seerr url at metadata"),
     ({"overseerr_url": "http://metadata.google.internal/"}, "seerr url at gcp metadata"),
     ({"overseerr_url": "gopher://127.0.0.1:11211/"}, "seerr url with gopher scheme"),
+    ({"gotify_url": "http://169.254.169.254/"}, "gotify url at metadata"),
+    ({"gotify_url": "file:///etc/passwd"}, "gotify url with file scheme"),
     ({"sync_interval": -5}, "negative sync interval"),
     ({"sync_interval": 0}, "zero sync interval"),
     ({"sync_interval": 100000}, "absurd sync interval"),
@@ -117,6 +119,7 @@ print("=== legitimate settings still save ===")
 r = client.post("/api/settings/config", json={
     "discord_webhook": "https://discord.com/api/webhooks/123/abcdef",
     "overseerr_url": "http://192.168.1.50:5055",
+    "gotify_url": "http://192.168.1.50:8080",
     "sync_interval": 24,
     "timezone": "Europe/London",
     "frontend_domain": "https://listsync.example.com",
@@ -125,6 +128,8 @@ r = client.post("/api/settings/config", json={
 check("valid batch accepted", r.status_code, 200)
 check("  webhook stored", stored("discord_webhook"), "https://discord.com/api/webhooks/123/abcdef")
 check("  private seerr stored", stored("overseerr_url"), "http://192.168.1.50:5055")
+# A self-hosted Gotify on a private address is legitimate, same as Seerr.
+check("  private gotify stored", stored("gotify_url"), "http://192.168.1.50:8080")
 check("  interval stored", str(stored("sync_interval")), "24")
 
 print()
@@ -166,6 +171,36 @@ check("  and stores nothing new", stored("discord_webhook"),
 requests.get = record_get
 
 print()
+print("=== setup wizard step 2: Gotify is validated and saved ===")
+requests.get = lambda *a, **k: OKResponse()
+r = client.post("/api/setup/step2/configuration", json={
+    "trakt_client_id": "0123456789abcdef0123",
+    "sync_interval": 24,
+    "timezone": "UTC",
+    "gotify_url": "http://169.254.169.254/",
+    "gotify_enabled": True,
+})
+body = r.json()
+check("step 2 refuses the metadata Gotify url", body.get("valid"), False)
+check("  and names the field", "gotify_url" in body.get("errors", {}), True)
+check("  and stores nothing", stored("gotify_url"), "http://192.168.1.50:8080")
+
+r = client.post("/api/setup/step2/configuration", json={
+    "trakt_client_id": "0123456789abcdef0123",
+    "sync_interval": 24,
+    "timezone": "UTC",
+    "gotify_url": "http://192.168.1.51:8080",
+    "gotify_token": "apptoken",
+    "gotify_enabled": True,
+})
+body = r.json()
+check("step 2 accepts a private Gotify server", body.get("valid"), True)
+check("  gotify url stored", stored("gotify_url"), "http://192.168.1.51:8080")
+check("  gotify token stored", stored("gotify_token"), "apptoken")
+check("  gotify enabled stored", str(stored("gotify_enabled")).lower() in ("true", "1"), True)
+requests.get = record_get
+
+print()
 print("=== the send path refuses a bad webhook however it got there ===")
 from list_sync.notifications import discord as notifications
 from list_sync.ui.display import SyncResults
@@ -182,9 +217,40 @@ for url, name in [
     check(f"no request sent to {name}", outbound, [])
 
 print()
+print("=== the Gotify send path: metadata blocked, private allowed, test endpoint guarded ===")
+from list_sync.notifications import gotify as gotify_notifications
+
+for url, name in [
+    ("http://169.254.169.254/", "metadata"),
+    ("file:///etc/passwd", "file scheme"),
+]:
+    outbound.clear()
+    gotify_notifications.send_to_gotify("test", url=url, token="apptoken")
+    check(f"no Gotify request to {name}", outbound, [])
+
+# A private/self-hosted address is a legitimate target, so the POST is attempted
+# (the stub raises ConnectionError, which the send path logs and swallows).
+outbound.clear()
+gotify_notifications.send_to_gotify("test", url="http://192.168.1.50:8080", token="apptoken")
+check("private Gotify request attempted", outbound, [("POST", "http://192.168.1.50:8080/message")])
+
+# The test endpoint posts to a caller-supplied URL, so it must apply the same guard.
+outbound.clear()
+r = client.post("/api/notifications/test",
+                json={"service": "gotify", "url": "http://169.254.169.254/", "token": "apptoken"})
+check("test endpoint rejects metadata Gotify url", r.status_code, 400)
+check("  and sends nothing", outbound, [])
+
+outbound.clear()
+r = client.post("/api/notifications/test",
+                json={"service": "gotify", "url": "http://192.168.1.50:8080", "token": "apptoken"})
+check("test endpoint attempts a private Gotify url", outbound,
+      [("POST", "http://192.168.1.50:8080/message")])
+
+print()
 print("=== encrypted-at-rest coverage ===")
 for key in ("overseerr_api_key", "seerr_api_key", "trakt_client_id", "discord_webhook",
-            "tmdb_key", "tvdb_key", "simkl_client_id", "simkl_user_token"):
+            "gotify_token", "tmdb_key", "tvdb_key", "simkl_client_id", "simkl_user_token"):
     check(f"{key} is encrypted at rest", encryption.should_encrypt(key), True)
 check("a list ID is not treated as a secret", encryption.should_encrypt("imdb_lists"), False)
 

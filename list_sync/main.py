@@ -27,6 +27,7 @@ from .database import (
     cancel_sync_in_db
 )
 from .notifications.discord import send_to_discord_webhook
+from .notifications.gotify import send_to_gotify
 from .providers import get_provider, get_available_providers, SyncCancelledException
 from .ui.cli import handle_menu_choice, manage_lists
 from .ui.display import (
@@ -1377,6 +1378,7 @@ def automated_sync(
             
             # Send to Discord webhook if configured
             send_to_discord_webhook(summary_text, sync_results, automated=automated_mode)
+            send_to_gotify(summary_text, sync_results, automated=automated_mode)
             
             """
             # OLD CODE END
@@ -1587,6 +1589,7 @@ def run_sync(
         # Send to Discord webhook if configured
         if not dry_run:
             send_to_discord_webhook(summary_text, sync_results, automated=automated_mode)
+            send_to_gotify(summary_text, sync_results, automated=automated_mode)
         
         # A cancelled sync must not be recorded as a successful one
         cancelled = getattr(sync_results, 'cancelled', False)
@@ -1778,6 +1781,7 @@ def sync_single_list(
             if not dry_run:
                 summary_text = f"Single list sync completed for {list_type}:{list_id}"
                 send_to_discord_webhook(summary_text, sync_results, automated=True, is_single_list=True)
+                send_to_gotify(summary_text, sync_results, automated=True, is_single_list=True)
             
             # Log sync complete with clear marker
             sync_end_marker = f"========== SYNC COMPLETE [SINGLE] - Session: {session_id} - List: {list_type}:{list_id} - Status: SUCCESS =========="

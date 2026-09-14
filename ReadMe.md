@@ -452,6 +452,8 @@ SYNC_INTERVAL=24          # Hours between syncs (default: 24)
 AUTOMATED_MODE=true       # Enable automatic syncing (default: true)
 OVERSEERR_4K=false        # Request 4K versions (default: false)
 DISCORD_WEBHOOK_URL=...   # Discord notifications (optional)
+GOTIFY_URL=                                             # Self-hosted Gotify base URL, e.g. https://gotify.example.com
+GOTIFY_TOKEN=                                           # Gotify application token (Apps page); set both to enable
 TZ=America/New_York       # Your timezone (default: GMT)
 
 # API Keys for Enhanced Functionality (Optional)

@@ -2456,6 +2456,9 @@ async def save_step2_configuration(data: dict):
         - timezone: str
         - discord_webhook: str (optional)
         - discord_enabled: bool
+        - gotify_url: str (optional)
+        - gotify_token: str (optional)
+        - gotify_enabled: bool (optional)
     """
     try:
         from list_sync.config import ConfigManager
@@ -2568,6 +2571,22 @@ async def save_step2_configuration(data: dict):
             if webhook_error:
                 errors['discord_webhook'] = webhook_error
         
+        # Validate Gotify URL if provided
+        gotify_url = data.get('gotify_url', '').strip()
+        gotify_token = data.get('gotify_token', '').strip()
+        gotify_enabled = data.get('gotify_enabled', False)
+
+        # Checked whenever a URL is supplied, not only when notifications are
+        # switched on. The save below stores it either way, and switching Gotify
+        # on later is a separate request that carries no URL to check - so a
+        # URL saved while disabled would never be validated at all.
+        if gotify_url:
+            from list_sync.utils.settings_validation import validate_gotify_url
+
+            gotify_error = validate_gotify_url(gotify_url)
+            if gotify_error:
+                errors['gotify_url'] = gotify_error
+
         # If validation failed, return errors
         if errors:
             return {
@@ -2584,6 +2603,13 @@ async def save_step2_configuration(data: dict):
         if discord_webhook:
             config.save_setting('discord_webhook', discord_webhook)
             config.save_setting('discord_enabled', discord_enabled)
+
+        # Persist Gotify settings only when a URL is supplied, mirroring the
+        # Discord pattern above — no URL means nothing to store.
+        if gotify_url:
+            config.save_setting('gotify_url', gotify_url)
+            config.save_setting('gotify_token', gotify_token)
+            config.save_setting('gotify_enabled', gotify_enabled)
         
         # Also save to sync_interval table (for compatibility)
         configure_sync_interval(sync_interval)
@@ -6832,6 +6858,12 @@ async def get_settings():
         discord_enabled = get_setting_safe('discord_enabled', False)
         if isinstance(discord_enabled, str):
             discord_enabled = discord_enabled.lower() in ('true', '1', 'yes')
+
+        gotify_url = get_setting_safe('gotify_url', '')
+        gotify_token = get_setting_safe('gotify_token', '', mask=True)
+        gotify_enabled = get_setting_safe('gotify_enabled', False)
+        if isinstance(gotify_enabled, str):
+            gotify_enabled = gotify_enabled.lower() in ('true', '1', 'yes')
         
         frontend_domain = get_setting_safe('frontend_domain', 'http://localhost:3222')
         backend_domain = get_setting_safe('backend_domain', 'http://localhost:4222')
@@ -6871,6 +6903,9 @@ async def get_settings():
             # Notifications
             "discord_webhook": discord_webhook,
             "discord_enabled": bool(discord_webhook),
+            "gotify_url": gotify_url or '',
+            "gotify_token": gotify_token or '',
+            "gotify_enabled": bool(gotify_url),
             
             # Trakt API
             "trakt_client_id": trakt_client_id,
@@ -6911,6 +6946,9 @@ async def get_settings():
             # Notifications
             "discord_webhook": '',
             "discord_enabled": False,
+            "gotify_url": '',
+            "gotify_token": '',
+            "gotify_enabled": False,
             
             # Trakt API
             "trakt_client_id": '',
@@ -7001,9 +7039,58 @@ async def update_settings(settings: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/notifications/test")
-async def test_discord_notification(payload: dict = None):
-    """Send a test Discord notification to verify webhook configuration"""
+async def test_notification(payload: dict = None):
+    """Send a test notification to verify webhook configuration (Discord or Gotify)"""
     try:
+        payload = payload or {}
+        service = str(payload.get('service') or 'discord').lower()
+
+        if service == 'gotify':
+            url = (payload.get('url') or os.getenv('GOTIFY_URL', '')).strip()
+            token = (payload.get('token') or os.getenv('GOTIFY_TOKEN', '')).strip()
+
+            if not url:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Gotify URL is required. Please provide a URL or set GOTIFY_URL in your environment variables."
+                )
+            if not token:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Gotify token is required. Please provide a token or set GOTIFY_TOKEN in your environment variables."
+                )
+
+            # The URL arrives from the caller and the server then requests it, so
+            # anything other than a valid Gotify server URL turns this endpoint
+            # into an open request proxy. Validate before requesting.
+            from list_sync.utils.settings_validation import validate_gotify_url
+
+            gotify_error = validate_gotify_url(url)
+            if gotify_error:
+                logging.warning(f"Blocked Gotify test: {gotify_error}")
+                raise HTTPException(status_code=400, detail=gotify_error)
+
+            from datetime import datetime
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            try:
+                response = requests.post(
+                    f"{url.rstrip('/')}/message",
+                    params={"token": token},
+                    json={"title": "🧪 Gotify Integration Test",
+                          "message": "If you see this message, Gotify notifications are working correctly! ✅",
+                          "priority": 0},
+                    timeout=10,
+                )
+                response.raise_for_status()
+                return {"success": True, "message": "Test notification sent successfully! Check your Gotify server.", "timestamp": current_time}
+            except requests.exceptions.Timeout:
+                raise HTTPException(status_code=504, detail="Gotify request timed out")
+            except requests.exceptions.RequestException as e:
+                error_msg = f"Failed to send Gotify notification: {str(e)}"
+                if hasattr(e, 'response') and e.response is not None:
+                    error_msg += f" (Status: {e.response.status_code})"
+                raise HTTPException(status_code=500, detail=error_msg)
+
         # Get Discord webhook URL from request body or environment
         webhook_url = None
         if payload and 'webhook_url' in payload:

@@ -6,7 +6,10 @@ forever. Liveness has to come from the heartbeat, because a full sync records
 the PID of the long-lived core process, which outlives the sync it runs.
 """
 import datetime
-import os, sys, tempfile, types
+import os
+import sys
+import tempfile
+import types
 
 tmp = tempfile.mkdtemp()
 os.environ["DATA_DIR"] = tmp
@@ -38,15 +41,22 @@ crypto.fernet = stub("cryptography.fernet", ("Fernet", "InvalidToken"))
 import sqlite3
 
 import list_sync.database as db
+
 db.DB_FILE = os.path.join(tmp, "list_sync.db")
 db.init_database()
 
 from list_sync.database import (
-    start_sync_in_db, end_sync_in_db, cancel_sync_in_db, heartbeat_sync_in_db,
-    get_current_sync_status, clear_stale_syncs,
+    cancel_sync_in_db,
+    clear_stale_syncs,
+    end_sync_in_db,
+    get_current_sync_status,
+    heartbeat_sync_in_db,
+    start_sync_in_db,
 )
 from list_sync.utils.sync_status import (
-    get_sync_staleness_reason, parse_db_timestamp, start_sync_heartbeat,
+    get_sync_staleness_reason,
+    parse_db_timestamp,
+    start_sync_heartbeat,
 )
 
 fail = []
@@ -59,7 +69,7 @@ def check(label, got, want):
 
 def set_activity(session_id, minutes_ago):
     """Backdate a record's heartbeat, as if the process had gone quiet."""
-    when = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=minutes_ago)
+    when = datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=minutes_ago)
     stamp = when.strftime("%Y-%m-%d %H:%M:%S")
     with sqlite3.connect(db.DB_FILE) as conn:
         conn.execute(
@@ -69,7 +79,7 @@ def set_activity(session_id, minutes_ago):
 
 
 # --- timestamps are stored as UTC and must be read back as UTC ---
-now = datetime.datetime.now(datetime.timezone.utc)
+now = datetime.datetime.now(datetime.UTC)
 sqlite_now = now.strftime("%Y-%m-%d %H:%M:%S")
 parsed = parse_db_timestamp(sqlite_now)
 check("sqlite timestamp parsed as utc", parsed is not None and parsed.tzinfo is not None, True)
@@ -89,7 +99,7 @@ check("cancel updates record", cancel_sync_in_db("cancelled"), True)
 check("cancelled sync is not reported", get_current_sync_status(), None)
 with sqlite3.connect(db.DB_FILE) as conn:
     row = conn.execute(
-        "SELECT in_progress, status FROM sync_history WHERE session_id = 'cancelled'"
+        "SELECT in_progress, status FROM sync_history WHERE session_id = 'cancelled'",
     ).fetchone()
 check("cancelled record is closed", row, (0, "cancelled"))
 
@@ -128,7 +138,7 @@ set_activity("stuck", minutes_ago=60)
 check("stuck sync is cleared", get_current_sync_status(), None)
 with sqlite3.connect(db.DB_FILE) as conn:
     row = conn.execute(
-        "SELECT in_progress, status FROM sync_history WHERE session_id = 'stuck'"
+        "SELECT in_progress, status FROM sync_history WHERE session_id = 'stuck'",
     ).fetchone()
 check("stuck record is closed as interrupted", row, (0, "interrupted"))
 
@@ -154,6 +164,7 @@ start_sync_in_db(session_id="threaded", sync_type="single", list_type="imdb", li
 set_activity("threaded", minutes_ago=60)
 beat = start_sync_heartbeat("threaded", interval_seconds=0.2)
 import time
+
 time.sleep(0.6)
 check("heartbeat thread refreshes record", get_current_sync_status()["session_id"], "threaded")
 beat.stop()
@@ -170,7 +181,7 @@ check("clearing is idempotent", clear_stale_syncs(), [])
 # --- upgrading a database written before last_heartbeat existed ---
 legacy_db = os.path.join(tmp, "legacy.db")
 with sqlite3.connect(legacy_db) as conn:
-    conn.execute('''
+    conn.execute("""
         CREATE TABLE sync_history (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             session_id TEXT UNIQUE NOT NULL,
@@ -188,11 +199,11 @@ with sqlite3.connect(legacy_db) as conn:
             items_errors INTEGER DEFAULT 0,
             error_message TEXT
         )
-    ''')
+    """)
     # A full sync from an hour ago, holding the PID of the core process that
     # ran it - still alive, because that process runs for the life of the
     # container. This is the record that left the dashboard stuck.
-    stale_start = (datetime.datetime.now(datetime.timezone.utc)
+    stale_start = (datetime.datetime.now(datetime.UTC)
                    - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute(
         "INSERT INTO sync_history (session_id, sync_type, in_progress, start_time, pid, status)"
@@ -208,9 +219,11 @@ check("upgrade is repeatable", (db.init_database(), "last_heartbeat" in legacy_c
 
 # --- the live endpoint reports the stuck sync as idle and closes the record ---
 import api_server
+
 api_server.DB_FILE = legacy_db
 
 from fastapi.testclient import TestClient
+
 client = TestClient(api_server.app)
 
 body = client.get("/api/sync/status/live").json()
@@ -218,7 +231,7 @@ check("stuck sync reported idle", body.get("is_running"), False)
 check("stuck sync status idle", body.get("status"), "idle")
 with sqlite3.connect(legacy_db) as conn:
     row = conn.execute(
-        "SELECT in_progress, status FROM sync_history WHERE session_id = 'legacy_stuck'"
+        "SELECT in_progress, status FROM sync_history WHERE session_id = 'legacy_stuck'",
     ).fetchone()
 check("stuck record closed by endpoint", row, (0, "interrupted"))
 

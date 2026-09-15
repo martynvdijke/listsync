@@ -3,15 +3,14 @@
 Database Analysis Script - Check if list sources data exists
 """
 
-import sqlite3
 import os
-from pathlib import Path
+import sqlite3
 
 # Find database file - check multiple possible locations
 possible_paths = [
-    os.path.join(os.path.dirname(__file__), 'data', 'list_sync.db'),
-    os.path.join(os.path.dirname(__file__), '..', '..', 'data', 'list_sync.db'),
-    os.path.join(os.getcwd(), 'data', 'list_sync.db'),
+    os.path.join(os.path.dirname(__file__), "data", "list_sync.db"),
+    os.path.join(os.path.dirname(__file__), "..", "..", "data", "list_sync.db"),
+    os.path.join(os.getcwd(), "data", "list_sync.db"),
 ]
 
 DB_FILE = None
@@ -21,8 +20,8 @@ for path in possible_paths:
         break
 
 if not DB_FILE:
-    DATA_DIR = os.path.join(os.path.dirname(__file__), '..', '..', 'data')
-    DB_FILE = os.path.join(DATA_DIR, 'list_sync.db')
+    DATA_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data")
+    DB_FILE = os.path.join(DATA_DIR, "list_sync.db")
 
 if not os.path.exists(DB_FILE):
     print(f"❌ Database file not found: {DB_FILE}")
@@ -44,7 +43,7 @@ cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='item
 table_exists = cursor.fetchone()
 if table_exists:
     print("✅ item_lists table EXISTS")
-    
+
     # Get table schema
     cursor.execute("PRAGMA table_info(item_lists)")
     columns = cursor.fetchall()
@@ -75,13 +74,13 @@ if cursor.fetchone():
     cursor.execute("SELECT COUNT(*) FROM lists")
     list_count = cursor.fetchone()[0]
     print(f"✅ lists table EXISTS with {list_count} lists")
-    
+
     # Show sample lists
     if list_count > 0:
         # Check what columns exist
         cursor.execute("PRAGMA table_info(lists)")
         list_columns = [col[1] for col in cursor.fetchall()]
-        if 'display_name' in list_columns:
+        if "display_name" in list_columns:
             cursor.execute("SELECT list_type, list_id, display_name FROM lists LIMIT 5")
             lists = cursor.fetchall()
             print("   Sample lists:")
@@ -105,15 +104,15 @@ if table_exists:
     cursor.execute("SELECT COUNT(*) FROM item_lists")
     relationship_count = cursor.fetchone()[0]
     print(f"Total relationships in item_lists: {relationship_count}")
-    
+
     if relationship_count > 0:
         print("✅ Relationships exist! Items are linked to lists.")
-        
+
         # Show sample relationships
         # Check if display_name column exists in lists table
         cursor.execute("PRAGMA table_info(lists)")
         list_columns = [col[1] for col in cursor.fetchall()]
-        if 'display_name' in list_columns:
+        if "display_name" in list_columns:
             cursor.execute("""
                 SELECT 
                     il.item_id,
@@ -142,16 +141,16 @@ if table_exists:
         relationships = cursor.fetchall()
         print("\n   Sample relationships:")
         for rel in relationships:
-            if 'display_name' in rel.keys():
+            if "display_name" in rel.keys():
                 print(f"     - Item #{rel['item_id']} ({rel['title']}) ← {rel['list_type']}:{rel['list_id']} ({rel['display_name'] or 'No name'})")
             else:
                 print(f"     - Item #{rel['item_id']} ({rel['title']}) ← {rel['list_type']}:{rel['list_id']}")
-        
+
         # Check how many items have relationships
         cursor.execute("SELECT COUNT(DISTINCT item_id) FROM item_lists")
         items_with_lists = cursor.fetchone()[0]
         print(f"\n   Items with list relationships: {items_with_lists} out of {item_count}")
-        
+
         if items_with_lists < item_count:
             missing = item_count - items_with_lists
             print(f"   ⚠️  {missing} items are missing list relationships!")
@@ -182,10 +181,10 @@ if item_count > 0:
         LIMIT 10
     """)
     items = cursor.fetchall()
-    
+
     print("Sample items with their list sources:")
     for item in items:
-        sources = item['list_sources'] or "❌ NO LIST SOURCES"
+        sources = item["list_sources"] or "❌ NO LIST SOURCES"
         print(f"   - #{item['id']}: {item['title']} ({item['year']}) - {sources}")
 else:
     print("No items in database")
@@ -197,7 +196,7 @@ print("-" * 80)
 if table_exists:
     cursor.execute("SELECT COUNT(*) FROM item_lists")
     rel_count = cursor.fetchone()[0]
-    
+
     if rel_count == 0:
         print("❌ PROBLEM: item_lists table is EMPTY")
         print("   → Items are not linked to lists")

@@ -1,7 +1,9 @@
 """Adversarial tests for the outbound-URL validator."""
-import sys, types, socket
+import os
+import socket
+import sys
+import types
 
-import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def stub(n, a=()):
     m = types.ModuleType(n)
@@ -12,11 +14,14 @@ for n in ("seleniumbase", "bs4", "halo"):
     except ImportError: stub(n, ("SB", "BeautifulSoup", "Halo"))
 
 import logging
+
 logging.disable(logging.CRITICAL)
 
 from list_sync.utils import url_safety as us
 from list_sync.utils.url_safety import (
-    validate_outbound_url, assert_safe_url, DISCORD_WEBHOOK_HOSTS,
+    DISCORD_WEBHOOK_HOSTS,
+    assert_safe_url,
+    validate_outbound_url,
 )
 
 fail = []

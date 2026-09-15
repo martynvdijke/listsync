@@ -2,13 +2,13 @@
 Seerr API client for the ListSync application.
 """
 
-import json
 import logging
-import requests
-from typing import Dict, Any, Tuple, Optional
+from typing import Any
 from urllib.parse import quote
 
-from ..utils.helpers import calculate_title_similarity, custom_input, color_gradient
+import requests
+
+from ..utils.helpers import calculate_title_similarity, color_gradient, custom_input
 
 # Seerr permission bits (server/lib/permissions.ts).
 # ADMIN implies every other permission.
@@ -20,7 +20,7 @@ PERMISSION_REQUEST_TV = 524288
 
 class SeerrClient:
     """Client for interacting with the Seerr API."""
-    
+
     def __init__(self, seerr_url: str, api_key: str, requester_user_id: str = "1"):
         """
         Initialize the Seerr API client.
@@ -30,14 +30,14 @@ class SeerrClient:
             api_key (str): API key
             requester_user_id (str, optional): Requester user ID. Defaults to "1".
         """
-        self.seerr_url = seerr_url.rstrip('/')
+        self.seerr_url = seerr_url.rstrip("/")
         self.api_key = api_key
         self.requester_user_id = requester_user_id
         self.headers = {"X-Api-Key": api_key, "Content-Type": "application/json"}
         self.request_headers = {"X-Api-Key": api_key, "X-Api-User": requester_user_id, "Content-Type": "application/json"}
         self._users_cache = None
 
-    def _headers_for_user(self, requester_user_id: Optional[str] = None) -> Dict[str, str]:
+    def _headers_for_user(self, requester_user_id: str | None = None) -> dict[str, str]:
         """
         Build request headers for a specific Seerr user without mutating defaults.
         """
@@ -45,11 +45,11 @@ class SeerrClient:
         return {
             "X-Api-Key": self.api_key,
             "X-Api-User": str(user_id),
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
-    def _submit_request(self, payload: Dict[str, Any], description: str,
-                        requester_user_id: Optional[str] = None) -> str:
+    def _submit_request(self, payload: dict[str, Any], description: str,
+                        requester_user_id: str | None = None) -> str:
         """
         POST a request to Seerr as a specific user and classify the outcome.
 
@@ -75,7 +75,7 @@ class SeerrClient:
                 request_url,
                 headers=self._headers_for_user(user_id),
                 json=payload,
-                timeout=30
+                timeout=30,
             )
             response.raise_for_status()
             logging.debug(f"Request successful for {description} as user {user_id}")
@@ -91,25 +91,25 @@ class SeerrClient:
                 return "already_requested"
 
             if status_code == 401:
-                logging.error(
+                logging.exception(
                     f"❌ {description}: Seerr rejected user_id {user_id} (401). "
                     f"No user with that ID exists on {self.seerr_url}. "
-                    f"Check the user assigned to this list against Settings → Users in Seerr."
+                    f"Check the user assigned to this list against Settings → Users in Seerr.",
                 )
                 return "error"
 
             if status_code == 403:
                 lowered = server_message.lower()
                 if "quota" in lowered:
-                    logging.error(
+                    logging.exception(
                         f"❌ {description}: user {user_id} has hit their request quota ({server_message}). "
-                        f"Raise or clear the quota in Seerr under Users → {user_id} → Permissions."
+                        f"Raise or clear the quota in Seerr under Users → {user_id} → Permissions.",
                     )
                 else:
-                    logging.error(
+                    logging.exception(
                         f"❌ {description}: user {user_id} is not allowed to make this request ({server_message}). "
                         f"Grant that user the Request permission in Seerr under Users → {user_id} → Permissions "
-                        f"(4K requests need the separate 4K permission)."
+                        f"(4K requests need the separate 4K permission).",
                     )
                 return "error"
 
@@ -119,14 +119,14 @@ class SeerrClient:
                        for phrase in ["already", "duplicate", "exists"]):
                     logging.info(f"📌 {description}: already requested (400 response)")
                     return "already_requested"
-                logging.error(f"❌ {description}: bad request (400) - {server_message}")
+                logging.exception(f"❌ {description}: bad request (400) - {server_message}")
                 return "error"
 
-            logging.error(f"❌ {description}: HTTP {status_code} as user {user_id} - {server_message}")
+            logging.exception(f"❌ {description}: HTTP {status_code} as user {user_id} - {server_message}")
             return "error"
 
         except requests.exceptions.RequestException as e:
-            logging.error(f"❌ {description}: could not reach Seerr - {str(e)}")
+            logging.exception(f"❌ {description}: could not reach Seerr - {e!s}")
             return "error"
 
     @staticmethod
@@ -143,7 +143,7 @@ class SeerrClient:
         text = getattr(response, "text", "") or ""
         return text.strip()[:200] or "no detail returned"
 
-    def get_users(self, use_cache: bool = True) -> Optional[list]:
+    def get_users(self, use_cache: bool = True) -> list | None:
         """
         Fetch the users configured on the Seerr server.
 
@@ -165,16 +165,16 @@ class SeerrClient:
                 users_url,
                 headers=self.headers,
                 params={"take": 200},
-                timeout=15
+                timeout=15,
             )
             response.raise_for_status()
             self._users_cache = response.json().get("results", [])
             return self._users_cache
         except requests.exceptions.RequestException as e:
-            logging.error(f"Failed to fetch Seerr users: {str(e)}")
+            logging.exception(f"Failed to fetch Seerr users: {e!s}")
             return None
 
-    def validate_requester(self, requester_user_id: str) -> Tuple[bool, str]:
+    def validate_requester(self, requester_user_id: str) -> tuple[bool, str]:
         """
         Check up front that a list's assigned user can actually make requests.
 
@@ -234,9 +234,9 @@ class SeerrClient:
             logging.info("Seerr API connection successful!")
             return True
         except Exception as e:
-            logging.error(f"Seerr API connection failed. Error: {str(e)}")
+            logging.exception(f"Seerr API connection failed. Error: {e!s}")
             raise
-    
+
     def set_requester_user(self) -> str:
         """
         Set the requester user based on available users.
@@ -250,23 +250,23 @@ class SeerrClient:
             response = requests.get(users_url, headers=self.headers)
             response.raise_for_status()
             jsonResult = response.json()
-            
-            if jsonResult['pageInfo']['results'] > 1:
+
+            if jsonResult["pageInfo"]["results"] > 1:
                 print(color_gradient("\n📋 Multiple users detected, you can choose which user will make the requests on ListSync behalf.\n", "#00aaff", "#00ffaa"))
-                for result in jsonResult['results']:
+                for result in jsonResult["results"]:
                     print(color_gradient(f"{result['id']}. {result['displayName']}", "#ffaa00", "#ff5500"))
                 requester_user_id = custom_input(color_gradient("\nEnter the number of the user to use as requester: ", "#ffaa00", "#ff5500"))
-                if not next((x for x in jsonResult['results'] if str(x['id']) == requester_user_id), None):
+                if not next((x for x in jsonResult["results"] if str(x["id"]) == requester_user_id), None):
                     requester_user_id = "1"
                     print(color_gradient("\n❌  Invalid option, using admin as requester user.", "#ff0000", "#aa0000"))
-                
+
             logging.info("Requester user set!")
             return requester_user_id
         except Exception as e:
-            logging.error(f"Failed to set requester user. Error: {str(e)}")
+            logging.exception(f"Failed to set requester user. Error: {e!s}")
             return "1"  # Default fallback
-    
-    def get_media_by_tmdb_id(self, tmdb_id: int, media_type: str) -> Optional[Dict[str, Any]]:
+
+    def get_media_by_tmdb_id(self, tmdb_id: int, media_type: str) -> dict[str, Any] | None:
         """
         Get media details directly by TMDB ID (no search needed).
         
@@ -278,54 +278,54 @@ class SeerrClient:
             Optional[Dict[str, Any]]: Media details with ID and status or None if not found
         """
         media_url = f"{self.seerr_url}/api/v1/{media_type}/{tmdb_id}"
-        
+
         try:
             logging.info(f"🎯 Seerr API: Direct lookup by TMDB ID: {tmdb_id} [{media_type}]")
             logging.debug(f"Request URL: {media_url}")
-            
+
             response = requests.get(media_url, headers=self.headers, timeout=10)
-            
+
             if response.status_code == 404:
                 logging.info(f"❌ Seerr API: TMDB ID {tmdb_id} not found in Seerr")
                 return None
-            
+
             if response.status_code == 403:
                 logging.error(f"❌ Seerr API: 403 Forbidden - API key does not have permission to access /api/v1/{media_type}/{tmdb_id}")
-                logging.error(f"   Please check your API key permissions in Seerr settings. The key needs 'Read' permission for media endpoints.")
+                logging.error("   Please check your API key permissions in Seerr settings. The key needs 'Read' permission for media endpoints.")
                 return None
-            
+
             response.raise_for_status()
             media_data = response.json()
-            
+
             # Extract the title for logging
-            media_title = media_data.get('title') if media_type == 'movie' else media_data.get('name')
+            media_title = media_data.get("title") if media_type == "movie" else media_data.get("name")
             media_year = None
             try:
-                if media_type == 'movie' and 'releaseDate' in media_data:
-                    media_year = media_data['releaseDate'][:4]
-                elif media_type == 'tv' and 'firstAirDate' in media_data:
-                    media_year = media_data['firstAirDate'][:4]
+                if media_type == "movie" and "releaseDate" in media_data:
+                    media_year = media_data["releaseDate"][:4]
+                elif media_type == "tv" and "firstAirDate" in media_data:
+                    media_year = media_data["firstAirDate"][:4]
             except (ValueError, TypeError):
                 pass
-            
+
             logging.info(f"✅ Seerr API: Found '{media_title}' ({media_year}) via TMDB ID {tmdb_id}")
             # Removed verbose media data logging to reduce log size
-            
+
             # Ensure tmdb_id is an integer (may be string from collections)
             overseerr_id = int(tmdb_id) if tmdb_id else None
-            
+
             return {
                 "id": overseerr_id,  # Use TMDB ID as the identifier (converted to int)
                 "mediaType": media_type,
                 "title": media_title,
-                "year": media_year
+                "year": media_year,
             }
-            
+
         except requests.exceptions.RequestException as e:
-            logging.error(f"❌ Seerr API error for TMDB ID {tmdb_id}: {str(e)}")
+            logging.exception(f"❌ Seerr API error for TMDB ID {tmdb_id}: {e!s}")
             return None
-    
-    def search_media(self, media_title: str, media_type: str, release_year: int = None) -> Optional[Dict[str, Any]]:
+
+    def search_media(self, media_title: str, media_type: str, release_year: int = None) -> dict[str, Any] | None:
         """
         Search for media in Seerr (fallback method when no TMDB ID available).
         
@@ -340,49 +340,49 @@ class SeerrClient:
         logging.info(f"🔍 Seerr API: Fallback search by title: '{media_title}' ({release_year}) [{media_type}]")
         search_url = f"{self.seerr_url}/api/v1/search"
         search_title = media_title  # Use the provided title
-        
+
         page = 1
         best_match = None
         best_score = 0
-        
+
         while True:
             try:
                 # Use quote to properly encode all special characters including forward slashes
                 # quote() encodes spaces as %20 and slashes as %2F (unlike requests.utils.quote which doesn't encode /)
-                encoded_query = quote(search_title, safe='')
+                encoded_query = quote(search_title, safe="")
                 url = f"{search_url}?query={encoded_query}&page={page}&language=en"
-                
+
                 logging.info(f"  📄 Seerr API: Searching page {page} for '{search_title}' (Year: {release_year})")
                 logging.debug(f"  Request URL: {url}")
                 response = requests.get(url, headers=self.headers, timeout=10)
-                
+
                 if response.status_code == 429:
                     logging.warning("Rate limited, waiting 5 seconds...")
                     import time
                     time.sleep(5)
                     continue
-                
+
                 if response.status_code == 403:
-                    logging.error(f"❌ Seerr API: 403 Forbidden - API key does not have permission to access /api/v1/search")
-                    logging.error(f"   Please check your API key permissions in Seerr settings. The key needs 'Read' permission for search endpoints.")
+                    logging.error("❌ Seerr API: 403 Forbidden - API key does not have permission to access /api/v1/search")
+                    logging.error("   Please check your API key permissions in Seerr settings. The key needs 'Read' permission for search endpoints.")
                     return None
-                    
+
                 response.raise_for_status()
                 search_results = response.json()
-                
+
                 if not search_results.get("results"):
                     break
-                    
+
                 for result in search_results["results"]:
                     result_type = result.get("mediaType")
                     if result_type != media_type:
                         continue
-                    
+
                     # Get the title based on media type
                     result_title = result.get("title") if media_type == "movie" else result.get("name")
                     if not result_title:
                         continue
-                    
+
                     # Get year
                     result_year = None
                     try:
@@ -392,13 +392,13 @@ class SeerrClient:
                             result_year = int(result["firstAirDate"][:4])
                     except (ValueError, TypeError):
                         pass
-                    
+
                     # Calculate title similarity
                     similarity = calculate_title_similarity(search_title, result_title)
-                    
+
                     # Calculate final score
                     score = similarity
-                    
+
                     # Year matching
                     if release_year and result_year:
                         if release_year == result_year:
@@ -407,26 +407,26 @@ class SeerrClient:
                         elif abs(release_year - result_year) <= 1:
                             score *= 1.5  # 1.5x score for off-by-one year
                             logging.debug(f"  ≈ Close year match for '{result_title}' ({result_year}) - Base similarity: {similarity}")
-                    
+
                     logging.debug(f"  🔍 Match candidate: '{result_title}' ({result_year}) - Score: {score}")
-                    
+
                     # Update best match if we have a better score
                     # For exact year matches, require a lower similarity threshold
                     min_similarity = 0.5 if (release_year and result_year and release_year == result_year) else 0.7
-                    
+
                     if score > best_score and similarity >= min_similarity:
                         best_score = score
                         best_match = result
                         logging.info(f"  ⭐ New best match: '{result_title}' ({result_year}) - Score: {score}")
-                
+
                 # Only continue to next page if we haven't found a good match
                 if best_score > 1.5 or page >= search_results.get("totalPages", 1):
                     break
-                
+
                 page += 1
-                
+
             except requests.exceptions.RequestException as e:
-                logging.error(f'Error searching for "{search_title}": {str(e)}')
+                logging.exception(f'Error searching for "{search_title}": {e!s}')
                 if "429" in str(e):
                     import time
                     time.sleep(5)
@@ -443,17 +443,17 @@ class SeerrClient:
                     result_year = best_match["firstAirDate"][:4]
             except (ValueError, TypeError):
                 pass
-            
+
             logging.info(f"✅ Seerr API: Final match for '{media_title}' ({release_year}): '{result_title}' ({result_year}) - Score: {best_score}")
             return {
                 "id": best_match["id"],
                 "mediaType": best_match["mediaType"],
             }
-        
+
         logging.warning(f'❌ Seerr API: No matching results found for "{media_title}" ({release_year}) of type "{media_type}"')
         return None
-    
-    def get_media_state(self, media_id: int, media_type: str, is_4k: bool = False) -> Dict[str, Any]:
+
+    def get_media_state(self, media_id: int, media_type: str, is_4k: bool = False) -> dict[str, Any]:
         """
         Get the full state of a media item in Seerr, including who requested it.
 
@@ -475,7 +475,7 @@ class SeerrClient:
         try:
             media_id = int(media_id)
         except (ValueError, TypeError):
-            logging.error(f"Invalid media_id type in get_media_status: {type(media_id)} = {media_id}")
+            logging.exception(f"Invalid media_id type in get_media_status: {type(media_id)} = {media_id}")
             raise ValueError(f"media_id must be an integer, got {type(media_id)}: {media_id}")
 
         media_url = f"{self.seerr_url}/api/v1/{media_type}/{media_id}"
@@ -492,7 +492,7 @@ class SeerrClient:
 
             logging.debug(
                 f"Seerr {media_type} ID {media_id}: status={status}, "
-                f"seasons={number_of_seasons}, requested_by={sorted(requested_by) or 'nobody'}"
+                f"seasons={number_of_seasons}, requested_by={sorted(requested_by) or 'nobody'}",
             )
 
             # Status codes:
@@ -518,11 +518,11 @@ class SeerrClient:
                 "requested_by_user_ids": requested_by,
             }
         except Exception as e:
-            logging.error(f"Error confirming status for {media_type} ID {media_id}: {str(e)}")
+            logging.exception(f"Error confirming status for {media_type} ID {media_id}: {e!s}")
             raise
 
     @staticmethod
-    def _extract_requester_ids(media_info: Dict[str, Any], is_4k: bool = False) -> set:
+    def _extract_requester_ids(media_info: dict[str, Any], is_4k: bool = False) -> set:
         """
         Collect the IDs of users who already have a request on this media.
 
@@ -542,7 +542,7 @@ class SeerrClient:
                 requester_ids.add(str(user_id))
         return requester_ids
 
-    def get_media_status(self, media_id: int, media_type: str) -> Tuple[bool, bool, int]:
+    def get_media_status(self, media_id: int, media_type: str) -> tuple[bool, bool, int]:
         """
         Get the status of media in Seerr.
 
@@ -570,8 +570,8 @@ class SeerrClient:
         number_of_seasons = media_data.get("numberOfSeasons")
         logging.debug(f"Extracted number of seasons: {number_of_seasons}")
         return number_of_seasons if number_of_seasons is not None else 1
-    
-    def request_media(self, media_id: int, media_type: str, is_4k: bool = False, requester_user_id: Optional[str] = None) -> str:
+
+    def request_media(self, media_id: int, media_type: str, is_4k: bool = False, requester_user_id: str | None = None) -> str:
         """
         Request media in Seerr.
         
@@ -587,22 +587,22 @@ class SeerrClient:
         try:
             media_id = int(media_id)
         except (ValueError, TypeError):
-            logging.error(f"Invalid media_id type: {type(media_id)} = {media_id}")
+            logging.exception(f"Invalid media_id type: {type(media_id)} = {media_id}")
             return "error"
-        
+
         payload = {
             "mediaId": media_id,  # Ensure it's an integer, not string
             "mediaType": media_type,
-            "is4k": is_4k
+            "is4k": is_4k,
         }
 
         return self._submit_request(
             payload,
             f"{media_type} ID {media_id}",
-            requester_user_id
+            requester_user_id,
         )
 
-    def request_tv_series(self, tv_id: int, number_of_seasons: int, is_4k: bool = False, requester_user_id: Optional[str] = None) -> str:
+    def request_tv_series(self, tv_id: int, number_of_seasons: int, is_4k: bool = False, requester_user_id: str | None = None) -> str:
         """
         Request TV series in Seerr with specific seasons.
         
@@ -618,9 +618,9 @@ class SeerrClient:
         try:
             tv_id = int(tv_id)
         except (ValueError, TypeError):
-            logging.error(f"Invalid tv_id type: {type(tv_id)} = {tv_id}")
+            logging.exception(f"Invalid tv_id type: {type(tv_id)} = {tv_id}")
             return "error"
-        
+
         seasons_list = [i for i in range(1, number_of_seasons + 1)]
         logging.debug(f"Seasons list for TV series ID {tv_id}: {seasons_list}")
 
@@ -628,7 +628,7 @@ class SeerrClient:
             "mediaId": tv_id,  # Ensure it's an integer, not string
             "mediaType": "tv",
             "is4k": is_4k,
-            "seasons": seasons_list
+            "seasons": seasons_list,
         }
 
         logging.debug(f"Requesting TV series ID {tv_id}: {number_of_seasons} seasons")
@@ -636,10 +636,10 @@ class SeerrClient:
         return self._submit_request(
             payload,
             f"TV series ID {tv_id} ({number_of_seasons} season(s))",
-            requester_user_id
+            requester_user_id,
         )
 
-    def request_specific_season(self, tv_id: int, season_number: int, is_4k: bool = False, requester_user_id: Optional[str] = None) -> str:
+    def request_specific_season(self, tv_id: int, season_number: int, is_4k: bool = False, requester_user_id: str | None = None) -> str:
         """
         Request a specific season of a TV series in Seerr.
         
@@ -655,14 +655,14 @@ class SeerrClient:
         try:
             tv_id = int(tv_id)
         except (ValueError, TypeError):
-            logging.error(f"Invalid tv_id type: {type(tv_id)} = {tv_id}")
+            logging.exception(f"Invalid tv_id type: {type(tv_id)} = {tv_id}")
             return "error"
-        
+
         payload = {
             "mediaId": tv_id,  # Ensure it's an integer, not string
             "mediaType": "tv",
             "is4k": is_4k,
-            "seasons": [season_number]  # Request only the specific season
+            "seasons": [season_number],  # Request only the specific season
         }
 
         logging.info(f"📺 Requesting Season {season_number} for TV series TMDB ID {tv_id}")
@@ -670,5 +670,5 @@ class SeerrClient:
         return self._submit_request(
             payload,
             f"Season {season_number} of TV series ID {tv_id}",
-            requester_user_id
+            requester_user_id,
         )

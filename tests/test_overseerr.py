@@ -1,7 +1,8 @@
 """Check SeerrClient classifies each Seerr failure mode correctly."""
-import os, sys, types, logging
+import os
+import sys
+import types
 
-import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 for name in ("seleniumbase", "bs4", "dotenv"):
     try:
@@ -13,6 +14,7 @@ for name in ("seleniumbase", "bs4", "dotenv"):
         sys.modules[name] = mod
 
 import requests
+
 from list_sync.api.seerr import SeerrClient
 
 fail = []

@@ -2,14 +2,13 @@
 In-memory sync status tracking for real-time sync state monitoring.
 """
 
-import logging
-import threading
 import datetime
-from typing import Optional, Dict, Any
-from dataclasses import dataclass, asdict
 import json
+import logging
 import os
-
+import threading
+from dataclasses import asdict, dataclass
+from typing import Any
 
 # A running sync bumps its database row every few seconds (see
 # start_sync_heartbeat). A row that has not been touched for this long belongs
@@ -29,22 +28,22 @@ _MIN_AGE_BEFORE_PID_CHECK_SECONDS = 60
 class SyncState:
     """Current sync state information"""
     is_running: bool = False
-    sync_type: Optional[str] = None  # 'full' or 'single'
-    session_id: Optional[str] = None
-    start_time: Optional[datetime.datetime] = None
-    list_type: Optional[str] = None  # For single list syncs
-    list_id: Optional[str] = None  # For single list syncs
-    pid: Optional[int] = None  # Main process PID
-    sync_subprocess_pid: Optional[int] = None  # PID of subprocess running sync (for immediate termination)
+    sync_type: str | None = None  # 'full' or 'single'
+    session_id: str | None = None
+    start_time: datetime.datetime | None = None
+    list_type: str | None = None  # For single list syncs
+    list_id: str | None = None  # For single list syncs
+    pid: int | None = None  # Main process PID
+    sync_subprocess_pid: int | None = None  # PID of subprocess running sync (for immediate termination)
     cancellation_requested: bool = False
 
 
 class SyncStatusTracker:
     """Thread-safe singleton for tracking sync status"""
-    
+
     _instance = None
     _lock = threading.Lock()
-    
+
     def __new__(cls):
         if cls._instance is None:
             with cls._lock:
@@ -53,14 +52,14 @@ class SyncStatusTracker:
                     cls._instance._state = SyncState()
                     cls._instance._state_lock = threading.Lock()
         return cls._instance
-    
+
     def start_sync(
         self,
         sync_type: str,
         session_id: str,
-        list_type: Optional[str] = None,
-        list_id: Optional[str] = None,
-        subprocess_pid: Optional[int] = None
+        list_type: str | None = None,
+        list_id: str | None = None,
+        subprocess_pid: int | None = None,
     ) -> None:
         """Mark sync as started"""
         import os
@@ -74,7 +73,7 @@ class SyncStatusTracker:
             self._state.pid = os.getpid()
             self._state.sync_subprocess_pid = subprocess_pid
             self._state.cancellation_requested = False
-    
+
     def end_sync(self) -> None:
         """Mark sync as completed"""
         with self._state_lock:
@@ -87,61 +86,61 @@ class SyncStatusTracker:
             self._state.pid = None
             self._state.sync_subprocess_pid = None
             self._state.cancellation_requested = False
-    
+
     def set_subprocess_pid(self, pid: int) -> None:
         """Set the subprocess PID for the running sync (allows immediate termination)"""
         with self._state_lock:
             self._state.sync_subprocess_pid = pid
-    
-    def get_subprocess_pid(self) -> Optional[int]:
+
+    def get_subprocess_pid(self) -> int | None:
         """Get the subprocess PID if set"""
         with self._state_lock:
             return self._state.sync_subprocess_pid
-    
-    def get_state(self) -> Dict[str, Any]:
+
+    def get_state(self) -> dict[str, Any]:
         """Get current sync state as dictionary"""
         with self._state_lock:
             state_dict = asdict(self._state)
             # Convert datetime to ISO format string
-            if state_dict.get('start_time'):
-                state_dict['start_time'] = self._state.start_time.isoformat()
+            if state_dict.get("start_time"):
+                state_dict["start_time"] = self._state.start_time.isoformat()
             return state_dict
-    
+
     def is_sync_running(self) -> bool:
         """Check if sync is currently running"""
         with self._state_lock:
             return self._state.is_running
-    
-    def get_sync_info(self) -> Optional[Dict[str, Any]]:
+
+    def get_sync_info(self) -> dict[str, Any] | None:
         """Get sync information if running, None otherwise"""
         with self._state_lock:
             if not self._state.is_running:
                 return None
-            
+
             info = {
-                'sync_type': self._state.sync_type,
-                'session_id': self._state.session_id,
-                'start_time': self._state.start_time.isoformat() if self._state.start_time else None,
-                'pid': self._state.pid,
-                'sync_subprocess_pid': self._state.sync_subprocess_pid,
+                "sync_type": self._state.sync_type,
+                "session_id": self._state.session_id,
+                "start_time": self._state.start_time.isoformat() if self._state.start_time else None,
+                "pid": self._state.pid,
+                "sync_subprocess_pid": self._state.sync_subprocess_pid,
             }
-            
-            if self._state.sync_type == 'single':
-                info['list_type'] = self._state.list_type
-                info['list_id'] = self._state.list_id
-            
+
+            if self._state.sync_type == "single":
+                info["list_type"] = self._state.list_type
+                info["list_id"] = self._state.list_id
+
             return info
-    
+
     def request_cancellation(self) -> None:
         """Request cancellation of the current sync"""
         with self._state_lock:
             self._state.cancellation_requested = True
-    
+
     def is_cancellation_requested(self) -> bool:
         """Check if cancellation has been requested"""
         with self._state_lock:
             return self._state.cancellation_requested
-    
+
     def clear_cancellation(self) -> None:
         """Clear the cancellation request flag"""
         with self._state_lock:
@@ -170,7 +169,7 @@ def _read_cancel_requests() -> dict:
     try:
         if not os.path.exists(_CANCEL_FILE):
             return {}
-        with open(_CANCEL_FILE, "r") as f:
+        with open(_CANCEL_FILE) as f:
             return json.load(f) or {}
     except Exception:
         return {}
@@ -215,7 +214,7 @@ def set_pause_until(timestamp_iso: str):
     _write_cancel_requests(data)
 
 
-def get_pause_until() -> Optional[str]:
+def get_pause_until() -> str | None:
     data = _read_cancel_requests()
     return data.get(_PAUSE_KEY)
 
@@ -244,7 +243,7 @@ def get_stale_timeout_seconds() -> int:
     return DEFAULT_SYNC_STALE_SECONDS
 
 
-def parse_db_timestamp(value: Any) -> Optional[datetime.datetime]:
+def parse_db_timestamp(value: Any) -> datetime.datetime | None:
     """
     Parse a sync_history timestamp into an aware UTC datetime.
 
@@ -275,11 +274,11 @@ def parse_db_timestamp(value: Any) -> Optional[datetime.datetime]:
     if parsed is None:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
-    return parsed.astimezone(datetime.timezone.utc)
+        parsed = parsed.replace(tzinfo=datetime.UTC)
+    return parsed.astimezone(datetime.UTC)
 
 
-def pid_is_alive(pid: int) -> Optional[bool]:
+def pid_is_alive(pid: int) -> bool | None:
     """
     Whether a process exists, or None when that cannot be determined.
 
@@ -318,21 +317,21 @@ def pid_is_alive(pid: int) -> Optional[bool]:
     return True
 
 
-def get_sync_last_activity(sync_record: Dict[str, Any]) -> Optional[datetime.datetime]:
+def get_sync_last_activity(sync_record: dict[str, Any]) -> datetime.datetime | None:
     """Most recent sign of life for a sync record, as an aware UTC datetime."""
     if not sync_record:
         return None
     return (
-        parse_db_timestamp(sync_record.get('last_heartbeat'))
-        or parse_db_timestamp(sync_record.get('start_time'))
+        parse_db_timestamp(sync_record.get("last_heartbeat"))
+        or parse_db_timestamp(sync_record.get("start_time"))
     )
 
 
 def get_sync_staleness_reason(
-    sync_record: Dict[str, Any],
-    now: Optional[datetime.datetime] = None,
-    stale_after_seconds: Optional[int] = None
-) -> Optional[str]:
+    sync_record: dict[str, Any],
+    now: datetime.datetime | None = None,
+    stale_after_seconds: int | None = None,
+) -> str | None:
     """
     Explain why an in-progress sync record is abandoned, or None if it looks alive.
 
@@ -355,12 +354,12 @@ def get_sync_staleness_reason(
     if stale_after_seconds is None:
         stale_after_seconds = get_stale_timeout_seconds()
     if now is None:
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
 
     last_activity = get_sync_last_activity(sync_record)
     age_seconds = (now - last_activity).total_seconds() if last_activity else None
 
-    pid = sync_record.get('pid')
+    pid = sync_record.get("pid")
     if pid and (age_seconds is None or age_seconds >= _MIN_AGE_BEFORE_PID_CHECK_SECONDS):
         if pid_is_alive(pid) is False:
             return f"process {pid} is no longer running"
@@ -383,7 +382,7 @@ class SyncHeartbeat:
         self.session_id = session_id
         self.interval_seconds = interval_seconds
         self._stop_event = threading.Event()
-        self._thread: Optional[threading.Thread] = None
+        self._thread: threading.Thread | None = None
 
     def start(self) -> "SyncHeartbeat":
         if self._thread is not None:
@@ -391,7 +390,7 @@ class SyncHeartbeat:
         self._thread = threading.Thread(
             target=self._run,
             name=f"sync-heartbeat-{self.session_id}",
-            daemon=True
+            daemon=True,
         )
         self._thread.start()
         return self
@@ -416,7 +415,7 @@ class SyncHeartbeat:
 
 def start_sync_heartbeat(
     session_id: str,
-    interval_seconds: int = SYNC_HEARTBEAT_INTERVAL_SECONDS
+    interval_seconds: int = SYNC_HEARTBEAT_INTERVAL_SECONDS,
 ) -> SyncHeartbeat:
     """Start heartbeating a running sync. Call stop() on the result when done."""
     return SyncHeartbeat(session_id, interval_seconds).start()

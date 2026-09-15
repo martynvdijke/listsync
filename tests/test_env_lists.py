@@ -1,7 +1,9 @@
 """End-to-end: env vars -> database -> per-list requester."""
-import sys, types, os, tempfile
+import os
+import sys
+import tempfile
+import types
 
-import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def stub(name, attrs=()):
     m = types.ModuleType(name)
@@ -16,12 +18,16 @@ d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a,
 
 tmp = tempfile.mkdtemp()
 import list_sync.utils.logger as lg
+
 lg.DATA_DIR = tmp
 import list_sync.database as db
+
 db.DB_FILE = os.path.join(tmp, "list_sync.db")
 db.init_database()
 
 import list_sync.config as cfg
+
+
 # Force the environment fallback rather than ConfigManager (which needs a key).
 class BrokenConfigManager(Exception): pass
 cfg.ConfigManager = lambda *a, **k: (_ for _ in ()).throw(BrokenConfigManager())

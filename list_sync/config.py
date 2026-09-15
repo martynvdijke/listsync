@@ -6,16 +6,13 @@ import base64
 import getpass
 import json
 import os
-import sqlite3
-import time
-from typing import Optional, Tuple
 
 import requests
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 from halo import Halo
 
-from .utils.helpers import custom_input, color_gradient
+from .utils.helpers import color_gradient, custom_input
 from .utils.logger import DATA_DIR
 
 # Define paths for config and database
@@ -36,7 +33,7 @@ LEGACY_ENV_NAMES = {
 _reported_legacy_names = set()
 
 
-def get_seerr_env(name: str, default: Optional[str] = None) -> Optional[str]:
+def get_seerr_env(name: str, default: str | None = None) -> str | None:
     """
     Read a SEERR_* setting, accepting its old OVERSEERR_* name.
 
@@ -71,7 +68,7 @@ def get_seerr_env(name: str, default: Optional[str] = None) -> Optional[str]:
                 _reported_legacy_names.add(legacy_name)
                 logging.warning(
                     f"{legacy_name} is the old name for {name}. It still works, "
-                    f"but rename it when convenient - Overseerr is Seerr now."
+                    f"but rename it when convenient - Overseerr is Seerr now.",
                 )
             return value
 
@@ -187,7 +184,7 @@ def save_config(seerr_url, api_key, requester_user_id):
         f.write(encrypted_config)
     print(f'\n{color_gradient("✅  Details encrypted. Remember your password!", "#00ff00", "#00aa00")}\n')
 
-def load_config() -> Tuple[Optional[str], Optional[str], Optional[str]]:
+def load_config() -> tuple[str | None, str | None, str | None]:
     """
     Load configuration from encrypted file.
     
@@ -197,10 +194,10 @@ def load_config() -> Tuple[Optional[str], Optional[str], Optional[str]]:
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "rb") as f:
             encrypted_config = f.read()
-        
+
         max_attempts = 3
         current_attempt = 0
-        
+
         while current_attempt < max_attempts:
             print()  # Ensure password prompt is on a new line
             password = getpass.getpass(color_gradient("🔑  Enter your password: ", "#ff0000", "#aa0000"))
@@ -233,9 +230,9 @@ def test_overseerr_api(seerr_url, api_key):
         import logging
         logging.info("Seerr API connection successful!")
     except Exception as e:
-        spinner.fail(color_gradient(f"❌  Seerr API connection failed. Error: {str(e)}", "#ff0000", "#aa0000"))
+        spinner.fail(color_gradient(f"❌  Seerr API connection failed. Error: {e!s}", "#ff0000", "#aa0000"))
         import logging
-        logging.error(f"Seerr API connection failed. Error: {str(e)}")
+        logging.exception(f"Seerr API connection failed. Error: {e!s}")
         raise
 
 def set_requester_user(seerr_url, api_key):
@@ -247,12 +244,12 @@ def set_requester_user(seerr_url, api_key):
         response = requests.get(users_url, headers=headers)
         response.raise_for_status()
         jsonResult = response.json()
-        if jsonResult['pageInfo']['results'] > 1:
+        if jsonResult["pageInfo"]["results"] > 1:
             print(color_gradient("\n📋 Multiple users detected, you can choose which user will make the requests on ListSync behalf.\n", "#00aaff", "#00ffaa"))
-            for result in jsonResult['results']:
+            for result in jsonResult["results"]:
                 print(color_gradient(f"{result['id']}. {result['displayName']}", "#ffaa00", "#ff5500"))
             requester_user_id = custom_input(color_gradient("\nEnter the number of the list to use as requester user: ", "#ffaa00", "#ff5500"))
-            if not next((x for x in jsonResult['results'] if str(x['id']) == requester_user_id), None):
+            if not next((x for x in jsonResult["results"] if str(x["id"]) == requester_user_id), None):
                 requester_user_id = "1"
                 print(color_gradient("\n❌  Invalid option, using admin as requester user.", "#ff0000", "#aa0000"))
 
@@ -261,10 +258,10 @@ def set_requester_user(seerr_url, api_key):
         return requester_user_id
     except Exception as e:
         import logging
-        logging.error(f"Seerr API connection failed. Error: {str(e)}")
+        logging.exception(f"Seerr API connection failed. Error: {e!s}")
         return 1
 
-def get_trakt_client_id() -> Optional[str]:
+def get_trakt_client_id() -> str | None:
     """
     Get Trakt API Client ID from environment variables.
     
@@ -272,21 +269,21 @@ def get_trakt_client_id() -> Optional[str]:
         Optional[str]: Trakt Client ID if set, None otherwise
     """
     # Load environment variables if .env exists
-    if os.path.exists('.env'):
+    if os.path.exists(".env"):
         load_dotenv()
-    
-    client_id = os.getenv('TRAKT_CLIENT_ID')
+
+    client_id = os.getenv("TRAKT_CLIENT_ID")
     if client_id:
         import logging
         logging.info("Trakt API Client ID loaded from environment")
     else:
         import logging
         logging.warning("TRAKT_CLIENT_ID not set - Trakt integration will not work")
-    
+
     return client_id
 
 
-def get_tmdb_api_key() -> Optional[str]:
+def get_tmdb_api_key() -> str | None:
     """
     Get TMDB API Key from environment variables.
     
@@ -294,21 +291,21 @@ def get_tmdb_api_key() -> Optional[str]:
         Optional[str]: TMDB API Key if set, None otherwise
     """
     # Load environment variables if .env exists
-    if os.path.exists('.env'):
+    if os.path.exists(".env"):
         load_dotenv()
-    
-    api_key = os.getenv('TMDB_KEY')
+
+    api_key = os.getenv("TMDB_KEY")
     if api_key:
         import logging
         logging.info("TMDB API Key loaded from environment")
     else:
         import logging
         logging.warning("TMDB_KEY not set - TMDB will use web scraping fallback")
-    
+
     return api_key
 
 
-def get_tvdb_api_key() -> Optional[str]:
+def get_tvdb_api_key() -> str | None:
     """
     Get TVDB API Key from environment variables.
     
@@ -316,21 +313,21 @@ def get_tvdb_api_key() -> Optional[str]:
         Optional[str]: TVDB API Key if set, None otherwise
     """
     # Load environment variables if .env exists
-    if os.path.exists('.env'):
+    if os.path.exists(".env"):
         load_dotenv()
-    
-    api_key = os.getenv('TVDB_KEY')
+
+    api_key = os.getenv("TVDB_KEY")
     if api_key:
         import logging
         logging.info("TVDB API Key loaded from environment")
     else:
         import logging
         logging.warning("TVDB_KEY not set - TVDB will use web scraping fallback")
-    
+
     return api_key
 
 
-def load_env_config() -> Tuple[Optional[str], Optional[str], Optional[str], float, bool, bool]:
+def load_env_config() -> tuple[str | None, str | None, str | None, float, bool, bool]:
     """
     Load configuration from database or environment variables (database preferred).
     
@@ -338,40 +335,40 @@ def load_env_config() -> Tuple[Optional[str], Optional[str], Optional[str], floa
         Tuple: Seerr URL, API key, user ID, sync interval (float), automated mode flag, 4K flag
     """
     import logging
-    
+
     # Try to load from database first (if ConfigManager available)
     try:
         config_manager = ConfigManager()
-        
+
         # Get settings from database or environment
-        url = config_manager.get_setting('overseerr_url')
-        api_key = config_manager.get_setting('overseerr_api_key')
-        user_id = config_manager.get_setting('overseerr_user_id', '1')
-        
-        sync_interval_val = config_manager.get_setting('sync_interval', '12')
+        url = config_manager.get_setting("overseerr_url")
+        api_key = config_manager.get_setting("overseerr_api_key")
+        user_id = config_manager.get_setting("overseerr_user_id", "1")
+
+        sync_interval_val = config_manager.get_setting("sync_interval", "12")
         try:
             sync_interval = float(sync_interval_val)
         except:
             sync_interval = 12.0
-        
-        automated_mode_val = config_manager.get_setting('auto_sync', 'true')
+
+        automated_mode_val = config_manager.get_setting("auto_sync", "true")
         if isinstance(automated_mode_val, bool):
             automated_mode = automated_mode_val
         else:
-            automated_mode = str(automated_mode_val).lower() == 'true'
-        
-        is_4k_val = config_manager.get_setting('overseerr_4k', 'false')
+            automated_mode = str(automated_mode_val).lower() == "true"
+
+        is_4k_val = config_manager.get_setting("overseerr_4k", "false")
         if isinstance(is_4k_val, bool):
             is_4k = is_4k_val
         else:
-            is_4k = str(is_4k_val).lower() == 'true'
-        
-        discord_webhook_url = config_manager.get_setting('discord_webhook')
-        
+            is_4k = str(is_4k_val).lower() == "true"
+
+        discord_webhook_url = config_manager.get_setting("discord_webhook")
+
         # Log if Discord webhook is configured
         if discord_webhook_url:
             logging.info("Discord webhook integration enabled")
-        
+
         # Only return the config if required variables are present
         if url and api_key:
             try:
@@ -380,31 +377,31 @@ def load_env_config() -> Tuple[Optional[str], Optional[str], Optional[str], floa
                 logging.info("Configuration loaded from database")
                 return url, api_key, user_id, sync_interval, automated_mode, is_4k
             except Exception as e:
-                logging.error(f"Error testing Seerr API with database config: {e}")
+                logging.exception(f"Error testing Seerr API with database config: {e}")
                 print(color_gradient(f"\n❌  Error testing Seerr API: {e}", "#ff0000", "#aa0000"))
-        
+
         return None, None, None, 0.0, False, False
-        
+
     except Exception as e:
         # Fallback to environment variables if database fails
         logging.debug(f"Could not load from database, falling back to environment: {e}")
-        
+
         # Load environment variables if .env exists
-        if os.path.exists('.env'):
+        if os.path.exists(".env"):
             load_dotenv()
-            
-        url = get_seerr_env('SEERR_URL')
-        api_key = get_seerr_env('SEERR_API_KEY')
-        user_id = get_seerr_env('SEERR_USER_ID', '1')
-        sync_interval = os.getenv('SYNC_INTERVAL', '12')
-        automated_mode = os.getenv('AUTOMATED_MODE', 'true').lower() == 'true'
-        is_4k = get_seerr_env('SEERR_4K', 'false').lower() == 'true'
-        discord_webhook_url = os.getenv('DISCORD_WEBHOOK_URL')
-        
+
+        url = get_seerr_env("SEERR_URL")
+        api_key = get_seerr_env("SEERR_API_KEY")
+        user_id = get_seerr_env("SEERR_USER_ID", "1")
+        sync_interval = os.getenv("SYNC_INTERVAL", "12")
+        automated_mode = os.getenv("AUTOMATED_MODE", "true").lower() == "true"
+        is_4k = get_seerr_env("SEERR_4K", "false").lower() == "true"
+        discord_webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
+
         # Log if Discord webhook is configured
         if discord_webhook_url:
             logging.info("Discord webhook integration enabled")
-        
+
         # Only return the config if required variables are present
         if url and api_key:
             try:
@@ -413,9 +410,9 @@ def load_env_config() -> Tuple[Optional[str], Optional[str], Optional[str], floa
                 logging.info("Configuration loaded from environment variables")
                 return url, api_key, user_id, float(sync_interval), automated_mode, is_4k
             except Exception as e:
-                logging.error(f"Error testing Seerr API with environment variables: {e}")
+                logging.exception(f"Error testing Seerr API with environment variables: {e}")
                 print(color_gradient(f"\n❌  Error testing Seerr API: {e}", "#ff0000", "#aa0000"))
-        
+
         return None, None, None, 0.0, False, False
 
 # Separator between a list ID and the Seerr user it should request as, in
@@ -424,7 +421,7 @@ def load_env_config() -> Tuple[Optional[str], Optional[str], Optional[str], floa
 LIST_USER_SEPARATOR = "::"
 
 
-def parse_list_entry(raw_entry: str) -> Tuple[str, Optional[str]]:
+def parse_list_entry(raw_entry: str) -> tuple[str, str | None]:
     """
     Split one entry of a *_LISTS environment variable into list ID and user.
 
@@ -464,8 +461,9 @@ def load_env_lists() -> bool:
     Returns:
         bool: True if any new lists were added, False otherwise
     """
-    from .database import save_list_id, load_list_ids, normalize_list_id, DB_FILE
     import logging
+
+    from .database import load_list_ids, normalize_list_id, save_list_id
 
     lists_added = False
 
@@ -473,28 +471,28 @@ def load_env_lists() -> bool:
         # Try to use ConfigManager for settings
         try:
             config_manager = ConfigManager()
-            get_list_setting = lambda key: config_manager.get_setting(key, '')
+            get_list_setting = lambda key: config_manager.get_setting(key, "")
         except:
             # Fallback to environment if ConfigManager fails
-            get_list_setting = lambda key: os.getenv(key.upper(), '')
+            get_list_setting = lambda key: os.getenv(key.upper(), "")
 
         # Get existing lists from database to avoid duplicates
         existing_lists = load_list_ids()
         # Match on canonical IDs so a list stored as a URL isn't re-added as a
         # bare ID (and vice versa), which would duplicate it under user 1.
         existing_set = {
-            (list_info['type'], normalize_list_id(list_info['type'], list_info['id']))
+            (list_info["type"], normalize_list_id(list_info["type"], list_info["id"]))
             for list_info in existing_lists
         }
 
         # Lists added from the environment request as the globally configured
         # user unless the entry names one, rather than always the admin account.
-        default_user_id = str(get_list_setting('overseerr_user_id') or '').strip() or None
+        default_user_id = str(get_list_setting("overseerr_user_id") or "").strip() or None
 
         logging.info(f"Found {len(existing_lists)} existing lists in database")
 
         # Helper function to add list if it doesn't exist
-        def add_list_if_new(list_id: str, list_type: str, user_id: Optional[str] = None):
+        def add_list_if_new(list_id: str, list_type: str, user_id: str | None = None):
             nonlocal lists_added
             requester = user_id or default_user_id
             if (list_type, normalize_list_id(list_type, list_id)) not in existing_set:
@@ -516,45 +514,45 @@ def load_env_lists() -> bool:
 
         def add_lists_from_setting(setting_value: str, list_type: str):
             """Add every comma-separated entry of a *_LISTS setting."""
-            for raw_entry in setting_value.split(','):
+            for raw_entry in setting_value.split(","):
                 list_id, user_id = parse_list_entry(raw_entry)
                 if list_id:
                     add_list_if_new(list_id, list_type, user_id)
 
         # Process IMDB lists
-        if imdb_lists := get_list_setting('imdb_lists'):
+        if imdb_lists := get_list_setting("imdb_lists"):
             add_lists_from_setting(imdb_lists, "imdb")
 
         # Process Trakt lists
-        if trakt_lists := get_list_setting('trakt_lists'):
+        if trakt_lists := get_list_setting("trakt_lists"):
             add_lists_from_setting(trakt_lists, "trakt")
 
         # Process special Trakt lists
-        if trakt_special_lists := get_list_setting('trakt_special_lists'):
-            for raw_entry in trakt_special_lists.split(','):
+        if trakt_special_lists := get_list_setting("trakt_special_lists"):
+            for raw_entry in trakt_special_lists.split(","):
                 list_id, user_id = parse_list_entry(raw_entry)
                 if list_id:
                     is_new = ("trakt_special", normalize_list_id("trakt_special", list_id)) not in existing_set
                     add_list_if_new(list_id, "trakt_special", user_id)
                     if is_new:
-                        trakt_limit = get_list_setting('trakt_special_items_limit') or '20'
+                        trakt_limit = get_list_setting("trakt_special_items_limit") or "20"
                         logging.info(f"Special Trakt list configured with max {trakt_limit} items")
 
         # Process Letterboxd lists
-        if letterboxd_lists := get_list_setting('letterboxd_lists'):
+        if letterboxd_lists := get_list_setting("letterboxd_lists"):
             add_lists_from_setting(letterboxd_lists, "letterboxd")
 
         # Process AniList lists
-        if anilist_lists := get_list_setting('anilist_lists'):
+        if anilist_lists := get_list_setting("anilist_lists"):
             add_lists_from_setting(anilist_lists, "anilist")
 
         # Process MDBList lists
-        if mdblist_lists := get_list_setting('mdblist_lists'):
+        if mdblist_lists := get_list_setting("mdblist_lists"):
             add_lists_from_setting(mdblist_lists, "mdblist")
 
         # Process Steven Lu lists
-        if stevenlu_lists := get_list_setting('stevenlu_lists'):
-            if 'stevenlu' in stevenlu_lists.lower():
+        if stevenlu_lists := get_list_setting("stevenlu_lists"):
+            if "stevenlu" in stevenlu_lists.lower():
                 _, stevenlu_user = parse_list_entry(stevenlu_lists)
                 is_new = ("stevenlu", normalize_list_id("stevenlu", "stevenlu")) not in existing_set
                 add_list_if_new("stevenlu", "stevenlu", stevenlu_user)
@@ -562,21 +560,21 @@ def load_env_lists() -> bool:
                     logging.info("Steven Lu popular movies list configured")
 
         # Process TMDB lists
-        if tmdb_lists := get_list_setting('tmdb_lists'):
+        if tmdb_lists := get_list_setting("tmdb_lists"):
             add_lists_from_setting(tmdb_lists, "tmdb")
 
         # Process Simkl lists (API-only, requires authentication)
-        simkl_client_id = get_list_setting('simkl_client_id')
-        simkl_user_token = get_list_setting('simkl_user_token')
-        simkl_lists = get_list_setting('simkl_lists')
-        
+        simkl_client_id = get_list_setting("simkl_client_id")
+        simkl_user_token = get_list_setting("simkl_user_token")
+        simkl_lists = get_list_setting("simkl_lists")
+
         # Check for deprecated SIMKL_LISTS without API credentials
         if simkl_lists and not (simkl_client_id and simkl_user_token):
             logging.warning("SIMKL_LISTS is deprecated. SIMKL now uses API authentication.")
             logging.warning("Please set SIMKL_CLIENT_ID and SIMKL_USER_TOKEN instead.")
             logging.warning("Get credentials at: https://simkl.com/settings/developer/")
             logging.warning("SIMKL API only supports authenticated user watchlists, not custom public lists.")
-        
+
         # Only process SIMKL if both credentials are provided
         if simkl_client_id and simkl_user_token:
             if simkl_lists:
@@ -587,9 +585,9 @@ def load_env_lists() -> bool:
                 logging.info("SIMKL: Using authenticated user watchlist (no specific lists configured)")
         elif simkl_lists:
             logging.warning("SIMKL lists configured but missing API credentials. Skipping SIMKL provider.")
-        
+
         # Process TVDB lists
-        if tvdb_lists := get_list_setting('tvdb_lists'):
+        if tvdb_lists := get_list_setting("tvdb_lists"):
             add_lists_from_setting(tvdb_lists, "tvdb")
 
         if lists_added:
@@ -598,12 +596,12 @@ def load_env_lists() -> bool:
         else:
             logging.info("No new lists found in environment variables (all existing lists preserved)")
             print("📊 No new lists to add from environment (all existing lists preserved)")
-        
+
         return lists_added
     except Exception as e:
         import logging
-        logging.error(f"Error loading lists from environment: {str(e)}")
-        print(color_gradient(f"\n❌  Error loading lists: {str(e)}", "#ff0000", "#aa0000"))
+        logging.exception(f"Error loading lists from environment: {e!s}")
+        print(color_gradient(f"\n❌  Error loading lists: {e!s}", "#ff0000", "#aa0000"))
         return False
 
 def format_time_remaining(seconds):
@@ -629,7 +627,7 @@ def is_masked_value(value: str) -> bool:
     """
     if not value or not isinstance(value, str):
         return False
-    return value.startswith('****') and len(value) >= 4
+    return value.startswith("****") and len(value) >= 4
 
 
 # ============================================================================
@@ -645,26 +643,25 @@ class ConfigManager:
     
     Handles encryption/decryption of sensitive settings.
     """
-    
+
     def __init__(self):
         """Initialize ConfigManager and load configuration."""
-        from . import encryption
-        from . import database
-        
+        from . import database, encryption
+
         self.encryption = encryption
         self.database = database
         self._cache = {}
         self._load_config()
-    
+
     def _load_config(self):
         """Load configuration from database or environment."""
         import logging
-        
+
         # Check if .env file exists
-        if os.path.exists('.env'):
+        if os.path.exists(".env"):
             load_dotenv()
             logging.info("Loaded .env file")
-        
+
         # Try to load from database first
         try:
             if self.database.count_settings() > 0:
@@ -676,11 +673,11 @@ class ConfigManager:
         except Exception as e:
             logging.warning(f"Error loading from database: {e}")
             self._cache = {}
-    
+
     def _load_from_database(self):
         """Load all settings from database into cache."""
         import logging
-        
+
         all_settings = self.database.get_all_settings()
         for key, (value, is_encrypted, setting_type) in all_settings.items():
             # Decrypt if needed
@@ -688,25 +685,25 @@ class ConfigManager:
                 try:
                     value = self.encryption.decrypt_value(value)
                 except Exception as e:
-                    logging.error(f"Failed to decrypt setting {key}: {e}")
+                    logging.exception(f"Failed to decrypt setting {key}: {e}")
                     value = ""
-            
+
             # Convert type
-            if setting_type == 'boolean':
-                value = value.lower() in ('true', '1', 'yes')
-            elif setting_type == 'integer':
+            if setting_type == "boolean":
+                value = value.lower() in ("true", "1", "yes")
+            elif setting_type == "integer":
                 try:
                     value = int(value)
                 except:
                     value = 0
-            elif setting_type == 'float':
+            elif setting_type == "float":
                 try:
                     value = float(value)
                 except:
                     value = 0.0
-            
+
             self._cache[key] = value
-    
+
     def get_setting(self, key: str, default: any = None) -> any:
         """
         Get a configuration setting.
@@ -726,15 +723,15 @@ class ConfigManager:
         # Try cache first (database settings)
         if key in self._cache:
             return self._cache[key]
-        
+
         # Try environment variable
         env_value = os.getenv(key.upper())
         if env_value is not None:
             return env_value
-        
+
         # Return default
         return default
-    
+
     def save_setting(self, key: str, value: any, encrypt: bool = None):
         """
         Save a configuration setting to the database.
@@ -745,48 +742,48 @@ class ConfigManager:
             encrypt: Whether to encrypt (auto-detects if None)
         """
         import logging
-        
+
         # Auto-detect if should encrypt
         if encrypt is None:
             encrypt = self.encryption.should_encrypt(key)
-        
+
         # Convert value to string
         if isinstance(value, bool):
-            str_value = 'true' if value else 'false'
-            setting_type = 'boolean'
+            str_value = "true" if value else "false"
+            setting_type = "boolean"
         elif isinstance(value, int):
             str_value = str(value)
-            setting_type = 'integer'
+            setting_type = "integer"
         elif isinstance(value, float):
             str_value = str(value)
-            setting_type = 'float'
+            setting_type = "float"
         else:
             str_value = str(value)
-            setting_type = 'string'
-        
+            setting_type = "string"
+
         # CRITICAL FIX: Don't overwrite real values with masked placeholders
         # Masked values (****...) are displayed in the UI for security but should
         # never be saved back to the database as they would overwrite real API keys
         if encrypt and is_masked_value(str_value):
             logging.info(f"Skipping masked value for '{key}' (preserving existing encrypted value)")
             return  # Skip saving, keep existing value in database
-        
+
         # Encrypt if needed
         if encrypt and str_value:
             try:
                 str_value = self.encryption.encrypt_value(str_value)
             except Exception as e:
-                logging.error(f"Failed to encrypt setting {key}: {e}")
+                logging.exception(f"Failed to encrypt setting {key}: {e}")
                 raise
-        
+
         # Save to database
         self.database.save_setting(key, str_value, encrypt, setting_type)
-        
+
         # Update cache
         self._cache[key] = value
-        
+
         logging.info(f"Saved setting: {key} (encrypted: {encrypt})")
-    
+
     def save_settings_batch(self, settings: dict):
         """
         Save multiple settings at once.
@@ -796,15 +793,15 @@ class ConfigManager:
         """
         for key, value in settings.items():
             self.save_setting(key, value)
-    
+
     def is_setup_complete(self) -> bool:
         """Check if the initial setup wizard has been completed."""
         return self.database.is_setup_completed()
-    
+
     def mark_setup_complete(self):
         """Mark setup as completed."""
         self.database.mark_setup_complete()
-    
+
     def migrate_env_to_database(self) -> int:
         """
         Migrate all settings from environment variables to database.
@@ -813,51 +810,51 @@ class ConfigManager:
             int: Number of settings migrated
         """
         import logging
-        
+
         logging.info("Starting environment to database migration")
-        
+
         settings_to_migrate = {
             # Seerr
-            'overseerr_url': get_seerr_env('SEERR_URL', ''),
-            'overseerr_api_key': get_seerr_env('SEERR_API_KEY', ''),
-            'overseerr_user_id': get_seerr_env('SEERR_USER_ID', '1'),
-            'overseerr_4k': get_seerr_env('SEERR_4K', 'false').lower() == 'true',
-            
+            "overseerr_url": get_seerr_env("SEERR_URL", ""),
+            "overseerr_api_key": get_seerr_env("SEERR_API_KEY", ""),
+            "overseerr_user_id": get_seerr_env("SEERR_USER_ID", "1"),
+            "overseerr_4k": get_seerr_env("SEERR_4K", "false").lower() == "true",
+
             # Trakt
-            'trakt_client_id': os.getenv('TRAKT_CLIENT_ID', ''),
-            
+            "trakt_client_id": os.getenv("TRAKT_CLIENT_ID", ""),
+
             # Sync Settings
-            'sync_interval': int(os.getenv('SYNC_INTERVAL', '24') or '24'),
-            'auto_sync': os.getenv('AUTOMATED_MODE', 'true').lower() == 'true',
-            'timezone': os.getenv('TZ', 'UTC'),
-            
+            "sync_interval": int(os.getenv("SYNC_INTERVAL", "24") or "24"),
+            "auto_sync": os.getenv("AUTOMATED_MODE", "true").lower() == "true",
+            "timezone": os.getenv("TZ", "UTC"),
+
             # Notifications
-            'discord_webhook': os.getenv('DISCORD_WEBHOOK_URL', ''),
-            'discord_enabled': bool(os.getenv('DISCORD_WEBHOOK_URL', '')),
-            'gotify_url': os.getenv('GOTIFY_URL', ''),
-            'gotify_token': os.getenv('GOTIFY_TOKEN', ''),
-            'gotify_enabled': bool(os.getenv('GOTIFY_URL') and os.getenv('GOTIFY_TOKEN')),
-            
+            "discord_webhook": os.getenv("DISCORD_WEBHOOK_URL", ""),
+            "discord_enabled": bool(os.getenv("DISCORD_WEBHOOK_URL", "")),
+            "gotify_url": os.getenv("GOTIFY_URL", ""),
+            "gotify_token": os.getenv("GOTIFY_TOKEN", ""),
+            "gotify_enabled": bool(os.getenv("GOTIFY_URL") and os.getenv("GOTIFY_TOKEN")),
+
             # Service Endpoints
-            'frontend_domain': os.getenv('FRONTEND_DOMAIN', 'http://localhost:3222'),
-            'backend_domain': os.getenv('BACKEND_DOMAIN', 'http://localhost:4222'),
-            'nuxt_public_api_url': os.getenv('NUXT_PUBLIC_API_URL', 'http://localhost:4222'),
-            
+            "frontend_domain": os.getenv("FRONTEND_DOMAIN", "http://localhost:3222"),
+            "backend_domain": os.getenv("BACKEND_DOMAIN", "http://localhost:4222"),
+            "nuxt_public_api_url": os.getenv("NUXT_PUBLIC_API_URL", "http://localhost:4222"),
+
             # Content Sources
-            'imdb_lists': os.getenv('IMDB_LISTS', ''),
-            'trakt_lists': os.getenv('TRAKT_LISTS', ''),
-            'trakt_special_lists': os.getenv('TRAKT_SPECIAL_LISTS', ''),
-            'trakt_special_items_limit': int(os.getenv('TRAKT_SPECIAL_ITEMS_LIMIT', '20') or '20'),
-            'letterboxd_lists': os.getenv('LETTERBOXD_LISTS', ''),
-            'anilist_lists': os.getenv('ANILIST_LISTS', ''),
-            'mdblist_lists': os.getenv('MDBLIST_LISTS', ''),
-            'stevenlu_lists': os.getenv('STEVENLU_LISTS', ''),
-            'tmdb_key': os.getenv('TMDB_KEY', ''),
-            'tmdb_lists': os.getenv('TMDB_LISTS', ''),
-            'tvdb_lists': os.getenv('TVDB_LISTS', ''),
-            'simkl_lists': os.getenv('SIMKL_LISTS', ''),
+            "imdb_lists": os.getenv("IMDB_LISTS", ""),
+            "trakt_lists": os.getenv("TRAKT_LISTS", ""),
+            "trakt_special_lists": os.getenv("TRAKT_SPECIAL_LISTS", ""),
+            "trakt_special_items_limit": int(os.getenv("TRAKT_SPECIAL_ITEMS_LIMIT", "20") or "20"),
+            "letterboxd_lists": os.getenv("LETTERBOXD_LISTS", ""),
+            "anilist_lists": os.getenv("ANILIST_LISTS", ""),
+            "mdblist_lists": os.getenv("MDBLIST_LISTS", ""),
+            "stevenlu_lists": os.getenv("STEVENLU_LISTS", ""),
+            "tmdb_key": os.getenv("TMDB_KEY", ""),
+            "tmdb_lists": os.getenv("TMDB_LISTS", ""),
+            "tvdb_lists": os.getenv("TVDB_LISTS", ""),
+            "simkl_lists": os.getenv("SIMKL_LISTS", ""),
         }
-        
+
         # Save all settings
         migrated_count = 0
         for key, value in settings_to_migrate.items():
@@ -866,19 +863,19 @@ class ConfigManager:
                     self.save_setting(key, value)
                     migrated_count += 1
                 except Exception as e:
-                    logging.error(f"Failed to migrate setting {key}: {e}")
-        
+                    logging.exception(f"Failed to migrate setting {key}: {e}")
+
         logging.info(f"Migration complete: {migrated_count} settings migrated to database")
         return migrated_count
-    
+
     def has_env_config(self) -> bool:
         """Check if .env file exists and has basic configuration."""
-        if not os.path.exists('.env'):
+        if not os.path.exists(".env"):
             return False
-        
+
         load_dotenv()
-        return bool(get_seerr_env('SEERR_URL') and get_seerr_env('SEERR_API_KEY'))
-    
+        return bool(get_seerr_env("SEERR_URL") and get_seerr_env("SEERR_API_KEY"))
+
     def reload(self):
         """Reload configuration from database."""
         self._cache = {}

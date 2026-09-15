@@ -4,14 +4,13 @@ Gotify notifications for ListSync.
 
 import logging
 import os
-from typing import Optional, Tuple
 
 import requests
 
 from ..utils.url_safety import validate_outbound_url
 
 
-def get_gotify_config() -> Optional[Tuple[str, str]]:
+def get_gotify_config() -> tuple[str, str] | None:
     """
     Get the Gotify server URL and app token from database config or environment.
 
@@ -23,24 +22,24 @@ def get_gotify_config() -> Optional[Tuple[str, str]]:
         from ..config import ConfigManager
         config = ConfigManager()
 
-        enabled = config.get_setting('gotify_enabled')
-        if enabled and str(enabled).lower() in ('true', '1', 'yes'):
-            url = config.get_setting('gotify_url')
-            token = config.get_setting('gotify_token')
+        enabled = config.get_setting("gotify_enabled")
+        if enabled and str(enabled).lower() in ("true", "1", "yes"):
+            url = config.get_setting("gotify_url")
+            token = config.get_setting("gotify_token")
             if url and token:
                 return str(url), str(token)
     except Exception as e:
         logging.debug(f"Could not load Gotify config from database: {e}")
 
-    url = os.getenv('GOTIFY_URL')
-    token = os.getenv('GOTIFY_TOKEN')
+    url = os.getenv("GOTIFY_URL")
+    token = os.getenv("GOTIFY_TOKEN")
     if url and token:
         return url, token
     return None
 
 
-def send_to_gotify(summary_text, sync_results=None, url: Optional[str] = None,
-                   token: Optional[str] = None, automated: bool = False,
+def send_to_gotify(summary_text, sync_results=None, url: str | None = None,
+                   token: str | None = None, automated: bool = False,
                    is_single_list: bool = False, priority: int = 0) -> None:
     """Send a sync summary to a Gotify server."""
     if not url or not token:
@@ -73,4 +72,4 @@ def send_to_gotify(summary_text, sync_results=None, url: Optional[str] = None,
         response.raise_for_status()
         logging.info("Gotify notification sent successfully")
     except Exception as e:
-        logging.error(f"Failed to send Gotify notification: {e}")
+        logging.exception(f"Failed to send Gotify notification: {e}")

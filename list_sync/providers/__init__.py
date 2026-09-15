@@ -3,12 +3,12 @@ List provider registration and management.
 """
 
 import logging
-from typing import Dict, Callable, List, Any
+from collections.abc import Callable
+from typing import Any, Dict, List
 
 
 class SyncCancelledException(Exception):
     """Exception raised when sync cancellation is requested."""
-    pass
 
 
 def check_cancellation() -> bool:
@@ -75,13 +75,13 @@ def get_provider(provider_type: str) -> Callable:
     # Import providers if not already imported
     if not PROVIDERS:
         _import_all_providers()
-    
+
     if provider_type not in PROVIDERS:
         raise ValueError(f"Provider type '{provider_type}' not supported. Available: {list(PROVIDERS.keys())}")
     return PROVIDERS[provider_type]
 
 
-def get_available_providers() -> List[str]:
+def get_available_providers() -> list[str]:
     """
     Get a list of available provider types.
     
@@ -91,23 +91,14 @@ def get_available_providers() -> List[str]:
     # Import providers if not already imported
     if not PROVIDERS:
         _import_all_providers()
-    
+
     return list(PROVIDERS.keys())
 
 
 def _import_all_providers():
     """Import all providers to register them."""
     try:
-        from . import imdb
-        from . import trakt
-        from . import letterboxd
-        from . import mdblist
-        from . import stevenlu
-        from . import tmdb
-        from . import simkl
-        from . import tvdb
-        from . import anilist
-        from . import collections
+        from . import anilist, collections, imdb, letterboxd, mdblist, simkl, stevenlu, tmdb, trakt, tvdb
     except ImportError as e:
         import logging
         logging.warning(f"Could not import all providers: {e}")

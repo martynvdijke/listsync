@@ -1,9 +1,9 @@
 """Exercise the browser-free IMDb extraction against realistic page shapes."""
 import json
+import os
 import sys
 import types
 
-import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def stub(name, attrs=()):
     m = types.ModuleType(name)
@@ -17,12 +17,15 @@ c = stub("cryptography"); f = stub("cryptography.fernet", ("Fernet", "InvalidTok
 d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a, **k: None
 
 import logging
+
 logging.disable(logging.CRITICAL)
 
+from list_sync.providers import imdb
 from list_sync.providers.imdb import (
-    _extract_titles_from_html, _resolve_imdb_url, fetch_imdb_list_via_http,
+    _extract_titles_from_html,
+    _resolve_imdb_url,
+    fetch_imdb_list_via_http,
 )
-import list_sync.providers.imdb as imdb
 
 fail = []
 def check(label, got, want):
@@ -31,10 +34,10 @@ def check(label, got, want):
     if not ok: fail.append(label)
 
 
-def page(payload, script_id='__NEXT_DATA__'):
+def page(payload, script_id="__NEXT_DATA__"):
     return (b'<html><body>only a few rendered</body><script id="' + script_id.encode() +
             b'" type="application/json">' + json.dumps(payload).encode() +
-            b'</script></html>')
+            b"</script></html>")
 
 
 # --- modern GraphQL-ish shape, as IMDb currently nests things --------------
@@ -112,7 +115,7 @@ check("IMDbReactInitialState title", items[0]["title"], "The Godfather")
 # --- graceful failure -------------------------------------------------------
 check("empty html", _extract_titles_from_html(b""), [])
 check("no json", _extract_titles_from_html(b"<html>nothing here</html>"), [])
-check("malformed json", _extract_titles_from_html(page({}) .replace(b'{}', b'{not json')), [])
+check("malformed json", _extract_titles_from_html(page({}) .replace(b"{}", b"{not json")), [])
 check("json without titles", _extract_titles_from_html(page({"a": {"b": [1, 2, 3]}})), [])
 
 # ids that merely look close are rejected
@@ -155,7 +158,6 @@ clear_backoff()
 attempts = []
 def counting_get(url, timeout=30):
     attempts.append(url)
-    return None
 
 imdb._http_get = counting_get
 for _ in range(4):

@@ -1,7 +1,10 @@
 """End-to-end: the SSRF guards must actually reject at the HTTP layer."""
-import sys, types, os, tempfile, socket
+import os
+import socket
+import sys
+import tempfile
+import types
 
-import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def stub(n, a=()):
     m = types.ModuleType(n)
@@ -15,22 +18,28 @@ d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a,
 
 tmp = tempfile.mkdtemp()
 import list_sync.utils.logger as lg
+
 lg.DATA_DIR = tmp
 import list_sync.database as db
+
 db.DB_FILE = os.path.join(tmp, "list_sync.db")
 db.init_database()
 
 import api_server
+
 api_server.DB_FILE = db.DB_FILE
 
 # Any real outbound request during this test is itself a failure.
 import requests
+
+
 def forbidden(*a, **k):
     raise AssertionError(f"OUTBOUND REQUEST ESCAPED THE GUARD: {a} {k}")
 requests.get = forbidden
 requests.post = forbidden
 
 from fastapi.testclient import TestClient
+
 client = TestClient(api_server.app)
 
 fail = []
@@ -81,7 +90,7 @@ for target, name in [
     ("http://metadata.google.internal/", "gcp metadata"),
 ]:
     r = client.post(SEERR_TEST, json={
-        "overseerr_url": target, "overseerr_api_key": "k", "overseerr_user_id": "1"
+        "overseerr_url": target, "overseerr_api_key": "k", "overseerr_user_id": "1",
     })
     # endpoint answers 200 with valid:false rather than an HTTP error
     body = r.json() if r.status_code == 200 else {}
@@ -96,6 +105,7 @@ print("=== a private Seerr must still be permitted ===")
 # stand in a resolver that answers the way theirs does.
 from list_sync.utils import url_safety as us
 from list_sync.utils.url_safety import validate_outbound_url
+
 us.socket.getaddrinfo = lambda host, *a, **k: (
     [(None, None, None, "", ("172.18.0.5", 0))] if host == "seerr"
     else (_ for _ in ()).throw(socket.gaierror(-2, "Name or service not known"))

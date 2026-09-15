@@ -42,7 +42,7 @@ def run(name):
         [sys.executable, os.path.join(HERE, name + ".py")],
         capture_output=True,
         text=True,
-        cwd=REPO,
+        cwd=REPO, check=False,
     )
     elapsed = time.monotonic() - started
     output = proc.stdout + proc.stderr

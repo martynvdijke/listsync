@@ -24,7 +24,7 @@ straightforward attacks.
 import ipaddress
 import logging
 import socket
-from typing import Iterable, Optional, Tuple
+from collections.abc import Iterable
 from urllib.parse import urlparse
 
 # Addresses that hand out cloud credentials. Never a legitimate target, so
@@ -72,7 +72,7 @@ def _address_is_private(ip: ipaddress._BaseAddress) -> bool:
     )
 
 
-def _resolve(hostname: str) -> Tuple[list, Optional[str]]:
+def _resolve(hostname: str) -> tuple[list, str | None]:
     """Resolve a hostname to every address it answers with."""
     try:
         infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
@@ -98,8 +98,8 @@ def validate_outbound_url(
     raw_url: str,
     *,
     allow_private: bool = False,
-    allowed_hosts: Optional[Iterable[str]] = None,
-) -> Tuple[bool, str]:
+    allowed_hosts: Iterable[str] | None = None,
+) -> tuple[bool, str]:
     """
     Decide whether the server should fetch a caller-supplied URL.
 
@@ -180,7 +180,7 @@ def assert_safe_url(
     raw_url: str,
     *,
     allow_private: bool = False,
-    allowed_hosts: Optional[Iterable[str]] = None,
+    allowed_hosts: Iterable[str] | None = None,
     what: str = "URL",
 ) -> str:
     """

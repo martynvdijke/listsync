@@ -3,13 +3,10 @@
 Comprehensive test for the full image caching flow to ensure Trakt API compliance
 """
 
-import os
-import sys
 import sqlite3
-import tempfile
-import requests
+import sys
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 # Add the project root to the Python path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -18,7 +15,7 @@ def test_database_schema():
     """Test that all required database schema changes are in place"""
     print("=== Testing Database Schema ===")
 
-    from list_sync.database import init_database, DB_FILE
+    from list_sync.database import DB_FILE, init_database
 
     try:
         # Initialize database
@@ -31,7 +28,7 @@ def test_database_schema():
         cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
         tables = [row[0] for row in cursor.fetchall()]
 
-        required_tables = ['synced_items', 'lists', 'cached_images']
+        required_tables = ["synced_items", "lists", "cached_images"]
         for table in required_tables:
             if table in tables:
                 print(f"[PASS] Table '{table}' exists")
@@ -42,7 +39,7 @@ def test_database_schema():
         # Check synced_items has poster columns
         cursor.execute("PRAGMA table_info(synced_items)")
         synced_cols = [row[1] for row in cursor.fetchall()]
-        required_synced_cols = ['poster_url', 'poster_cached_at']
+        required_synced_cols = ["poster_url", "poster_cached_at"]
         for col in required_synced_cols:
             if col in synced_cols:
                 print(f"[PASS] synced_items has '{col}' column")
@@ -53,7 +50,7 @@ def test_database_schema():
         # Check cached_images table
         cursor.execute("PRAGMA table_info(cached_images)")
         cached_cols = [row[1] for row in cursor.fetchall()]
-        required_cached_cols = ['image_url', 'image_data', 'mime_type', 'file_size', 'source']
+        required_cached_cols = ["image_url", "image_data", "mime_type", "file_size", "source"]
         for col in required_cached_cols:
             if col in cached_cols:
                 print(f"[PASS] cached_images has '{col}' column")
@@ -72,7 +69,7 @@ def test_image_caching_functions():
     """Test the image caching database functions"""
     print("\n=== Testing Image Caching Functions ===")
 
-    from list_sync.database import save_cached_image, get_cached_image, get_cached_image_stats
+    from list_sync.database import get_cached_image, get_cached_image_stats, save_cached_image
 
     try:
         # Test saving an image
@@ -85,7 +82,7 @@ def test_image_caching_functions():
 
         # Test retrieving the image
         cached = get_cached_image(test_url)
-        if cached and cached['image_data'] == test_data and cached['source'] == 'trakt':
+        if cached and cached["image_data"] == test_data and cached["source"] == "trakt":
             print("[PASS] Retrieved cached image successfully")
         else:
             print("[FAIL] Failed to retrieve cached image")
@@ -93,7 +90,7 @@ def test_image_caching_functions():
 
         # Test stats
         stats = get_cached_image_stats()
-        if stats['total_images'] >= 1:
+        if stats["total_images"] >= 1:
             print(f"[PASS] Image cache stats: {stats['total_images']} images, {stats['total_size_mb']:.2f} MB")
         else:
             print("[FAIL] No images in cache")
@@ -120,15 +117,15 @@ def test_trakt_metadata_fetcher():
             "rating": 8.2,
             "genres": ["action", "crime"],
             "images": {
-                "poster": ["walter-r2.trakt.tv/images/movies/000/012/601/posters/medium/e0d9dd35c5.jpg.webp"]
+                "poster": ["walter-r2.trakt.tv/images/movies/000/012/601/posters/medium/e0d9dd35c5.jpg.webp"],
             },
             "ids": {
                 "tmdb": 272,
-                "imdb": "tt0372784"
-            }
+                "imdb": "tt0372784",
+            },
         }
 
-        with patch('list_sync.providers.trakt.requests.get') as mock_get:
+        with patch("list_sync.providers.trakt.requests.get") as mock_get:
             mock_response_obj = MagicMock()
             mock_response_obj.status_code = 200
             mock_response_obj.json.return_value = mock_response
@@ -138,19 +135,19 @@ def test_trakt_metadata_fetcher():
             # Test the fetcher
             metadata = get_trakt_metadata(imdb_id="tt0372784")
 
-            if metadata and 'poster_url' in metadata:
-                poster_url = metadata['poster_url']
+            if metadata and "poster_url" in metadata:
+                poster_url = metadata["poster_url"]
                 print(f"[PASS] Got poster URL: {poster_url}")
 
                 # Check it's a proxy URL, not direct Trakt URL
-                if poster_url.startswith('/api/images/proxy?url='):
+                if poster_url.startswith("/api/images/proxy?url="):
                     print("[PASS] Poster URL is a proxy URL (not direct Trakt hotlink)")
                 else:
                     print(f"[FAIL] Poster URL is not a proxy URL: {poster_url}")
                     return False
 
                 # Check the original Trakt URL is in the proxy URL
-                if 'walter-r2.trakt.tv' in poster_url:
+                if "walter-r2.trakt.tv" in poster_url:
                     print("[PASS] Proxy URL contains original Trakt URL")
                 else:
                     print("[FAIL] Proxy URL doesn't contain original Trakt URL")
@@ -191,7 +188,7 @@ def test_proxy_api_logic():
 
         # Now it should be cached
         cached = get_cached_image(test_url)
-        if cached and cached['image_data'] == test_data:
+        if cached and cached["image_data"] == test_data:
             print("[PASS] Image now cached and retrievable")
         else:
             print("[FAIL] Image not cached properly")
@@ -217,7 +214,7 @@ def test_enriched_items_flow():
             imdb_id="tt1234567",
             overseerr_id=12345,
             status="available",
-            year=2020
+            year=2020,
         )
         print(f"[PASS] Created test item with ID: {item_id}")
 
@@ -272,7 +269,7 @@ def main():
         test_trakt_metadata_fetcher,
         test_proxy_api_logic,
         test_enriched_items_flow,
-        test_full_flow
+        test_full_flow,
     ]
 
     passed = 0
@@ -299,9 +296,8 @@ def main():
         print("3. Next time, serve from database (not Trakt hotlink)")
         print("\nTrakt API compliance: FULLY ACHIEVED")
         return True
-    else:
-        print("\n[FAILURE] Some tests failed. Compliance not verified.")
-        return False
+    print("\n[FAILURE] Some tests failed. Compliance not verified.")
+    return False
 
 if __name__ == "__main__":
     success = main()

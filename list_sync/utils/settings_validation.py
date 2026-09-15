@@ -18,7 +18,7 @@ through: this is validation, not an allowlist of setting names, and rejecting an
 unknown key would break any caller that saves one.
 """
 
-from typing import Any, Dict
+from typing import Any
 
 from .url_safety import DISCORD_WEBHOOK_HOSTS, validate_outbound_url
 
@@ -90,7 +90,7 @@ def validate_gotify_url(value: str) -> str:
     return ""
 
 
-def validate_settings(settings: Dict[str, Any]) -> Dict[str, str]:
+def validate_settings(settings: dict[str, Any]) -> dict[str, str]:
     """
     Check a batch of settings before any of them are saved.
 
@@ -101,7 +101,7 @@ def validate_settings(settings: Dict[str, Any]) -> Dict[str, str]:
         Dict[str, str]: One message per rejected setting, keyed by setting name.
             Empty when everything is acceptable.
     """
-    errors: Dict[str, str] = {}
+    errors: dict[str, str] = {}
 
     for key, sink in _FETCHED_URL_SETTINGS.items():
         value = settings.get(key)

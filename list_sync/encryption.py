@@ -3,9 +3,10 @@ Encryption utilities for securing sensitive configuration data.
 Uses Fernet symmetric encryption from cryptography library.
 """
 
-import os
 import logging
+import os
 from pathlib import Path
+
 from cryptography.fernet import Fernet
 
 logger = logging.getLogger(__name__)
@@ -35,11 +36,11 @@ def get_encryption_key() -> bytes:
         bytes: Fernet-compatible encryption key
     """
     global _cached_key
-    
+
     # Return cached key if available
     if _cached_key:
         return _cached_key
-    
+
     # Try to load from persistent file first
     if ENCRYPTION_KEY_FILE.exists():
         try:
@@ -52,9 +53,9 @@ def get_encryption_key() -> bytes:
         except Exception as e:
             logger.error(f"Failed to load encryption key from file: {e}")
             # Continue to next method
-    
+
     # Check environment variable as backup/override
-    env_key = os.getenv('ENCRYPTION_KEY')
+    env_key = os.getenv("ENCRYPTION_KEY")
     if env_key:
         try:
             key_bytes = env_key.encode() if isinstance(env_key, str) else env_key
@@ -64,14 +65,14 @@ def get_encryption_key() -> bytes:
             return _cached_key
         except Exception as e:
             logger.warning(f"Invalid ENCRYPTION_KEY in environment: {e}")
-    
+
     # Generate a new key and save it
     logger.info("No encryption key found. Generating new key...")
     new_key = Fernet.generate_key()
-    
+
     # Ensure data directory exists
     ENCRYPTION_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Save to file with restricted permissions
     try:
         ENCRYPTION_KEY_FILE.write_bytes(new_key)
@@ -100,10 +101,10 @@ def encrypt_value(value: str, key: bytes = None) -> str:
     """
     if not value:
         return ""
-    
+
     if key is None:
         key = get_encryption_key()
-    
+
     try:
         fernet = Fernet(key)
         encrypted_bytes = fernet.encrypt(value.encode())
@@ -126,10 +127,10 @@ def decrypt_value(encrypted_value: str, key: bytes = None) -> str:
     """
     if not encrypted_value:
         return ""
-    
+
     if key is None:
         key = get_encryption_key()
-    
+
     try:
         fernet = Fernet(key)
         decrypted_bytes = fernet.decrypt(encrypted_value.encode())
@@ -155,10 +156,10 @@ def mask_sensitive_value(value: str, show_chars: int = 4) -> str:
     """
     if not value:
         return ""
-    
+
     if len(value) <= show_chars:
         return "*" * len(value)
-    
+
     return "*" * (len(value) - show_chars) + value[-show_chars:]
 
 
@@ -168,15 +169,15 @@ def mask_sensitive_value(value: str, show_chars: int = 4) -> str:
 # here if it is a secret - a key missing from this set is stored as plain text
 # in the database, where anything that can read the data volume can read it.
 SENSITIVE_KEYS = {
-    'overseerr_api_key',
-    'seerr_api_key',       # the current name for overseerr_api_key
-    'trakt_client_id',
-    'discord_webhook',     # the token is part of the webhook URL
-    'tmdb_key',
-    'tvdb_key',
-    'simkl_client_id',
-    'simkl_user_token',
-    'gotify_token',      # Gotify app token
+    "overseerr_api_key",
+    "seerr_api_key",       # the current name for overseerr_api_key
+    "trakt_client_id",
+    "discord_webhook",     # the token is part of the webhook URL
+    "tmdb_key",
+    "tvdb_key",
+    "simkl_client_id",
+    "simkl_user_token",
+    "gotify_token",      # Gotify app token
 }
 
 

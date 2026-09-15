@@ -2,12 +2,12 @@
 Database operations for ListSync.
 """
 
-import sqlite3
-import os
-import logging
 import hashlib
-from typing import Dict, List, Optional, Any
+import logging
+import os
+import sqlite3
 from pathlib import Path
+from typing import Any
 
 from .utils.logger import DATA_DIR
 
@@ -37,17 +37,17 @@ def normalize_list_id(list_type: str, list_id: str) -> str:
     if not list_id:
         return ""
 
-    key = str(list_id).strip().rstrip('/')
+    key = str(list_id).strip().rstrip("/")
     lowered = key.lower()
 
     # For IMDb, the list/user/chart token uniquely identifies the list, so pull
     # it out of whatever URL form was supplied.
     if (list_type or "").lower() == "imdb":
         import re
-        match = re.search(r'\b(ls\d+|ur\d+)\b', lowered)
+        match = re.search(r"\b(ls\d+|ur\d+)\b", lowered)
         if match:
             return match.group(1)
-        chart_match = re.search(r'/chart/([a-z0-9_-]+)', lowered)
+        chart_match = re.search(r"/chart/([a-z0-9_-]+)", lowered)
         if chart_match:
             return chart_match.group(1)
         return lowered
@@ -61,7 +61,7 @@ def normalize_list_id(list_type: str, list_id: str) -> str:
     return lowered.removeprefix("www.")
 
 
-def find_list_rows(cursor, list_type: str, list_id: str) -> List[tuple]:
+def find_list_rows(cursor, list_type: str, list_id: str) -> list[tuple]:
     """
     Find every list row matching a type and ID, tolerating ID/URL form differences.
 
@@ -80,7 +80,7 @@ def find_list_rows(cursor, list_type: str, list_id: str) -> List[tuple]:
     # Fast path: exact match on the stored ID
     cursor.execute(
         "SELECT rowid, list_id FROM lists WHERE list_type = ? AND list_id = ?",
-        (list_type, list_id)
+        (list_type, list_id),
     )
     matches = cursor.fetchall()
 
@@ -100,7 +100,7 @@ def find_list_rows(cursor, list_type: str, list_id: str) -> List[tuple]:
     return matches
 
 
-def find_list_row(cursor, list_type: str, list_id: str) -> Optional[tuple]:
+def find_list_row(cursor, list_type: str, list_id: str) -> tuple | None:
     """
     Find a single list row by type and ID, tolerating ID/URL form differences.
 
@@ -114,32 +114,32 @@ def find_list_row(cursor, list_type: str, list_id: str) -> Optional[tuple]:
 def update_existing_list_urls():
     """Update URLs for existing lists that may have incorrect URLs stored."""
     from .utils.helpers import construct_list_url
-    
+
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        
+
         # Get all lists to check their URLs
         cursor.execute("SELECT list_type, list_id, list_url FROM lists")
         all_lists = cursor.fetchall()
-        
+
         updated_count = 0
         for list_type, list_id, current_url in all_lists:
             try:
                 # Generate the correct URL
                 correct_url = construct_list_url(list_type, list_id)
-                
+
                 # Update if the URLs don't match
                 if current_url != correct_url:
                     cursor.execute(
                         "UPDATE lists SET list_url = ? WHERE list_type = ? AND list_id = ?",
-                        (correct_url, list_type, list_id)
+                        (correct_url, list_type, list_id),
                     )
                     updated_count += 1
                     logging.info(f"Updated URL for {list_type} list {list_id}: {current_url} -> {correct_url}")
-                    
+
             except Exception as e:
                 logging.warning(f"Failed to update URL for {list_type} list {list_id}: {e}")
-        
+
         if updated_count > 0:
             conn.commit()
             logging.info(f"Updated {updated_count} list URLs")
@@ -151,17 +151,17 @@ def remove_simkl_column():
     """Remove the simkl_id column from synced_items table since SIMKL is disabled."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        
+
         # Check if simkl_id column exists
         cursor.execute("PRAGMA table_info(synced_items)")
         columns = [column[1] for column in cursor.fetchall()]
-        
-        if 'simkl_id' in columns:
+
+        if "simkl_id" in columns:
             # SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
             logging.info("Removing simkl_id column from synced_items table")
-            
+
             # Create new table without simkl_id column
-            cursor.execute('''
+            cursor.execute("""
                 CREATE TABLE synced_items_new (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     title TEXT NOT NULL,
@@ -173,19 +173,19 @@ def remove_simkl_column():
                     status TEXT,
                     last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
-            ''')
-            
+            """)
+
             # Copy data from old table to new table (excluding simkl_id)
-            cursor.execute('''
+            cursor.execute("""
                 INSERT INTO synced_items_new (id, title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, last_synced)
                 SELECT id, title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, last_synced
                 FROM synced_items
-            ''')
-            
+            """)
+
             # Drop old table and rename new table
-            cursor.execute('DROP TABLE synced_items')
-            cursor.execute('ALTER TABLE synced_items_new RENAME TO synced_items')
-            
+            cursor.execute("DROP TABLE synced_items")
+            cursor.execute("ALTER TABLE synced_items_new RENAME TO synced_items")
+
             conn.commit()
             logging.info("Successfully removed simkl_id column from synced_items table")
         else:
@@ -194,47 +194,47 @@ def remove_simkl_column():
 def migrate_list_urls():
     """Migrate existing lists to populate missing URLs and add item_count and last_synced columns."""
     from .utils.helpers import construct_list_url
-    
+
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        
+
         # Add item_count column if it doesn't exist
         try:
-            cursor.execute('ALTER TABLE lists ADD COLUMN item_count INTEGER DEFAULT 0')
+            cursor.execute("ALTER TABLE lists ADD COLUMN item_count INTEGER DEFAULT 0")
             logging.info("Added item_count column to lists table")
         except sqlite3.OperationalError:
             # Column already exists
             pass
-        
+
         # Add last_synced column if it doesn't exist
         try:
-            cursor.execute('ALTER TABLE lists ADD COLUMN last_synced TIMESTAMP')
+            cursor.execute("ALTER TABLE lists ADD COLUMN last_synced TIMESTAMP")
             logging.info("Added last_synced column to lists table")
         except sqlite3.OperationalError:
             # Column already exists
             pass
-        
+
         # Get all lists that don't have URLs
         cursor.execute("SELECT list_type, list_id FROM lists WHERE list_url IS NULL OR list_url = ''")
         lists_without_urls = cursor.fetchall()
-        
+
         if lists_without_urls:
             logging.info(f"Migrating {len(lists_without_urls)} lists to add URLs")
-            
+
             for list_type, list_id in lists_without_urls:
                 try:
                     list_url = construct_list_url(list_type, list_id)
                     cursor.execute(
                         "UPDATE lists SET list_url = ? WHERE list_type = ? AND list_id = ?",
-                        (list_url, list_type, list_id)
+                        (list_url, list_type, list_id),
                     )
                     logging.info(f"Added URL for {list_type} list {list_id}: {list_url}")
                 except Exception as e:
                     logging.warning(f"Failed to generate URL for {list_type} list {list_id}: {e}")
-            
+
             conn.commit()
             logging.info("URL migration completed")
-        
+
         # Also update any existing URLs that might be incorrect
         update_existing_list_urls()
 
@@ -243,7 +243,7 @@ def init_database():
     """Initialize the SQLite database with required tables."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS lists (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 list_type TEXT NOT NULL,
@@ -255,30 +255,30 @@ def init_database():
                 poster_cached_at TIMESTAMP,
                 UNIQUE(list_type, list_id)
             )
-        ''')
-        
+        """)
+
         # Add list_url column if it doesn't exist (for existing databases)
         try:
-            cursor.execute('ALTER TABLE lists ADD COLUMN list_url TEXT')
+            cursor.execute("ALTER TABLE lists ADD COLUMN list_url TEXT")
         except sqlite3.OperationalError:
             # Column already exists or other error
             pass
-        
+
         # Add item_count column if it doesn't exist (for existing databases)
         try:
-            cursor.execute('ALTER TABLE lists ADD COLUMN item_count INTEGER DEFAULT 0')
+            cursor.execute("ALTER TABLE lists ADD COLUMN item_count INTEGER DEFAULT 0")
         except sqlite3.OperationalError:
             # Column already exists or other error
             pass
-        
+
         # Add last_synced column if it doesn't exist (for existing databases)
         try:
-            cursor.execute('ALTER TABLE lists ADD COLUMN last_synced TIMESTAMP')
+            cursor.execute("ALTER TABLE lists ADD COLUMN last_synced TIMESTAMP")
         except sqlite3.OperationalError:
             # Column already exists or other error
             pass
-        
-        cursor.execute('''
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS synced_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 title TEXT NOT NULL,
@@ -293,19 +293,19 @@ def init_database():
                 source_list_type TEXT,
                 source_list_id TEXT
             )
-        ''')
-        
+        """)
+
         # Add year column if it doesn't exist (for existing databases)
         try:
-            cursor.execute('ALTER TABLE synced_items ADD COLUMN year INTEGER')
+            cursor.execute("ALTER TABLE synced_items ADD COLUMN year INTEGER")
             logging.info("Added year column to synced_items table")
         except sqlite3.OperationalError:
             # Column already exists or other error
             pass
-        
+
         # Add tmdb_id column if it doesn't exist (for existing databases)
         try:
-            cursor.execute('ALTER TABLE synced_items ADD COLUMN tmdb_id TEXT')
+            cursor.execute("ALTER TABLE synced_items ADD COLUMN tmdb_id TEXT")
             logging.info("Added tmdb_id column to synced_items table")
         except sqlite3.OperationalError:
             # Column already exists or other error
@@ -313,62 +313,62 @@ def init_database():
 
         # Add poster columns to synced_items if they don't exist
         try:
-            cursor.execute('ALTER TABLE synced_items ADD COLUMN poster_url TEXT')
+            cursor.execute("ALTER TABLE synced_items ADD COLUMN poster_url TEXT")
             logging.info("Added poster_url column to synced_items table")
         except sqlite3.OperationalError:
             pass
 
         try:
-            cursor.execute('ALTER TABLE synced_items ADD COLUMN poster_cached_at TIMESTAMP')
+            cursor.execute("ALTER TABLE synced_items ADD COLUMN poster_cached_at TIMESTAMP")
             logging.info("Added poster_cached_at column to synced_items table")
         except sqlite3.OperationalError:
             pass
 
         # Add source list columns to synced_items for easier filtering
         try:
-            cursor.execute('ALTER TABLE synced_items ADD COLUMN source_list_type TEXT')
+            cursor.execute("ALTER TABLE synced_items ADD COLUMN source_list_type TEXT")
             logging.info("Added source_list_type column to synced_items table")
         except sqlite3.OperationalError:
             pass
 
         try:
-            cursor.execute('ALTER TABLE synced_items ADD COLUMN source_list_id TEXT')
+            cursor.execute("ALTER TABLE synced_items ADD COLUMN source_list_id TEXT")
             logging.info("Added source_list_id column to synced_items table")
         except sqlite3.OperationalError:
             pass
 
         # Add poster columns to lists if they don't exist
         try:
-            cursor.execute('ALTER TABLE lists ADD COLUMN poster_url TEXT')
+            cursor.execute("ALTER TABLE lists ADD COLUMN poster_url TEXT")
             logging.info("Added poster_url column to lists table")
         except sqlite3.OperationalError:
             pass
 
         try:
-            cursor.execute('ALTER TABLE lists ADD COLUMN poster_cached_at TIMESTAMP')
+            cursor.execute("ALTER TABLE lists ADD COLUMN poster_cached_at TIMESTAMP")
             logging.info("Added poster_cached_at column to lists table")
         except sqlite3.OperationalError:
             pass
-        
+
         # Add user_id column to lists if it doesn't exist (for per-list user assignment)
         try:
             cursor.execute("ALTER TABLE lists ADD COLUMN user_id TEXT DEFAULT '1'")
             logging.info("Added user_id column to lists table")
         except sqlite3.OperationalError:
             pass
-        
+
         # SIMKL is disabled, so we don't add simkl_id column anymore
-        
-        cursor.execute('''
+
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS sync_interval (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 interval_hours REAL NOT NULL
             )
-        ''')
-        
+        """)
+
         # Junction table to track which lists each item came from
         # This allows many-to-many relationship (one item can come from multiple lists)
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS item_lists (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 item_id INTEGER NOT NULL,
@@ -378,31 +378,31 @@ def init_database():
                 FOREIGN KEY (item_id) REFERENCES synced_items(id) ON DELETE CASCADE,
                 UNIQUE(item_id, list_type, list_id)
             )
-        ''')
-        
+        """)
+
         # Create index for faster lookups
         try:
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_item_lists_item_id ON item_lists(item_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_item_lists_list ON item_lists(list_type, list_id)')
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_item_lists_item_id ON item_lists(item_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_item_lists_list ON item_lists(list_type, list_id)")
         except sqlite3.OperationalError:
             # Indexes might already exist
             pass
-        
+
         # Backfill source_list columns from item_lists table for existing items
         # This migration runs AFTER item_lists table is created
         try:
             # Check if we need to backfill (if there are NULL values)
-            cursor.execute('''
+            cursor.execute("""
                 SELECT COUNT(*) FROM synced_items 
                 WHERE source_list_type IS NULL AND id IN (SELECT DISTINCT item_id FROM item_lists)
-            ''')
+            """)
             null_count = cursor.fetchone()[0]
-            
+
             if null_count > 0:
                 logging.info(f"🔄 Backfilling source_list columns for {null_count} items from item_lists table...")
-                
+
                 # Update items with their primary source list (most recent sync)
-                cursor.execute('''
+                cursor.execute("""
                     UPDATE synced_items
                     SET source_list_type = (
                         SELECT list_type FROM item_lists
@@ -418,8 +418,8 @@ def init_database():
                     )
                     WHERE source_list_type IS NULL 
                     AND id IN (SELECT DISTINCT item_id FROM item_lists)
-                ''')
-                
+                """)
+
                 updated = cursor.rowcount
                 conn.commit()
                 logging.info(f"✅ Backfilled source_list columns for {updated} items")
@@ -427,9 +427,9 @@ def init_database():
                 logging.info("✅ source_list columns already populated, no backfill needed")
         except Exception as e:
             logging.warning(f"Could not backfill source_list columns: {e}")
-        
+
         # Sync history table - tracks all sync operations
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS sync_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 session_id TEXT UNIQUE NOT NULL,
@@ -448,19 +448,19 @@ def init_database():
                 items_errors INTEGER DEFAULT 0,
                 error_message TEXT
             )
-        ''')
+        """)
 
         # Running syncs bump last_heartbeat so an abandoned in_progress row can
         # be told apart from one that is still working.
         try:
-            cursor.execute('ALTER TABLE sync_history ADD COLUMN last_heartbeat TIMESTAMP')
+            cursor.execute("ALTER TABLE sync_history ADD COLUMN last_heartbeat TIMESTAMP")
             logging.info("✅ Added last_heartbeat column to sync_history table")
         except sqlite3.OperationalError:
             # Column already exists
             pass
-        
+
         # Sync items table - tracks individual items processed during each sync
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS sync_items (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 sync_id INTEGER NOT NULL,
@@ -478,21 +478,21 @@ def init_database():
                 FOREIGN KEY (sync_id) REFERENCES sync_history(id) ON DELETE CASCADE,
                 FOREIGN KEY (item_id) REFERENCES synced_items(id) ON DELETE SET NULL
             )
-        ''')
-        
+        """)
+
         # Create indexes for sync tables
         try:
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_sync_history_in_progress ON sync_history(in_progress)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_sync_history_session_id ON sync_history(session_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_sync_history_start_time ON sync_history(start_time DESC)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_sync_items_sync_id ON sync_items(sync_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_sync_items_item_id ON sync_items(item_id)')
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_history_in_progress ON sync_history(in_progress)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_history_session_id ON sync_history(session_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_history_start_time ON sync_history(start_time DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_items_sync_id ON sync_items(sync_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_items_item_id ON sync_items(item_id)")
         except sqlite3.OperationalError:
             # Indexes might already exist
             pass
 
         # Seerr users table - stores synced Seerr users
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS overseerr_users (
                 id TEXT PRIMARY KEY,
                 display_name TEXT NOT NULL,
@@ -501,10 +501,10 @@ def init_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
-        
+        """)
+
         # Image cache table - stores downloaded images locally
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS cached_images (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 image_url TEXT NOT NULL UNIQUE,
@@ -518,49 +518,49 @@ def init_database():
                 width INTEGER,
                 height INTEGER
             )
-        ''')
+        """)
 
         # Create indexes for image cache
         try:
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_cached_images_url ON cached_images(image_url)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_cached_images_accessed ON cached_images(last_accessed)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_cached_images_source ON cached_images(source)')
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_cached_images_url ON cached_images(image_url)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_cached_images_accessed ON cached_images(last_accessed)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_cached_images_source ON cached_images(source)")
         except sqlite3.OperationalError:
             # Indexes might already exist
             pass
-        
+
         conn.commit()
-    
+
     # Migrate existing lists to populate URLs and add item_count column
     migrate_list_urls()
-    
+
     # Remove SIMKL column since SIMKL is disabled
     remove_simkl_column()
-    
+
     # Initialize configuration tables
     create_settings_tables()
-    
+
     # Migrate BLOB images to filesystem (one-time migration)
     # Only run if there are BLOB images that need migration
     try:
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute("""
                 SELECT COUNT(*) FROM cached_images
                 WHERE image_data IS NOT NULL AND (local_path IS NULL OR local_path = '')
-            ''')
+            """)
             blob_count = cursor.fetchone()[0]
-            
+
             if blob_count > 0:
                 logging.info(f"Found {blob_count} BLOB images to migrate to filesystem")
                 migration_result = migrate_blob_images_to_files()
-                if migration_result.get('migrated', 0) > 0:
+                if migration_result.get("migrated", 0) > 0:
                     logging.info(f"Migrated {migration_result['migrated']} BLOB images to filesystem")
     except Exception as e:
         logging.warning(f"Image migration check failed: {e}")
 
 
-def save_list_id(list_id: str, list_type: str, list_url: Optional[str] = None, item_count: Optional[int] = None, user_id: Optional[str] = None):
+def save_list_id(list_id: str, list_type: str, list_url: str | None = None, item_count: int | None = None, user_id: str | None = None):
     """
     Save list ID, URL, item count, and user_id to database, converting URLs to IDs if needed.
 
@@ -575,26 +575,23 @@ def save_list_id(list_id: str, list_type: str, list_url: Optional[str] = None, i
         cursor = conn.cursor()
 
         # For IMDb URLs, store the full URL
-        if list_type == "imdb" and list_id.startswith(('http://', 'https://')):
+        if list_type == "imdb" and list_id.startswith(("http://", "https://")):
             # Keep the full URL as is
-            id_to_save = list_id.rstrip('/')
+            id_to_save = list_id.rstrip("/")
         # For IMDb chart names, store as is
-        elif list_type == "imdb" and list_id in ['top', 'boxoffice', 'moviemeter', 'tvmeter']:
+        elif list_type == "imdb" and list_id in ["top", "boxoffice", "moviemeter", "tvmeter"]:
             id_to_save = list_id
         # For Trakt URLs, store the full URL
-        elif list_type == "trakt" and list_id.startswith(('http://', 'https://')):
-            id_to_save = list_id.rstrip('/')
-        # For MDBList URLs, store the full URL
-        elif list_type == "mdblist" and list_id.startswith(('http://', 'https://')):
-            id_to_save = list_id.rstrip('/')
+        elif list_type == "trakt" and list_id.startswith(("http://", "https://")) or list_type == "mdblist" and list_id.startswith(("http://", "https://")):
+            id_to_save = list_id.rstrip("/")
         else:
             # For traditional IDs (ls, ur, numeric) or MDBList username/listname format, store as is
             id_to_save = list_id
-        
+
         # Generate URL if not provided
         if list_url is None:
             list_url = construct_list_url(list_type, id_to_save)
-        
+
         # Set default item count if not provided
         if item_count is None:
             item_count = 0
@@ -611,24 +608,24 @@ def save_list_id(list_id: str, list_type: str, list_url: Optional[str] = None, i
             if user_id is None:
                 cursor.execute(
                     "UPDATE lists SET list_url = ?, item_count = ? WHERE rowid = ?",
-                    (list_url, item_count, rowid)
+                    (list_url, item_count, rowid),
                 )
             else:
                 cursor.execute(
                     "UPDATE lists SET list_url = ?, item_count = ?, user_id = ? WHERE rowid = ?",
-                    (list_url, item_count, str(user_id), rowid)
+                    (list_url, item_count, str(user_id), rowid),
                 )
         else:
             cursor.execute(
                 "INSERT INTO lists (list_type, list_id, list_url, item_count, user_id) VALUES (?, ?, ?, ?, ?)",
                 (list_type, id_to_save, list_url, item_count,
-                 str(user_id) if user_id is not None else DEFAULT_REQUESTER_USER_ID)
+                 str(user_id) if user_id is not None else DEFAULT_REQUESTER_USER_ID),
             )
 
         conn.commit()
 
 
-def get_list_user_id(list_type: str, list_id: str) -> Optional[str]:
+def get_list_user_id(list_type: str, list_id: str) -> str | None:
     """
     Get the Seerr user a list requests as.
 
@@ -684,7 +681,7 @@ def update_list_item_count(list_type: str, list_id: str, item_count: int):
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE lists SET item_count = ? WHERE list_type = ? AND list_id = ?",
-            (item_count, list_type, list_id)
+            (item_count, list_type, list_id),
         )
         conn.commit()
 
@@ -695,7 +692,7 @@ def update_list_last_synced(list_type: str, list_id: str):
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE lists SET last_synced = CURRENT_TIMESTAMP WHERE list_type = ? AND list_id = ?",
-            (list_type, list_id)
+            (list_type, list_id),
         )
         conn.commit()
 
@@ -706,12 +703,12 @@ def update_list_sync_info(list_type: str, list_id: str, item_count: int):
         cursor = conn.cursor()
         cursor.execute(
             "UPDATE lists SET item_count = ?, last_synced = CURRENT_TIMESTAMP WHERE list_type = ? AND list_id = ?",
-            (item_count, list_type, list_id)
+            (item_count, list_type, list_id),
         )
         conn.commit()
 
 
-def load_list_ids() -> List[Dict[str, str]]:
+def load_list_ids() -> list[dict[str, str]]:
     """Load all saved list IDs from database."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
@@ -726,25 +723,25 @@ def load_list_ids() -> List[Dict[str, str]]:
                 # Generate URL if missing
                 from .utils.helpers import construct_list_url
                 list_item["url"] = construct_list_url(row[0], row[1])
-            
+
             # Add item count (default to 0 if None)
             if len(row) > 3 and row[3] is not None:
                 list_item["item_count"] = row[3]
             else:
                 list_item["item_count"] = 0
-            
+
             # Add last_synced timestamp
             if len(row) > 4 and row[4] is not None:
                 list_item["last_synced"] = row[4]
             else:
                 list_item["last_synced"] = None
-            
+
             # Add user_id (default to admin if None for existing lists)
             if len(row) > 5 and row[5] is not None:
                 list_item["user_id"] = str(row[5])
             else:
                 list_item["user_id"] = DEFAULT_REQUESTER_USER_ID
-                
+
             results.append(list_item)
         return results
 
@@ -756,12 +753,12 @@ def delete_list(list_type: str, list_id: str) -> bool:
             cursor = conn.cursor()
             cursor.execute(
                 "DELETE FROM lists WHERE list_type = ? AND list_id = ?",
-                (list_type, list_id)
+                (list_type, list_id),
             )
             conn.commit()
             return cursor.rowcount > 0
     except Exception as e:
-        logging.error(f"Error deleting list: {str(e)}")
+        logging.exception(f"Error deleting list: {e!s}")
         return False
 
 
@@ -787,16 +784,16 @@ def should_sync_item(overseerr_id: int) -> bool:
     """Check if an item should be synced based on last sync time."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT last_synced FROM synced_items
             WHERE overseerr_id = ?
             AND last_synced > datetime('now', '-48 hours')
-        ''', (overseerr_id,))
+        """, (overseerr_id,))
         result = cursor.fetchone()
         return result is None
 
 
-def save_sync_result(title: str, media_type: str, imdb_id: Optional[str], overseerr_id: Optional[int], status: str, year: Optional[int] = None, tmdb_id: Optional[str] = None, list_type: Optional[str] = None, list_id: Optional[str] = None):
+def save_sync_result(title: str, media_type: str, imdb_id: str | None, overseerr_id: int | None, status: str, year: int | None = None, tmdb_id: str | None = None, list_type: str | None = None, list_id: str | None = None):
     """
     Save the result of a sync operation and track which list(s) it came from.
     
@@ -813,83 +810,81 @@ def save_sync_result(title: str, media_type: str, imdb_id: Optional[str], overse
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        
+
         # Get or create the item record
         # Try to find existing item by multiple possible keys (overseerr_id is most reliable)
         item_db_id = None
-        
+
         # Try overseerr_id first (most reliable)
         if overseerr_id:
-            cursor.execute('SELECT id FROM synced_items WHERE overseerr_id = ?', (overseerr_id,))
+            cursor.execute("SELECT id FROM synced_items WHERE overseerr_id = ?", (overseerr_id,))
             existing = cursor.fetchone()
             if existing:
                 item_db_id = existing[0]
-        
+
         # If not found by overseerr_id, try imdb_id
         if not item_db_id and imdb_id:
-            cursor.execute('SELECT id FROM synced_items WHERE imdb_id = ?', (imdb_id,))
+            cursor.execute("SELECT id FROM synced_items WHERE imdb_id = ?", (imdb_id,))
             existing = cursor.fetchone()
             if existing:
                 item_db_id = existing[0]
-        
+
         # If still not found, try tmdb_id
         if not item_db_id and tmdb_id:
-            cursor.execute('SELECT id FROM synced_items WHERE tmdb_id = ?', (tmdb_id,))
+            cursor.execute("SELECT id FROM synced_items WHERE tmdb_id = ?", (tmdb_id,))
             existing = cursor.fetchone()
             if existing:
                 item_db_id = existing[0]
-        
+
         if status == "skipped":
             # For skipped items, only insert if it doesn't exist (don't update last_synced)
             if item_db_id:
                 # Item already exists, just update status if needed
-                cursor.execute('''
+                cursor.execute("""
                     UPDATE synced_items 
                     SET status = ?, title = ?, media_type = ?, year = ?, imdb_id = ?, tmdb_id = ?,
                         source_list_type = ?, source_list_id = ?
                     WHERE id = ?
-                ''', (status, title, media_type, year, imdb_id, tmdb_id, list_type, list_id, item_db_id))
+                """, (status, title, media_type, year, imdb_id, tmdb_id, list_type, list_id, item_db_id))
             else:
                 # Insert new item
-                cursor.execute('''
+                cursor.execute("""
                     INSERT INTO synced_items 
                     (title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, last_synced, source_list_type, source_list_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
-                ''', (title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, list_type, list_id))
+                """, (title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, list_type, list_id))
                 item_db_id = cursor.lastrowid
-        else:
-            # For non-skipped items, update last_synced timestamp
-            if item_db_id:
-                # Update existing item
-                cursor.execute('''
+        elif item_db_id:
+            # Update existing item
+            cursor.execute("""
                     UPDATE synced_items 
                     SET title = ?, media_type = ?, year = ?, imdb_id = ?, tmdb_id = ?, 
                         overseerr_id = ?, status = ?, last_synced = CURRENT_TIMESTAMP,
                         source_list_type = ?, source_list_id = ?
                     WHERE id = ?
-                ''', (title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, list_type, list_id, item_db_id))
-            else:
-                # Insert new item
-                cursor.execute('''
+                """, (title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, list_type, list_id, item_db_id))
+        else:
+            # Insert new item
+            cursor.execute("""
                     INSERT INTO synced_items 
                     (title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, last_synced, source_list_type, source_list_id)
                     VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
-                ''', (title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, list_type, list_id))
-                item_db_id = cursor.lastrowid
-        
+                """, (title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, list_type, list_id))
+            item_db_id = cursor.lastrowid
+
         # Link item to list(s) if list information provided
         if item_db_id and list_type and list_id:
-            cursor.execute('''
+            cursor.execute("""
                 INSERT OR IGNORE INTO item_lists (item_id, list_type, list_id, synced_at)
                 VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (item_db_id, list_type, list_id))
-        
+            """, (item_db_id, list_type, list_id))
+
         conn.commit()
-        
+
         return item_db_id
 
 
-def get_item_lists(item_id: int) -> List[Dict[str, str]]:
+def get_item_lists(item_id: int) -> list[dict[str, str]]:
     """
     Get all lists that an item came from.
     
@@ -901,18 +896,18 @@ def get_item_lists(item_id: int) -> List[Dict[str, str]]:
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT list_type, list_id 
             FROM item_lists 
             WHERE item_id = ?
-        ''', (item_id,))
+        """, (item_id,))
         results = []
         for row in cursor.fetchall():
-            results.append({'type': row[0], 'id': row[1]})
+            results.append({"type": row[0], "id": row[1]})
         return results
 
 
-def get_list_items(list_type: str, list_id: str) -> List[Dict[str, Any]]:
+def get_list_items(list_type: str, list_id: str) -> list[dict[str, Any]]:
     """
     Get all items that came from a specific list.
     
@@ -925,26 +920,26 @@ def get_list_items(list_type: str, list_id: str) -> List[Dict[str, Any]]:
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT si.id, si.title, si.media_type, si.year, si.imdb_id, si.tmdb_id, 
                    si.overseerr_id, si.status, si.last_synced
             FROM synced_items si
             INNER JOIN item_lists il ON si.id = il.item_id
             WHERE il.list_type = ? AND il.list_id = ?
             ORDER BY si.last_synced DESC
-        ''', (list_type, list_id))
+        """, (list_type, list_id))
         results = []
         for row in cursor.fetchall():
             results.append({
-                'id': row[0],
-                'title': row[1],
-                'media_type': row[2],
-                'year': row[3],
-                'imdb_id': row[4],
-                'tmdb_id': row[5],
-                'overseerr_id': row[6],
-                'status': row[7],
-                'last_synced': row[8]
+                "id": row[0],
+                "title": row[1],
+                "media_type": row[2],
+                "year": row[3],
+                "imdb_id": row[4],
+                "tmdb_id": row[5],
+                "overseerr_id": row[6],
+                "status": row[7],
+                "last_synced": row[8],
             })
         return results
 
@@ -957,16 +952,16 @@ def clear_all_lists():
         conn.commit()
 
 
-def get_sync_stats() -> Dict[str, int]:
+def get_sync_stats() -> dict[str, int]:
     """Get sync statistics from the database."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT status, COUNT(*) 
             FROM synced_items 
             WHERE last_synced > datetime('now', '-7 days') 
             GROUP BY status
-        ''')
+        """)
         stats = dict(cursor.fetchall())
         return stats
 
@@ -978,9 +973,9 @@ def get_sync_stats() -> Dict[str, int]:
 def start_sync_in_db(
     session_id: str,
     sync_type: str,
-    list_type: Optional[str] = None,
-    list_id: Optional[str] = None,
-    pid: Optional[int] = None
+    list_type: str | None = None,
+    list_id: str | None = None,
+    pid: int | None = None,
 ) -> int:
     """
     Start a sync operation in the database.
@@ -1006,12 +1001,12 @@ def start_sync_in_db(
 
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             INSERT INTO sync_history (
                 session_id, sync_type, in_progress, start_time,
                 list_type, list_id, pid, status, last_heartbeat
             ) VALUES (?, ?, 1, CURRENT_TIMESTAMP, ?, ?, ?, 'running', CURRENT_TIMESTAMP)
-        ''', (session_id, sync_type, list_type, list_id, pid or os.getpid()))
+        """, (session_id, sync_type, list_type, list_id, pid or os.getpid()))
         sync_id = cursor.lastrowid
         conn.commit()
         logging.info(f"Started sync in database: session_id={session_id}, sync_id={sync_id}")
@@ -1030,11 +1025,11 @@ def heartbeat_sync_in_db(session_id: str) -> bool:
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             UPDATE sync_history
             SET last_heartbeat = CURRENT_TIMESTAMP
             WHERE session_id = ? AND in_progress = 1
-        ''', (session_id,))
+        """, (session_id,))
         conn.commit()
         return cursor.rowcount > 0
 
@@ -1051,13 +1046,13 @@ def cancel_sync_in_db(session_id: str) -> bool:
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             UPDATE sync_history
             SET in_progress = 0,
                 status = 'cancelled',
                 end_time = CURRENT_TIMESTAMP
             WHERE session_id = ? AND in_progress = 1
-        ''', (session_id,))
+        """, (session_id,))
         updated = cursor.rowcount > 0
         conn.commit()
         if updated:
@@ -1065,7 +1060,7 @@ def cancel_sync_in_db(session_id: str) -> bool:
         return updated
 
 
-def clear_stale_syncs(stale_after_seconds: Optional[int] = None) -> List[Dict[str, Any]]:
+def clear_stale_syncs(stale_after_seconds: int | None = None) -> list[dict[str, Any]]:
     """
     Close out in-progress sync records whose sync is no longer running.
 
@@ -1085,7 +1080,7 @@ def clear_stale_syncs(stale_after_seconds: Optional[int] = None) -> List[Dict[st
     with sqlite3.connect(DB_FILE) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM sync_history WHERE in_progress = 1')
+        cursor.execute("SELECT * FROM sync_history WHERE in_progress = 1")
         records = [dict(row) for row in cursor.fetchall()]
 
         for record in records:
@@ -1093,19 +1088,19 @@ def clear_stale_syncs(stale_after_seconds: Optional[int] = None) -> List[Dict[st
             if not reason:
                 continue
 
-            cursor.execute('''
+            cursor.execute("""
                 UPDATE sync_history
                 SET in_progress = 0,
                     status = 'interrupted',
                     end_time = COALESCE(end_time, CURRENT_TIMESTAMP),
                     error_message = COALESCE(error_message, ?)
                 WHERE session_id = ? AND in_progress = 1
-            ''', (f"Sync did not finish: {reason}", record.get('session_id')))
+            """, (f"Sync did not finish: {reason}", record.get("session_id")))
             if cursor.rowcount > 0:
-                record['reason'] = reason
+                record["reason"] = reason
                 cleared.append(record)
                 logging.warning(
-                    f"Cleared stale sync record {record.get('session_id')}: {reason}"
+                    f"Cleared stale sync record {record.get('session_id')}: {reason}",
                 )
 
         conn.commit()
@@ -1115,7 +1110,7 @@ def clear_stale_syncs(stale_after_seconds: Optional[int] = None) -> List[Dict[st
 
 def update_sync_lists_in_db(
     session_id: str,
-    synced_lists: List[Dict[str, str]]
+    synced_lists: list[dict[str, str]],
 ) -> bool:
     """
     Update sync_history record with list information for full syncs.
@@ -1129,30 +1124,30 @@ def update_sync_lists_in_db(
     """
     if not synced_lists:
         return False
-    
+
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        
+
         # For full syncs, store a summary of all lists synced
         # Format: "list_type1:list_id1,list_type2:list_id2,..." or summary if too many
         # Store all list identifiers (comma-separated) - SQLite TEXT can handle long strings
         list_summaries = [f"{lst['type']}:{lst['id']}" for lst in synced_lists]
-        list_id_value = ','.join(list_summaries)
-        
+        list_id_value = ",".join(list_summaries)
+
         # Use the first list type as the primary type, or "multiple" if different types
-        list_types = set(lst['type'] for lst in synced_lists)
+        list_types = set(lst["type"] for lst in synced_lists)
         if len(list_types) == 1:
             list_type_value = list_types.pop()
         else:
             # Multiple types - store as "multiple" with count
             list_type_value = f"multiple({len(list_types)} types)"
-        
-        cursor.execute('''
+
+        cursor.execute("""
             UPDATE sync_history
             SET list_type = ?,
                 list_id = ?
             WHERE session_id = ?
-        ''', (list_type_value, list_id_value, session_id))
+        """, (list_type_value, list_id_value, session_id))
         updated = cursor.rowcount > 0
         conn.commit()
         if updated:
@@ -1162,12 +1157,12 @@ def update_sync_lists_in_db(
 
 def end_sync_in_db(
     session_id: str,
-    status: str = 'completed',
+    status: str = "completed",
     total_items: int = 0,
     items_requested: int = 0,
     items_skipped: int = 0,
     items_errors: int = 0,
-    error_message: Optional[str] = None
+    error_message: str | None = None,
 ) -> bool:
     """
     End a sync operation in the database.
@@ -1186,7 +1181,7 @@ def end_sync_in_db(
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             UPDATE sync_history
             SET in_progress = 0,
                 end_time = CURRENT_TIMESTAMP,
@@ -1197,7 +1192,7 @@ def end_sync_in_db(
                 items_errors = ?,
                 error_message = ?
             WHERE session_id = ?
-        ''', (status, total_items, items_requested, items_skipped, items_errors, error_message, session_id))
+        """, (status, total_items, items_requested, items_skipped, items_errors, error_message, session_id))
         updated = cursor.rowcount > 0
         conn.commit()
         if updated:
@@ -1209,16 +1204,16 @@ def end_sync_in_db(
 
 def add_item_to_sync(
     sync_id: int,
-    item_id: Optional[int],
+    item_id: int | None,
     title: str,
     media_type: str,
     status: str,
-    list_type: Optional[str] = None,
-    list_id: Optional[str] = None,
-    year: Optional[int] = None,
-    imdb_id: Optional[str] = None,
-    tmdb_id: Optional[str] = None,
-    overseerr_id: Optional[int] = None
+    list_type: str | None = None,
+    list_id: str | None = None,
+    year: int | None = None,
+    imdb_id: str | None = None,
+    tmdb_id: str | None = None,
+    overseerr_id: int | None = None,
 ) -> int:
     """
     Add an item to a sync operation.
@@ -1241,19 +1236,19 @@ def add_item_to_sync(
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             INSERT INTO sync_items (
                 sync_id, item_id, title, media_type, year,
                 imdb_id, tmdb_id, overseerr_id, status,
                 list_type, list_id
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (sync_id, item_id, title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, list_type, list_id))
+        """, (sync_id, item_id, title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, list_type, list_id))
         item_record_id = cursor.lastrowid
         conn.commit()
         return item_record_id
 
 
-def get_current_sync_status(clear_stale: bool = True) -> Optional[Dict[str, Any]]:
+def get_current_sync_status(clear_stale: bool = True) -> dict[str, Any] | None:
     """
     Get the current in-progress sync status from database.
 
@@ -1273,19 +1268,19 @@ def get_current_sync_status(clear_stale: bool = True) -> Optional[Dict[str, Any]
     with sqlite3.connect(DB_FILE) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT * FROM sync_history
             WHERE in_progress = 1
             ORDER BY start_time DESC
             LIMIT 1
-        ''')
+        """)
         row = cursor.fetchone()
         if row:
             return dict(row)
         return None
 
 
-def get_sync_history(limit: int = 50, include_completed: bool = True) -> List[Dict[str, Any]]:
+def get_sync_history(limit: int = 50, include_completed: bool = True) -> list[dict[str, Any]]:
     """
     Get sync history from database.
     
@@ -1300,22 +1295,22 @@ def get_sync_history(limit: int = 50, include_completed: bool = True) -> List[Di
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
         if include_completed:
-            cursor.execute('''
+            cursor.execute("""
                 SELECT * FROM sync_history
                 ORDER BY start_time DESC
                 LIMIT ?
-            ''', (limit,))
+            """, (limit,))
         else:
-            cursor.execute('''
+            cursor.execute("""
                 SELECT * FROM sync_history
                 WHERE in_progress = 1
                 ORDER BY start_time DESC
                 LIMIT ?
-            ''', (limit,))
+            """, (limit,))
         return [dict(row) for row in cursor.fetchall()]
 
 
-def get_sync_items(sync_id: int) -> List[Dict[str, Any]]:
+def get_sync_items(sync_id: int) -> list[dict[str, Any]]:
     """
     Get all items processed during a sync.
     
@@ -1328,11 +1323,11 @@ def get_sync_items(sync_id: int) -> List[Dict[str, Any]]:
     with sqlite3.connect(DB_FILE) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT * FROM sync_items
             WHERE sync_id = ?
             ORDER BY processed_at
-        ''', (sync_id,))
+        """, (sync_id,))
         return [dict(row) for row in cursor.fetchall()]
 
 
@@ -1342,10 +1337,10 @@ def cleanup_old_sync_results(days: int = 30):
         cursor = conn.cursor()
         # Bound, not interpolated: today every caller passes an int, so the
         # old .format() was safe by accident rather than by construction.
-        cursor.execute('''
+        cursor.execute("""
             DELETE FROM synced_items
             WHERE last_synced < datetime('now', ?)
-        ''', (f'-{int(days)} days',))
+        """, (f"-{int(days)} days",))
         deleted_count = cursor.rowcount
         conn.commit()
         return deleted_count
@@ -1362,9 +1357,9 @@ def create_settings_tables():
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        
+
         # App settings table - stores all configuration
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS app_settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
@@ -1373,29 +1368,29 @@ def create_settings_tables():
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
-        ''')
-        
+        """)
+
         # Setup status table - tracks if initial wizard completed
-        cursor.execute('''
+        cursor.execute("""
             CREATE TABLE IF NOT EXISTS setup_status (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 is_completed INTEGER DEFAULT 0,
                 completed_at TEXT,
                 setup_version TEXT DEFAULT '1.0'
             )
-        ''')
-        
+        """)
+
         # Initialize setup_status row if it doesn't exist
-        cursor.execute('''
+        cursor.execute("""
             INSERT OR IGNORE INTO setup_status (id, is_completed)
             VALUES (1, 0)
-        ''')
-        
+        """)
+
         conn.commit()
         logging.info("Configuration tables initialized")
 
 
-def save_setting(key: str, value: str, is_encrypted: bool = False, setting_type: str = 'string'):
+def save_setting(key: str, value: str, is_encrypted: bool = False, setting_type: str = "string"):
     """
     Save a configuration setting to the database.
     
@@ -1407,15 +1402,15 @@ def save_setting(key: str, value: str, is_encrypted: bool = False, setting_type:
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             INSERT OR REPLACE INTO app_settings 
             (key, value, is_encrypted, setting_type, updated_at)
             VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ''', (key, value, 1 if is_encrypted else 0, setting_type))
+        """, (key, value, 1 if is_encrypted else 0, setting_type))
         conn.commit()
 
 
-def get_setting(key: str) -> Optional[tuple]:
+def get_setting(key: str) -> tuple | None:
     """
     Get a configuration setting from the database.
     
@@ -1427,16 +1422,16 @@ def get_setting(key: str) -> Optional[tuple]:
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT value, is_encrypted, setting_type
             FROM app_settings
             WHERE key = ?
-        ''', (key,))
+        """, (key,))
         result = cursor.fetchone()
         return result if result else None
 
 
-def get_all_settings() -> Dict[str, tuple]:
+def get_all_settings() -> dict[str, tuple]:
     """
     Get all configuration settings from the database.
     
@@ -1445,10 +1440,10 @@ def get_all_settings() -> Dict[str, tuple]:
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT key, value, is_encrypted, setting_type
             FROM app_settings
-        ''')
+        """)
         results = cursor.fetchall()
         return {row[0]: (row[1], row[2], row[3]) for row in results}
 
@@ -1457,7 +1452,7 @@ def delete_setting(key: str):
     """Delete a configuration setting from the database."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM app_settings WHERE key = ?', (key,))
+        cursor.execute("DELETE FROM app_settings WHERE key = ?", (key,))
         conn.commit()
 
 
@@ -1465,7 +1460,7 @@ def is_setup_completed() -> bool:
     """Check if the initial setup wizard has been completed."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT is_completed FROM setup_status WHERE id = 1')
+        cursor.execute("SELECT is_completed FROM setup_status WHERE id = 1")
         result = cursor.fetchone()
         return bool(result[0]) if result else False
 
@@ -1474,11 +1469,11 @@ def mark_setup_complete():
     """Mark the initial setup wizard as completed."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             UPDATE setup_status
             SET is_completed = 1, completed_at = CURRENT_TIMESTAMP
             WHERE id = 1
-        ''')
+        """)
         conn.commit()
         logging.info("Setup marked as completed in database")
 
@@ -1487,11 +1482,11 @@ def reset_setup_status():
     """Reset setup status (for testing/debugging)."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             UPDATE setup_status
             SET is_completed = 0, completed_at = NULL
             WHERE id = 1
-        ''')
+        """)
         conn.commit()
 
 
@@ -1499,7 +1494,7 @@ def count_settings() -> int:
     """Count the number of settings in the database."""
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT COUNT(*) FROM app_settings')
+        cursor.execute("SELECT COUNT(*) FROM app_settings")
         result = cursor.fetchone()
         return result[0] if result else 0
 
@@ -1508,7 +1503,7 @@ def count_settings() -> int:
 # Seerr Users Management
 # ============================================================================
 
-def save_seerr_users(users: List[Dict[str, Any]]):
+def save_seerr_users(users: list[dict[str, Any]]):
     """
     Save Seerr users to database, replacing existing users.
 
@@ -1521,27 +1516,27 @@ def save_seerr_users(users: List[Dict[str, Any]]):
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        
+
         # Clear existing users
         cursor.execute("DELETE FROM overseerr_users")
-        
+
         # Insert new users
         for user in users:
-            cursor.execute('''
+            cursor.execute("""
                 INSERT INTO overseerr_users (id, display_name, email, avatar, last_synced)
                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (
-                str(user.get('id')),
-                user.get('display_name', user.get('displayName', 'Unknown')),
-                user.get('email', ''),
-                user.get('avatar', '')
+            """, (
+                str(user.get("id")),
+                user.get("display_name", user.get("displayName", "Unknown")),
+                user.get("email", ""),
+                user.get("avatar", ""),
             ))
-        
+
         conn.commit()
         logging.info(f"Saved {len(users)} Seerr users to database")
 
 
-def get_seerr_users() -> List[Dict[str, Any]]:
+def get_seerr_users() -> list[dict[str, Any]]:
     """
     Get all Seerr users from database.
     
@@ -1550,26 +1545,26 @@ def get_seerr_users() -> List[Dict[str, Any]]:
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT id, display_name, email, avatar, last_synced
             FROM overseerr_users
             ORDER BY CAST(id AS INTEGER)
-        ''')
-        
+        """)
+
         users = []
         for row in cursor.fetchall():
             users.append({
-                'id': row[0],
-                'display_name': row[1],
-                'email': row[2],
-                'avatar': row[3],
-                'last_synced': row[4]
+                "id": row[0],
+                "display_name": row[1],
+                "email": row[2],
+                "avatar": row[3],
+                "last_synced": row[4],
             })
-        
+
         return users
 
 
-def get_overseerr_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+def get_overseerr_user_by_id(user_id: str) -> dict[str, Any] | None:
     """
     Get a specific Seerr user by ID.
     
@@ -1581,22 +1576,22 @@ def get_overseerr_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT id, display_name, email, avatar, last_synced
             FROM overseerr_users
             WHERE id = ?
-        ''', (user_id,))
-        
+        """, (user_id,))
+
         row = cursor.fetchone()
         if row:
             return {
-                'id': row[0],
-                'display_name': row[1],
-                'email': row[2],
-                'avatar': row[3],
-                'last_synced': row[4]
+                "id": row[0],
+                "display_name": row[1],
+                "email": row[2],
+                "avatar": row[3],
+                "last_synced": row[4],
             }
-        
+
         return None
 
 
@@ -1609,7 +1604,7 @@ def clear_seerr_users():
         logging.info("Cleared all Seerr users from database")
 
 
-def save_collection_sync_result(franchise_name: str, item_count: Optional[int] = None):
+def save_collection_sync_result(franchise_name: str, item_count: int | None = None):
     """
     Save or update collection sync tracking in the database.
     Uses the lists table with list_type='collections'.
@@ -1619,24 +1614,24 @@ def save_collection_sync_result(franchise_name: str, item_count: Optional[int] =
         item_count (Optional[int]): Number of items in the collection
     """
     from datetime import datetime
-    
+
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        
+
         # Use existing save_list_id function with list_type='collections'
         # Collections don't have URLs, so we'll use None
         list_url = None
-        
+
         cursor.execute(
             """INSERT OR REPLACE INTO lists (list_type, list_id, list_url, item_count, last_synced) 
                VALUES (?, ?, ?, ?, ?)""",
-            ("collections", franchise_name, list_url, item_count or 0, datetime.now())
+            ("collections", franchise_name, list_url, item_count or 0, datetime.now()),
         )
         conn.commit()
         logging.info(f"Saved collection sync result for: {franchise_name}")
 
 
-def get_synced_collections() -> List[str]:
+def get_synced_collections() -> list[str]:
     """
     Get list of all synced collection franchise names.
 
@@ -1646,7 +1641,7 @@ def get_synced_collections() -> List[str]:
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT list_id FROM lists WHERE list_type = 'collections' ORDER BY last_synced DESC"
+            "SELECT list_id FROM lists WHERE list_type = 'collections' ORDER BY last_synced DESC",
         )
         results = cursor.fetchall()
         return [row[0] for row in results]
@@ -1681,38 +1676,38 @@ def _generate_image_filename(image_url: str, mime_type: str = None) -> str:
         str: Filename with extension (e.g., 'a1b2c3d4e5f6g7h8.webp')
     """
     # Generate hash from URL (use full 64 chars for better collision resistance)
-    url_hash = hashlib.sha256(image_url.encode('utf-8')).hexdigest()[:32]
-    
+    url_hash = hashlib.sha256(image_url.encode("utf-8")).hexdigest()[:32]
+
     # Determine extension from MIME type or URL
-    extension = 'webp'  # Default for Trakt images
+    extension = "webp"  # Default for Trakt images
     if mime_type:
         # Map common MIME types to extensions
         mime_to_ext = {
-            'image/webp': 'webp',
-            'image/jpeg': 'jpg',
-            'image/jpg': 'jpg',
-            'image/png': 'png',
-            'image/gif': 'gif',
-            'image/bmp': 'bmp',
-            'image/svg+xml': 'svg'
+            "image/webp": "webp",
+            "image/jpeg": "jpg",
+            "image/jpg": "jpg",
+            "image/png": "png",
+            "image/gif": "gif",
+            "image/bmp": "bmp",
+            "image/svg+xml": "svg",
         }
-        extension = mime_to_ext.get(mime_type.lower(), 'webp')
+        extension = mime_to_ext.get(mime_type.lower(), "webp")
     else:
         # Try to extract from URL as fallback
         url_lower = image_url.lower()
-        if '.jpg' in url_lower or '.jpeg' in url_lower:
-            extension = 'jpg'
-        elif '.png' in url_lower:
-            extension = 'png'
-        elif '.gif' in url_lower:
-            extension = 'gif'
-        elif '.webp' in url_lower:
-            extension = 'webp'
-    
+        if ".jpg" in url_lower or ".jpeg" in url_lower:
+            extension = "jpg"
+        elif ".png" in url_lower:
+            extension = "png"
+        elif ".gif" in url_lower:
+            extension = "gif"
+        elif ".webp" in url_lower:
+            extension = "webp"
+
     return f"{url_hash}.{extension}"
 
 
-def save_cached_image(image_url: str, image_data: bytes, mime_type: str = None, source: str = 'trakt',
+def save_cached_image(image_url: str, image_data: bytes, mime_type: str = None, source: str = "trakt",
                       width: int = None, height: int = None) -> int:
     """
     Save an image to the filesystem and store metadata in the cached_images table.
@@ -1739,11 +1734,11 @@ def save_cached_image(image_url: str, image_data: bytes, mime_type: str = None, 
     try:
         # Ensure images directory exists
         images_dir = _ensure_images_directory()
-        
+
         # Generate unique filename based on URL hash
         filename = _generate_image_filename(image_url, mime_type)
         local_path = str(images_dir / filename)
-        
+
         # Skip if file already exists (avoid rewriting same file)
         if not os.path.exists(local_path):
             # Write image to file atomically
@@ -1752,10 +1747,10 @@ def save_cached_image(image_url: str, image_data: bytes, mime_type: str = None, 
             temp_path = None
             try:
                 # Write to temp file in same directory (ensures same filesystem for atomic rename)
-                with tempfile.NamedTemporaryFile(mode='wb', dir=images_dir, delete=False) as tmp:
+                with tempfile.NamedTemporaryFile(mode="wb", dir=images_dir, delete=False) as tmp:
                     tmp.write(image_data)
                     temp_path = tmp.name
-                
+
                 # Atomic rename (ensures no partial files)
                 os.replace(temp_path, local_path)
                 logging.debug(f"Wrote {len(image_data)} bytes to {local_path}")
@@ -1769,13 +1764,13 @@ def save_cached_image(image_url: str, image_data: bytes, mime_type: str = None, 
                 raise e
         else:
             logging.debug(f"File already exists, skipping write: {local_path}")
-        
+
         file_size = len(image_data)
-        
+
         # Store in database (preserve existing cached_at if record exists)
         with sqlite3.connect(DB_FILE) as conn:
             cursor = conn.cursor()
-            cursor.execute('''
+            cursor.execute("""
                 INSERT INTO cached_images
                 (image_url, local_path, mime_type, file_size, cached_at, last_accessed, source, width, height)
                 VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?, ?, ?)
@@ -1787,18 +1782,18 @@ def save_cached_image(image_url: str, image_data: bytes, mime_type: str = None, 
                     source = excluded.source,
                     width = excluded.width,
                     height = excluded.height
-            ''', (image_url, local_path, mime_type, file_size, source, width, height))
+            """, (image_url, local_path, mime_type, file_size, source, width, height))
             image_id = cursor.lastrowid
             conn.commit()
             logging.debug(f"Saved image to {local_path} (ID: {image_id})")
             return image_id
-            
+
     except Exception as e:
         logging.error(f"Error saving cached image {image_url}: {e}", exc_info=True)
         raise
 
 
-def get_cached_image(image_url: str) -> Optional[Dict[str, Any]]:
+def get_cached_image(image_url: str) -> dict[str, Any] | None:
     """
     Get a cached image by URL. Returns metadata including local_path.
 
@@ -1811,27 +1806,26 @@ def get_cached_image(image_url: str) -> Optional[Dict[str, Any]]:
     with sqlite3.connect(DB_FILE) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT * FROM cached_images WHERE image_url = ?
-        ''', (image_url,))
+        """, (image_url,))
         row = cursor.fetchone()
 
         if row:
             row_dict = dict(row)
-            local_path = row_dict.get('local_path')
-            
+            local_path = row_dict.get("local_path")
+
             # Verify file exists
             if local_path and os.path.exists(local_path):
                 # Update last_accessed timestamp
-                cursor.execute('''
+                cursor.execute("""
                     UPDATE cached_images SET last_accessed = CURRENT_TIMESTAMP WHERE id = ?
-                ''', (row['id'],))
+                """, (row["id"],))
                 conn.commit()
                 return row_dict
-            else:
-                # File missing but DB record exists - log and return None to trigger re-download
-                logging.warning(f"Cached image file missing: {local_path} (URL: {image_url})")
-                return None
+            # File missing but DB record exists - log and return None to trigger re-download
+            logging.warning(f"Cached image file missing: {local_path} (URL: {image_url})")
+            return None
 
         return None
 
@@ -1846,11 +1840,11 @@ def update_item_poster_url(item_id: int, poster_url: str):
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             UPDATE synced_items
             SET poster_url = ?, poster_cached_at = CURRENT_TIMESTAMP
             WHERE id = ?
-        ''', (poster_url, item_id))
+        """, (poster_url, item_id))
         conn.commit()
 
 
@@ -1865,15 +1859,15 @@ def update_collection_poster_url(list_type: str, list_id: str, poster_url: str):
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             UPDATE lists
             SET poster_url = ?, poster_cached_at = CURRENT_TIMESTAMP
             WHERE list_type = ? AND list_id = ?
-        ''', (poster_url, list_type, list_id))
+        """, (poster_url, list_type, list_id))
         conn.commit()
 
 
-def get_expired_cached_images(hours: int = 24) -> List[Dict[str, Any]]:
+def get_expired_cached_images(hours: int = 24) -> list[dict[str, Any]]:
     """
     Get cached images that haven't been accessed recently.
 
@@ -1886,11 +1880,11 @@ def get_expired_cached_images(hours: int = 24) -> List[Dict[str, Any]]:
     with sqlite3.connect(DB_FILE) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        cursor.execute('''
+        cursor.execute("""
             SELECT * FROM cached_images
             WHERE last_accessed < datetime('now', ?)
             ORDER BY last_accessed ASC
-        ''', (f'-{int(hours)} hours',))
+        """, (f"-{int(hours)} hours",))
         return [dict(row) for row in cursor.fetchall()]
 
 
@@ -1908,18 +1902,18 @@ def cleanup_expired_images(hours: int = 24) -> int:
     with sqlite3.connect(DB_FILE) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
-        
+
         # Get expired images with their file paths
-        cursor.execute('''
+        cursor.execute("""
             SELECT id, local_path FROM cached_images
             WHERE last_accessed < datetime('now', ?)
-        ''', (f'-{int(hours)} hours',))
+        """, (f"-{int(hours)} hours",))
         expired_images = cursor.fetchall()
-        
+
         deleted_count = 0
         for row in expired_images:
-            local_path = row['local_path']
-            
+            local_path = row["local_path"]
+
             # Delete file if it exists
             if local_path and os.path.exists(local_path):
                 try:
@@ -1927,17 +1921,17 @@ def cleanup_expired_images(hours: int = 24) -> int:
                     logging.debug(f"Deleted expired image file: {local_path}")
                 except Exception as e:
                     logging.warning(f"Failed to delete image file {local_path}: {e}")
-            
+
             # Delete database record
-            cursor.execute('DELETE FROM cached_images WHERE id = ?', (row['id'],))
+            cursor.execute("DELETE FROM cached_images WHERE id = ?", (row["id"],))
             deleted_count += 1
-        
+
         conn.commit()
         logging.info(f"Cleaned up {deleted_count} expired images")
         return deleted_count
 
 
-def migrate_blob_images_to_files() -> Dict[str, Any]:
+def migrate_blob_images_to_files() -> dict[str, Any]:
     """
     Migrate existing BLOB images in database to filesystem storage.
     This is a one-time migration function.
@@ -1948,91 +1942,91 @@ def migrate_blob_images_to_files() -> Dict[str, Any]:
     migrated_count = 0
     skipped_count = 0
     error_count = 0
-    
+
     try:
         images_dir = _ensure_images_directory()
-        
+
         with sqlite3.connect(DB_FILE) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            
+
             # Get all images that have BLOB data but no local_path
-            cursor.execute('''
+            cursor.execute("""
                 SELECT id, image_url, image_data, mime_type, source, file_size
                 FROM cached_images
                 WHERE image_data IS NOT NULL AND (local_path IS NULL OR local_path = '')
-            ''')
+            """)
             blob_images = cursor.fetchall()
-            
+
             logging.info(f"Found {len(blob_images)} BLOB images to migrate")
-            
+
             for row in blob_images:
                 try:
-                    image_url = row['image_url']
-                    image_data = row['image_data']
-                    
+                    image_url = row["image_url"]
+                    image_data = row["image_data"]
+
                     if not image_data:
                         skipped_count += 1
                         continue
-                    
+
                     # Generate filename
-                    filename = _generate_image_filename(image_url, row['mime_type'])
+                    filename = _generate_image_filename(image_url, row["mime_type"])
                     local_path = str(images_dir / filename)
-                    
+
                     # Skip if file already exists
                     if os.path.exists(local_path):
                         logging.debug(f"File already exists, skipping: {local_path}")
                         # Update database record with path
-                        cursor.execute('''
+                        cursor.execute("""
                             UPDATE cached_images
                             SET local_path = ?
                             WHERE id = ?
-                        ''', (local_path, row['id']))
+                        """, (local_path, row["id"]))
                         skipped_count += 1
                         continue
-                    
+
                     # Write image to file
-                    with open(local_path, 'wb') as f:
+                    with open(local_path, "wb") as f:
                         f.write(image_data)
-                    
+
                     # Update database record with local_path
-                    cursor.execute('''
+                    cursor.execute("""
                         UPDATE cached_images
                         SET local_path = ?
                         WHERE id = ?
-                    ''', (local_path, row['id']))
-                    
+                    """, (local_path, row["id"]))
+
                     migrated_count += 1
-                    
+
                     if migrated_count % 10 == 0:
                         logging.info(f"Migrated {migrated_count} images...")
                         conn.commit()
-                        
+
                 except Exception as e:
-                    logging.error(f"Error migrating image {row.get('image_url', 'unknown')}: {e}")
+                    logging.exception(f"Error migrating image {row.get('image_url', 'unknown')}: {e}")
                     error_count += 1
-            
+
             conn.commit()
             logging.info(f"Migration complete: {migrated_count} migrated, {skipped_count} skipped, {error_count} errors")
-            
+
             return {
-                'migrated': migrated_count,
-                'skipped': skipped_count,
-                'errors': error_count,
-                'total': len(blob_images)
+                "migrated": migrated_count,
+                "skipped": skipped_count,
+                "errors": error_count,
+                "total": len(blob_images),
             }
-            
+
     except Exception as e:
         logging.error(f"Error during image migration: {e}", exc_info=True)
         return {
-            'migrated': migrated_count,
-            'skipped': skipped_count,
-            'errors': error_count,
-            'error': str(e)
+            "migrated": migrated_count,
+            "skipped": skipped_count,
+            "errors": error_count,
+            "error": str(e),
         }
 
 
-def get_cached_image_stats() -> Dict[str, Any]:
+def get_cached_image_stats() -> dict[str, Any]:
     """
     Get statistics about cached images.
     Calculates sizes from filesystem for accuracy.
@@ -2045,50 +2039,50 @@ def get_cached_image_stats() -> Dict[str, Any]:
         cursor = conn.cursor()
 
         # Total images
-        cursor.execute('SELECT COUNT(*) FROM cached_images')
+        cursor.execute("SELECT COUNT(*) FROM cached_images")
         total_images = cursor.fetchone()[0]
 
         # Get all images with their paths
-        cursor.execute('SELECT local_path, file_size, source FROM cached_images')
+        cursor.execute("SELECT local_path, file_size, source FROM cached_images")
         all_images = cursor.fetchall()
 
         # Calculate total size from filesystem
         total_size = 0
         source_stats = {}
         valid_images = 0
-        
+
         for row in all_images:
-            local_path = row['local_path']
-            source = row['source'] or 'unknown'
-            
+            local_path = row["local_path"]
+            source = row["source"] or "unknown"
+
             if local_path and os.path.exists(local_path):
                 try:
                     file_size = os.path.getsize(local_path)
                     total_size += file_size
                     valid_images += 1
-                    
+
                     # Track by source
                     if source not in source_stats:
-                        source_stats[source] = {'count': 0, 'size_bytes': 0}
-                    source_stats[source]['count'] += 1
-                    source_stats[source]['size_bytes'] += file_size
+                        source_stats[source] = {"count": 0, "size_bytes": 0}
+                    source_stats[source]["count"] += 1
+                    source_stats[source]["size_bytes"] += file_size
                 except Exception as e:
                     logging.warning(f"Error getting size for {local_path}: {e}")
             else:
                 # Use database size if file missing
-                db_size = row['file_size'] or 0
+                db_size = row["file_size"] or 0
                 total_size += db_size
 
         # Oldest and newest
-        cursor.execute('SELECT MIN(cached_at), MAX(cached_at) FROM cached_images')
+        cursor.execute("SELECT MIN(cached_at), MAX(cached_at) FROM cached_images")
         oldest, newest = cursor.fetchone()
 
         return {
-            'total_images': total_images,
-            'valid_images': valid_images,
-            'total_size_bytes': total_size,
-            'total_size_mb': round(total_size / (1024 * 1024), 2),
-            'source_breakdown': source_stats,
-            'oldest_image': oldest,
-            'newest_image': newest
+            "total_images": total_images,
+            "valid_images": valid_images,
+            "total_size_bytes": total_size,
+            "total_size_mb": round(total_size / (1024 * 1024), 2),
+            "source_breakdown": source_stats,
+            "oldest_image": oldest,
+            "newest_image": newest,
         }

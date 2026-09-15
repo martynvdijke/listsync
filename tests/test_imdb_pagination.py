@@ -7,11 +7,11 @@ titles forever. Before the fix this never returns.
 
 Scenario B proves ordinary multi-page lists still paginate to completion.
 """
+import os
 import signal
 import sys
 import types
 
-import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def stub(name, attrs=()):
     m = types.ModuleType(name)
@@ -26,6 +26,7 @@ c = stub("cryptography"); f = stub("cryptography.fernet", ("Fernet", "InvalidTok
 d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a, **k: None
 
 import logging
+
 logging.disable(logging.CRITICAL)
 
 from list_sync.providers.imdb import _process_imdb_list
@@ -118,7 +119,6 @@ class FakeSB:
             if self._batch < len(self.scroll_batches):
                 self.rendered.extend(self.scroll_batches[self._batch])
                 self._batch += 1
-        return None
 
     # --- lookups --------------------------------------------------------
     def find_element(self, *args):

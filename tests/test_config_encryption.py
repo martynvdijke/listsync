@@ -12,7 +12,13 @@ cryptography is not installed for these suites, so Fernet and PBKDF2 are stood
 in for. What is being checked is the file format and which derivation each path
 picks - not the primitives themselves.
 """
-import sys, types, os, tempfile, base64, hashlib, json
+import base64
+import hashlib
+import json
+import os
+import sys
+import tempfile
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -79,6 +85,7 @@ for name, mod in [
 
 tmp = tempfile.mkdtemp()
 import list_sync.utils.logger as lg
+
 lg.DATA_DIR = tmp
 
 from list_sync import config

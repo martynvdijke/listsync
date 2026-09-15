@@ -1,5 +1,7 @@
 """SEERR_* must be preferred, OVERSEERR_* must keep working."""
-import os, sys, types
+import os
+import sys
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def stub(n, a=()):
@@ -13,10 +15,11 @@ c = stub("cryptography"); f = stub("cryptography.fernet", ("Fernet", "InvalidTok
 d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a, **k: None
 
 import logging
+
 logging.disable(logging.CRITICAL)
 
-from list_sync.config import get_seerr_env, LEGACY_ENV_NAMES
 import list_sync.config as cfg
+from list_sync.config import LEGACY_ENV_NAMES, get_seerr_env
 
 fail = []
 def check(label, got, want):

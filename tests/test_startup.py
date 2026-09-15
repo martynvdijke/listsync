@@ -1,7 +1,8 @@
 """Startup must survive Seerr being slow, and never prompt in a container."""
-import sys, types, os
+import os
+import sys
+import types
 
-import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def stub(n, a=()):
     m = types.ModuleType(n)
@@ -14,6 +15,7 @@ c = stub("cryptography"); f = stub("cryptography.fernet", ("Fernet", "InvalidTok
 d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a, **k: None
 
 import logging
+
 logging.disable(logging.CRITICAL)
 
 import list_sync.main as m

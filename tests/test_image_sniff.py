@@ -1,5 +1,8 @@
 """sniff_image_type must match what imghdr.what() returned, without imghdr."""
-import os, sys, types, tempfile
+import os
+import sys
+import tempfile
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def stub(n, a=()):
@@ -14,8 +17,10 @@ d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a,
 
 tmp = tempfile.mkdtemp()
 import list_sync.utils.logger as lg
+
 lg.DATA_DIR = tmp
 import list_sync.database as db
+
 db.DB_FILE = os.path.join(tmp, "list_sync.db")
 
 from api_server import sniff_image_type

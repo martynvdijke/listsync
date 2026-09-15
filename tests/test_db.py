@@ -1,9 +1,13 @@
 """Exercise the per-list user persistence against a real sqlite db."""
-import os, sys, tempfile, types
+import os
+import sys
+import tempfile
+import types
 
 tmp = tempfile.mkdtemp()
 os.environ["DATA_DIR"] = tmp
-import os, sys
+import os
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # helpers.py imports seleniumbase at module scope; none of the code under test
@@ -19,12 +23,17 @@ for name in ("seleniumbase", "bs4", "dotenv"):
             sys.modules[name] = mod
 
 import list_sync.database as db
+
 db.DB_FILE = os.path.join(tmp, "list_sync.db")
 db.init_database()
 
 from list_sync.database import (
-    save_list_id, load_list_ids, get_list_user_id, update_list_user_id,
-    normalize_list_id, update_list_sync_info,
+    get_list_user_id,
+    load_list_ids,
+    normalize_list_id,
+    save_list_id,
+    update_list_sync_info,
+    update_list_user_id,
 )
 
 fail = []
@@ -74,6 +83,7 @@ check("explicit user overrides", get_list_user_id("imdb", "ls123456789"), "9")
 
 # --- legacy duplicate rows (bare id + url) both get reassigned ---
 import sqlite3
+
 with sqlite3.connect(db.DB_FILE) as conn:
     conn.execute("INSERT INTO lists (list_type, list_id, list_url, item_count, user_id) VALUES (?,?,?,?,?)",
                  ("imdb", "https://www.imdb.com/list/ls123456789", "x", 0, "1"))

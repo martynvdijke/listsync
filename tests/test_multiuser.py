@@ -1,7 +1,8 @@
 """Check per-user request fan-out and the requester extraction."""
-import sys, types
+import os
+import sys
+import types
 
-import os, sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 def stub(name, attrs=()):
     m = types.ModuleType(name)
@@ -61,6 +62,8 @@ check("missing is4k treated as non-4k", ex({"requests": [{"requestedBy": {"id": 
 
 # --- get_media_state end to end ---
 import requests as rq
+
+
 class R:
     def __init__(self, body): self._b = body
     def json(self): return self._b

@@ -2,9 +2,8 @@
 Display and UI components for ListSync.
 """
 
-import os
 import time
-from typing import Dict, List
+
 from colorama import Style, init
 
 from ..utils.helpers import color_gradient
@@ -14,7 +13,7 @@ init(autoreset=True)
 
 class SyncResults:
     """Class to track sync operation results and statistics."""
-    
+
     def __init__(self):
         self.start_time = time.time()
         self.not_found_items = []  # For #1
@@ -24,7 +23,7 @@ class SyncResults:
             "pre-1980": 0,
             "1980-1999": 0,
             "2000-2019": 0,
-            "2020+": 0
+            "2020+": 0,
         }  # For #8
         self.total_items = 0
         self.synced_lists = []  # Track which lists were synced
@@ -35,15 +34,15 @@ class SyncResults:
             "already_available": 0,
             "not_found": 0,
             "error": 0,
-            "skipped": 0
+            "skipped": 0,
         }
-    
+
     def __str__(self):
         """Return a string representation of the sync results."""
         processing_time = time.time() - self.start_time
         total_items = self.total_items or 1
         avg_time_ms = (processing_time / total_items) * 1000
-        
+
         summary = "\n" + "-" * 62 + "\n"
         summary += "Soluify - List Sync Summary\n"
         summary += "-" * 62 + "\n\n"
@@ -62,35 +61,35 @@ class SyncResults:
         summary += "──────────\n"
         summary += f"Movies: {self.media_type_counts['movie']} ({self.media_type_counts['movie']/total_items*100:.1f}%)\n"
         summary += f"TV Shows: {self.media_type_counts['tv']} ({self.media_type_counts['tv']/total_items*100:.1f}%)\n\n"
-        
+
         # Synced Lists section
         if self.synced_lists:
             summary += "Synced Lists\n"
             summary += "────────────\n"
             for list_info in self.synced_lists:
-                list_type = list_info.get('type', 'Unknown').upper()
-                list_url = list_info.get('url', 'No URL')
+                list_type = list_info.get("type", "Unknown").upper()
+                list_url = list_info.get("url", "No URL")
                 summary += f"📋 {list_type}: {list_url}\n"
             summary += "\n"
-        
+
         # Not Found Items (including both not found and error items)
         all_failed_items = []
-        
+
         # Add not found items
         for item in self.not_found_items:
             all_failed_items.append(f"• {item['title']} (Not Found)")
-        
+
         # Add error items
         for item in self.error_items:
-            error_msg = item.get('error', 'Unknown error')
+            error_msg = item.get("error", "Unknown error")
             all_failed_items.append(f"• {item['title']} (Error: {error_msg})")
-        
+
         if all_failed_items:
             summary += f"\nNot Found Items ({len(all_failed_items)})\n"
             summary += "───────────────\n"
             for item_line in all_failed_items:
                 summary += f"{item_line}\n"
-        
+
         return summary
 
 def display_ascii_art():
@@ -134,12 +133,12 @@ def display_menu():
 """
     print(color_gradient(menu, "#00aaff", "#00ffaa") + Style.RESET_ALL)
 
-def display_lists(lists: List[Dict[str, str]]):
+def display_lists(lists: list[dict[str, str]]):
     """Display a list of saved lists."""
     if not lists:
         print(color_gradient("\n❌ No lists found.", "#ff0000", "#aa0000"))
         return
-        
+
     print(color_gradient("\nSaved Lists:", "#00aaff", "#00ffaa"))
     for idx, list_info in enumerate(lists, 1):
         print(color_gradient(f"{idx}. {list_info['type'].upper()}: {list_info['id']}", "#ffaa00", "#ff5500"))
@@ -153,7 +152,7 @@ def display_manage_lists_menu():
     print(color_gradient("4. Edit Lists", "#ffaa00", "#ff5500"))
     print(color_gradient("5. Return to Previous Menu", "#ffaa00", "#ff5500"))
 
-def display_item_status(result: Dict, current_item: int, total_items: int, dry_run: bool = False):
+def display_item_status(result: dict, current_item: int, total_items: int, dry_run: bool = False):
     """Display the status of a processed item."""
     if dry_run:
         print(color_gradient(f"🔍 {result['title']}: Would be synced ({current_item}/{total_items})", "#ffaa00", "#ff5500") + "\n")
@@ -164,13 +163,13 @@ def display_item_status(result: Dict, current_item: int, total_items: int, dry_r
             "already_available": ("☑️ ", "Already Available", "#00BCD4", "#00ACC1"),
             "not_found": ("❓", "Not Found", "#FFC107", "#FFA000"),
             "error": ("❌", "Error", "#F44336", "#E53935"),
-            "skipped": ("⏭️ ", "Skipped", "#9E9E9E", "#757575")
+            "skipped": ("⏭️ ", "Skipped", "#9E9E9E", "#757575"),
         }.get(result["status"], ("➖", "Unknown Status", "#607D8B", "#546E7A"))
-        
+
         emoji, status_text, start_color, end_color = status_info
         message = f"{result['title']}: {status_text} ({current_item}/{total_items})"
         print(f"{emoji} {color_gradient(message, start_color, end_color)}")
-        
+
         # If there's an error message, log it too for the failures page to pick up
         if result.get("status") in ["error", "not_found"] and result.get("error_message"):
             import logging
@@ -213,23 +212,23 @@ def display_summary(sync_results: SyncResults):
         summary += "Synced Lists\n"
         summary += "────────────\n"
         for list_info in sync_results.synced_lists:
-            list_type = list_info.get('type', 'Unknown').upper()
-            list_url = list_info.get('url', 'No URL')
+            list_type = list_info.get("type", "Unknown").upper()
+            list_url = list_info.get("url", "No URL")
             summary += f"📋 {list_type}: {list_url}\n"
         summary += "\n"
 
     # Not Found Items (including both not found and error items)
     all_failed_items = []
-    
+
     # Add not found items
     for item in sync_results.not_found_items:
         all_failed_items.append(f"• {item['title']} (Not Found)")
-    
+
     # Add error items
     for item in sync_results.error_items:
-        error_msg = item.get('error', 'Unknown error')
+        error_msg = item.get("error", "Unknown error")
         all_failed_items.append(f"• {item['title']} (Error: {error_msg})")
-    
+
     if all_failed_items:
         summary += f"\nNot Found Items ({len(all_failed_items)})\n"
         summary += "───────────────\n"
@@ -262,7 +261,7 @@ def display_automated_mode_message(sync_interval: float):
             interval_text = f"{int(minutes)} minutes"
         else:
             interval_text = f"{sync_interval} hours"
-    
+
     print(color_gradient(f"\n⚙️  Starting automated sync mode (interval: {interval_text})...", "#00aaff", "#00ffaa"))
 
 def display_lists_loaded_message():

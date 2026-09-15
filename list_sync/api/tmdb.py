@@ -12,7 +12,7 @@ which mismatches remakes, sequels and common titles.
 """
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any
 
 import requests
 
@@ -32,7 +32,7 @@ def is_available() -> bool:
     return bool(get_tmdb_api_key())
 
 
-def resolve_imdb_id(imdb_id: str, media_type: str = "movie") -> Optional[Dict[str, Any]]:
+def resolve_imdb_id(imdb_id: str, media_type: str = "movie") -> dict[str, Any] | None:
     """
     Resolve an IMDb ID to a TMDB ID using TMDB's /find endpoint.
 
@@ -67,7 +67,7 @@ def resolve_imdb_id(imdb_id: str, media_type: str = "movie") -> Optional[Dict[st
         if response.status_code == 401:
             logging.error(
                 "TMDB rejected the API key (401). Check TMDB_KEY - "
-                "a free key is available at https://www.themoviedb.org/settings/api"
+                "a free key is available at https://www.themoviedb.org/settings/api",
             )
             return None
 
@@ -97,7 +97,7 @@ def resolve_imdb_id(imdb_id: str, media_type: str = "movie") -> Optional[Dict[st
 
         if resolved_type != media_type:
             logging.info(
-                f"TMDB resolved {imdb_id} as {resolved_type}, not {media_type} - using {resolved_type}"
+                f"TMDB resolved {imdb_id} as {resolved_type}, not {media_type} - using {resolved_type}",
             )
 
         return {

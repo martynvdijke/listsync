@@ -3,12 +3,12 @@ Command-line interface for the ListSync application.
 """
 
 import logging
-from typing import List, Dict, Any, Callable
+from collections.abc import Callable
 
-from ..database import save_list_id, delete_list, configure_sync_interval, load_list_ids
-from ..utils.helpers import custom_input, color_gradient
-from .display import display_manage_lists_menu, display_lists
+from ..database import configure_sync_interval, delete_list, load_list_ids, save_list_id
 from ..providers import get_provider
+from ..utils.helpers import color_gradient, custom_input
+from .display import display_lists
 
 
 def validate_provider(list_type: str, list_id: str) -> bool:
@@ -25,32 +25,31 @@ def validate_provider(list_type: str, list_id: str) -> bool:
     try:
         # Get the provider function
         provider_func = get_provider(list_type)
-        
+
         # Test the provider with a small sample (limit to 5 items for testing)
         print(color_gradient(f"🔍  Testing {list_type.upper()} provider with list: {list_id}", "#ffaa00", "#ff5500"))
-        
+
         # Import the provider function and test it
         items = provider_func(list_id)
-        
+
         if items and len(items) > 0:
             print(color_gradient(f"✅  Provider validation successful! Found {len(items)} items", "#00ff00", "#00aa00"))
             return True
-        else:
-            print(color_gradient(f"❌  Provider validation failed: No items found", "#ff0000", "#aa0000"))
-            return False
-            
+        print(color_gradient("❌  Provider validation failed: No items found", "#ff0000", "#aa0000"))
+        return False
+
     except Exception as e:
-        print(color_gradient(f"❌  Provider validation failed: {str(e)}", "#ff0000", "#aa0000"))
+        print(color_gradient(f"❌  Provider validation failed: {e!s}", "#ff0000", "#aa0000"))
         return False
 
 
 def handle_menu_choice(
-    choice: str, 
+    choice: str,
     seerr_client,
     run_sync_func: Callable,
     load_list_ids_func: Callable,
     display_lists_func: Callable,
-    handle_manage_lists_func: Callable
+    handle_manage_lists_func: Callable,
 ):
     """
     Handle the main menu choice.
@@ -102,67 +101,65 @@ def add_list_to_sync():
     print(color_gradient("   • Steven Lu: stevenlu or https://movies.stevenlu.com", "#ffaa00", "#ff5500"))
     print(color_gradient("   • TMDB: 123456 or https://themoviedb.org/list/123456", "#ffaa00", "#ff5500"))
     print(color_gradient("   • Simkl: 123456 or https://simkl.com/5/list/123456", "#ffaa00", "#ff5500"))
-    
+
     list_ids = custom_input(color_gradient("\n🎬  Enter List ID(s) or URL(s) (comma-separated for multiple): ", "#ffaa00", "#ff5500"))
-    list_ids = [id.strip() for id in list_ids.split(',')]
-    
+    list_ids = [id.strip() for id in list_ids.split(",")]
+
     for list_id in list_ids:
         if not list_id:  # Skip empty strings
             continue
-            
+
         try:
             list_type = None
-            
+
             # Check for URLs
-            if list_id.startswith(('http://', 'https://')):
-                if 'imdb.com' in list_id:
+            if list_id.startswith(("http://", "https://")):
+                if "imdb.com" in list_id:
                     list_type = "imdb"
-                elif 'trakt.tv' in list_id:
+                elif "trakt.tv" in list_id:
                     # Check if this is a special Trakt list
                     special_patterns = [
-                        '/movies/trending', '/movies/streaming',
-                        '/movies/anticipated', '/movies/popular', '/movies/favorited',
-                        '/movies/watched', '/movies/boxoffice',
-                        '/shows/trending', '/shows/streaming',
-                        '/shows/anticipated', '/shows/popular', '/shows/favorited',
-                        '/shows/watched'
+                        "/movies/trending", "/movies/streaming",
+                        "/movies/anticipated", "/movies/popular", "/movies/favorited",
+                        "/movies/watched", "/movies/boxoffice",
+                        "/shows/trending", "/shows/streaming",
+                        "/shows/anticipated", "/shows/popular", "/shows/favorited",
+                        "/shows/watched",
                     ]
-                    
+
                     is_special_list = False
                     for pattern in special_patterns:
                         if pattern in list_id:
                             is_special_list = True
                             break
-                    
+
                     if is_special_list:
                         list_type = "trakt_special"
                     else:
                         list_type = "trakt"
-                elif 'letterboxd.com' in list_id and '/list/' in list_id:
+                elif "letterboxd.com" in list_id and "/list/" in list_id:
                     list_type = "letterboxd"
-                elif 'mdblist.com/lists/' in list_id:
+                elif "mdblist.com/lists/" in list_id:
                     list_type = "mdblist"
-                elif 'movies.stevenlu.com' in list_id or 's3.amazonaws.com/popular-movies' in list_id:
+                elif "movies.stevenlu.com" in list_id or "s3.amazonaws.com/popular-movies" in list_id:
                     list_type = "stevenlu"
                     # For Steven Lu, we don't need the specific URL as there's only one list
-                    list_id = "stevenlu" 
-                elif 'themoviedb.org' in list_id and '/list/' in list_id:
+                    list_id = "stevenlu"
+                elif "themoviedb.org" in list_id and "/list/" in list_id:
                     list_type = "tmdb"
-                elif 'simkl.com' in list_id and '/list/' in list_id:
+                elif "simkl.com" in list_id and "/list/" in list_id:
                     list_type = "simkl"
                 else:
                     print(color_gradient(f"\n❌  Invalid URL format for '{list_id}'. Must be IMDb, Trakt, Letterboxd, MDBList, Steven Lu, TMDB, or Simkl URL.", "#ff0000", "#aa0000"))
                     continue
-            elif list_id in ['top', 'boxoffice', 'moviemeter', 'tvmeter']:
-                list_type = "imdb"
-            elif list_id.startswith(('ls', 'ur')):
+            elif list_id in ["top", "boxoffice", "moviemeter", "tvmeter"] or list_id.startswith(("ls", "ur")):
                 list_type = "imdb"
             # Check for special Trakt list formats like "trending:movies"
-            elif ':' in list_id:
-                parts = list_id.split(':')
+            elif ":" in list_id:
+                parts = list_id.split(":")
                 if len(parts) == 2:
                     category, media_type = parts
-                    if media_type.lower() in ['movies', 'movie', 'shows', 'show', 'tv']:
+                    if media_type.lower() in ["movies", "movie", "shows", "show", "tv"]:
                         list_type = "trakt_special"
                     else:
                         print(color_gradient(f"\n❌  Invalid media type in special list format: {list_id}", "#ff0000", "#aa0000"))
@@ -180,10 +177,10 @@ def add_list_to_sync():
             elif list_id.isdigit():
                 list_type = "trakt"
             # Check for MDBList in format username/listname
-            elif list_id.count('/') == 1 and not list_id.startswith(('ls', 'ur')):
+            elif list_id.count("/") == 1 and not list_id.startswith(("ls", "ur")):
                 list_type = "mdblist"
             # Handle Steven Lu keywords
-            elif list_id.lower() in ['stevenlu', 'steven', 'steven-lu', 'stevenlu-movies', 'stevenlumovies']:
+            elif list_id.lower() in ["stevenlu", "steven", "steven-lu", "stevenlu-movies", "stevenlumovies"]:
                 list_type = "stevenlu"
                 list_id = "stevenlu"  # Standardize the ID
             else:
@@ -194,22 +191,22 @@ def add_list_to_sync():
             if list_type is None:
                 print(color_gradient(f"\n❌  Could not determine list type for '{list_id}'.", "#ff0000", "#aa0000"))
                 continue
-            
+
             # Validate provider before saving
             if not validate_provider(list_type, list_id):
                 print(color_gradient(f"\n❌  Skipping {list_type.upper()} list: {list_id} (validation failed)", "#ff0000", "#aa0000"))
                 continue
-                
+
             # Save list and show confirmation
             try:
                 save_list_id(list_id, list_type)
                 print(color_gradient(f"\n✅  Added {list_type.upper()} list: {list_id}", "#00ff00", "#00aa00"))
             except Exception as save_error:
-                print(color_gradient(f"\n❌  Error saving list {list_id}: {str(save_error)}", "#ff0000", "#aa0000"))
+                print(color_gradient(f"\n❌  Error saving list {list_id}: {save_error!s}", "#ff0000", "#aa0000"))
                 continue
-            
+
         except Exception as e:
-            print(color_gradient(f"\n❌  Error processing list '{list_id}': {str(e)}", "#ff0000", "#aa0000"))
+            print(color_gradient(f"\n❌  Error processing list '{list_id}': {e!s}", "#ff0000", "#aa0000"))
             import traceback
             traceback.print_exc()  # This will help debug any hidden issues
             continue
@@ -231,67 +228,62 @@ def one_time_list_sync(seerr_client, run_sync_func):
     print(color_gradient("   • Steven Lu: stevenlu or https://movies.stevenlu.com", "#ffaa00", "#ff5500"))
     print(color_gradient("   • TMDB: 123456 or https://themoviedb.org/list/123456", "#ffaa00", "#ff5500"))
     print(color_gradient("   • Simkl: 123456 or https://simkl.com/5/list/123456", "#ffaa00", "#ff5500"))
-    
+
     list_ids = custom_input(color_gradient("\n🎬  Enter List ID(s) for one-time sync (comma-separated for multiple): ", "#ffaa00", "#ff5500"))
-    list_ids = [id.strip() for id in list_ids.split(',')]
-    
+    list_ids = [id.strip() for id in list_ids.split(",")]
+
     temp_lists = []  # Track temporarily added lists for cleanup
-    
+
     for list_id in list_ids:
         try:
             # Check for URLs
-            if list_id.startswith(('http://', 'https://')):
-                if 'imdb.com' in list_id:
+            if list_id.startswith(("http://", "https://")):
+                if "imdb.com" in list_id:
                     list_type = "imdb"
-                elif 'trakt.tv' in list_id:
+                elif "trakt.tv" in list_id:
                     # Check if this is a special Trakt list
                     special_patterns = [
-                        '/movies/trending', '/movies/streaming',
-                        '/movies/anticipated', '/movies/popular', '/movies/favorited',
-                        '/movies/watched', '/movies/boxoffice',
-                        '/shows/trending', '/shows/streaming',
-                        '/shows/anticipated', '/shows/popular', '/shows/favorited',
-                        '/shows/watched'
+                        "/movies/trending", "/movies/streaming",
+                        "/movies/anticipated", "/movies/popular", "/movies/favorited",
+                        "/movies/watched", "/movies/boxoffice",
+                        "/shows/trending", "/shows/streaming",
+                        "/shows/anticipated", "/shows/popular", "/shows/favorited",
+                        "/shows/watched",
                     ]
-                    
+
                     is_special_list = False
                     for pattern in special_patterns:
                         if pattern in list_id:
                             is_special_list = True
                             break
-                    
+
                     if is_special_list:
                         list_type = "trakt_special"
                     else:
                         list_type = "trakt"
-                elif 'letterboxd.com' in list_id and '/list/' in list_id:
+                elif "letterboxd.com" in list_id and "/list/" in list_id:
                     list_type = "letterboxd"
-                elif 'mdblist.com/lists/' in list_id:
+                elif "mdblist.com/lists/" in list_id:
                     list_type = "mdblist"
-                elif 'movies.stevenlu.com' in list_id or 's3.amazonaws.com/popular-movies' in list_id:
+                elif "movies.stevenlu.com" in list_id or "s3.amazonaws.com/popular-movies" in list_id:
                     list_type = "stevenlu"
                     list_id = "stevenlu"
-                elif 'themoviedb.org' in list_id and '/list/' in list_id:
+                elif "themoviedb.org" in list_id and "/list/" in list_id:
                     list_type = "tmdb"
-                elif 'simkl.com' in list_id and '/list/' in list_id:
+                elif "simkl.com" in list_id and "/list/" in list_id:
                     list_type = "simkl"
                 else:
                     print(color_gradient("\n❌  Invalid URL format. Must be IMDb, Trakt, Letterboxd, MDBList, Steven Lu, TMDB, or Simkl URL.", "#ff0000", "#aa0000"))
                     continue
-            elif list_id in ['top', 'boxoffice', 'moviemeter', 'tvmeter']:
-                list_type = "imdb"
-            # Check for IMDb list IDs
-            elif list_id.startswith(('ls', 'ur')):
+            elif list_id in ["top", "boxoffice", "moviemeter", "tvmeter"] or list_id.startswith(("ls", "ur")):
                 list_type = "imdb"
             # Check for Trakt special list shortcuts
-            elif ':' in list_id:
-                parts = list_id.split(':')
+            elif ":" in list_id:
+                parts = list_id.split(":")
                 if len(parts) == 2:
                     list_type, media_type = parts
                     # Convert shorthand to URL (e.g., "trending:movies" -> "https://trakt.tv/movies/trending")
-                    if media_type.lower() in ['movies', 'movie']:
-                        list_type = "trakt_special"
-                    elif media_type.lower() in ['shows', 'show', 'tv']:
+                    if media_type.lower() in ["movies", "movie"] or media_type.lower() in ["shows", "show", "tv"]:
                         list_type = "trakt_special"
                     else:
                         print(color_gradient(f"\n❌  Invalid media type in special list format: {list_id}", "#ff0000", "#aa0000"))
@@ -309,42 +301,42 @@ def one_time_list_sync(seerr_client, run_sync_func):
             elif list_id.isdigit():
                 list_type = "trakt"
             # Check for MDBList in format username/listname
-            elif list_id.count('/') == 1 and not list_id.startswith(('ls', 'ur')):
+            elif list_id.count("/") == 1 and not list_id.startswith(("ls", "ur")):
                 list_type = "mdblist"
             # Handle 'stevenlu' as a keyword to fetch Steven Lu's list
-            elif list_id.lower() in ['stevenlu', 'steven', 'steven-lu', 'stevenlu-movies', 'stevenlumovies']:
+            elif list_id.lower() in ["stevenlu", "steven", "steven-lu", "stevenlu-movies", "stevenlumovies"]:
                 list_type = "stevenlu"
                 list_id = "stevenlu"
             else:
                 print(color_gradient(f"\n❌  Invalid list ID format for '{list_id}'. Skipping this ID.", "#ff0000", "#aa0000"))
                 continue
-            
+
             # Validate provider before saving
             if not validate_provider(list_type, list_id):
                 print(color_gradient(f"\n❌  Skipping {list_type.upper()} list: {list_id} (validation failed)", "#ff0000", "#aa0000"))
                 continue
-            
+
             # Save the list temporarily
             save_list_id(list_id, list_type)
             temp_lists.append((list_type, list_id))
             print(color_gradient(f"\n✅  Added {list_type.upper()} list: {list_id}", "#00ff00", "#00aa00"))
-            
+
         except Exception as e:
             print(color_gradient(f"\n❌  Error processing list {list_id}: {e}", "#ff0000", "#aa0000") + "\n")
-            logging.error(f"Error processing list {list_id}: {e}")
+            logging.exception(f"Error processing list {list_id}: {e}")
             continue
-    
+
     if temp_lists:
         # Run the sync
         try:
             run_sync_func(seerr_client)
         except Exception as e:
             print(color_gradient(f"\n❌  Error during sync: {e}", "#ff0000", "#aa0000"))
-            logging.error(f"Error during sync: {e}")
-        
+            logging.exception(f"Error during sync: {e}")
+
         # Ask if user wants to keep the lists for future use
         keep_lists = custom_input(color_gradient("\n💾  Save these lists for future syncs? (y/n): ", "#ffaa00", "#ff5500")).lower() == "y"
-        
+
         if not keep_lists:
             # Remove temporary lists
             for list_type, list_id in temp_lists:
@@ -365,9 +357,9 @@ def manage_lists():
         print(color_gradient("3. Delete a List", "#ffaa00", "#ff5500"))
         print(color_gradient("4. Edit Lists", "#ffaa00", "#ff5500"))
         print(color_gradient("5. Return to Previous Menu", "#ffaa00", "#ff5500"))
-        
+
         choice = custom_input(color_gradient("\nEnter your choice: ", "#ffaa00", "#ff5500"))
-        
+
         if choice == "1":
             lists = load_list_ids()
             display_lists(lists)
@@ -389,20 +381,20 @@ def delete_list_menu():
     if not lists:
         print(color_gradient("\n❌ No lists found.", "#ff0000", "#aa0000"))
         return
-    
+
     display_lists(lists)
     choice = custom_input(color_gradient("\nEnter the number of the list to delete (or 'c' to cancel): ", "#ffaa00", "#ff5500"))
-    if choice.lower() == 'c':
+    if choice.lower() == "c":
         return
     try:
         idx = int(choice) - 1
         if 0 <= idx < len(lists):
             list_to_delete = lists[idx]
-            success = delete_list(list_to_delete['type'], list_to_delete['id'])
+            success = delete_list(list_to_delete["type"], list_to_delete["id"])
             if success:
                 print(color_gradient(f"\n✅ List {list_to_delete['type'].upper()}: {list_to_delete['id']} deleted.", "#00ff00", "#00aa00"))
             else:
-                print(color_gradient(f"\n❌ Failed to delete list.", "#ff0000", "#aa0000"))
+                print(color_gradient("\n❌ Failed to delete list.", "#ff0000", "#aa0000"))
         else:
             print(color_gradient("\n❌ Invalid list number.", "#ff0000", "#aa0000"))
     except ValueError:
@@ -415,27 +407,28 @@ def edit_lists():
     if not lists:
         print(color_gradient("\n❌ No lists found to edit.", "#ff0000", "#aa0000"))
         return
-        
+
     display_lists(lists)
     print(color_gradient("\nEnter new list IDs (or press Enter to keep the current ID):", "#00aaff", "#00ffaa"))
     updated_lists = []
     for list_info in lists:
         new_id = custom_input(color_gradient(f"{list_info['type'].upper()}: {list_info['id']} -> ", "#ffaa00", "#ff5500"))
         updated_lists.append({
-            "type": list_info['type'],
-            "id": new_id if new_id else list_info['id']
+            "type": list_info["type"],
+            "id": new_id if new_id else list_info["id"],
         })
-    
+
     # Update database
     import sqlite3
+
     from ..database import DB_FILE
-    
+
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
         cursor.execute("DELETE FROM lists")
         cursor.executemany(
             "INSERT INTO lists (list_type, list_id) VALUES (?, ?)",
-            [(list_info['type'], list_info['id']) for list_info in updated_lists]
+            [(list_info["type"], list_info["id"]) for list_info in updated_lists],
         )
         conn.commit()
     print(color_gradient("\n✅ Lists updated successfully.", "#00ff00", "#00aa00"))
@@ -450,11 +443,11 @@ def configure_sync_interval_menu():
         if interval_hours < 0.5:
             print(color_gradient("\n⚠️  Warning: Intervals less than 0.5 hours (30 minutes) are not recommended.", "#ffaa00", "#ff5500"))
             confirm = custom_input(color_gradient("Continue anyway? (y/n): ", "#ffaa00", "#ff5500")).lower()
-            if confirm != 'y':
+            if confirm != "y":
                 return
         elif interval_hours < 1:
             print(color_gradient("\n⚠️  Warning: Intervals less than 1 hour may cause excessive API calls.", "#ffaa00", "#ff5500"))
-        
+
         configure_sync_interval(interval_hours)
         # Format the display nicely
         if interval_hours == int(interval_hours):

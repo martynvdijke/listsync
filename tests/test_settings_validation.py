@@ -8,7 +8,11 @@ webhook it stored is POSTed to on every sync - so a stored setting became an
 outbound request to wherever it pointed. These check the write paths and the
 send path that reads them back.
 """
-import sys, types, os, tempfile, base64
+import base64
+import os
+import sys
+import tempfile
+import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -44,15 +48,20 @@ sys.modules["cryptography.fernet"] = f
 
 tmp = tempfile.mkdtemp()
 import list_sync.utils.logger as lg
+
 lg.DATA_DIR = tmp
-import list_sync.encryption as encryption
 from pathlib import Path
+
+from list_sync import encryption
+
 encryption.ENCRYPTION_KEY_FILE = Path(tmp) / ".encryption_key"
 import list_sync.database as db
+
 db.DB_FILE = os.path.join(tmp, "list_sync.db")
 db.init_database()
 
 import api_server
+
 api_server.DB_FILE = db.DB_FILE
 
 # Anything that escapes the guards shows up here rather than leaving the box.
@@ -74,7 +83,9 @@ requests.get = record_get
 requests.post = record_post
 
 from fastapi.testclient import TestClient
+
 from list_sync.config import ConfigManager
+
 client = TestClient(api_server.app)
 
 fail = []

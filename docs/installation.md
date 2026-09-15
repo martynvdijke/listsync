@@ -1,107 +1,128 @@
-# Installation Guide
+# Installation Guide - Complete ListSync Setup
 
-This guide provides detailed installation instructions for ListSync, covering both Docker and manual installation methods.
+This comprehensive installation guide covers all deployment methods for ListSync, from quick Docker setup to advanced manual installations.
 
 ## 📋 Table of Contents
 
 1. [Prerequisites](#prerequisites)
-2. [Docker Installation (Recommended)](#docker-installation-recommended)
-3. [Manual Installation](#manual-installation)
-4. [Post-Installation Setup](#post-installation-setup)
-5. [Verification](#verification)
-6. [Updating](#updating)
-7. [Troubleshooting](#troubleshooting)
+2. [Quick Start (Docker)](#quick-start-docker)
+3. [Docker Installation (Recommended)](#docker-installation-recommended)
+4. [Manual Installation](#manual-installation)
+5. [Advanced Deployments](#advanced-deployments)
+6. [Post-Installation Setup](#post-installation-setup)
+7. [Verification & Testing](#verification--testing)
+8. [Updating & Maintenance](#updating--maintenance)
+9. [Troubleshooting](#troubleshooting)
 
 ## 🔧 Prerequisites
 
-### For Docker Installation
+### System Requirements
+
+#### Minimum Requirements
+- **RAM**: 2GB (4GB recommended)
+- **Storage**: 1GB free space (2GB recommended)
+- **CPU**: 1 core (2 cores recommended)
+- **Network**: Stable internet connection
+- **OS**: Linux, macOS, or Windows with WSL2
+
+#### For Docker Installation
 - **Docker**: Version 20.10 or higher
 - **Docker Compose**: Version 2.0 or higher
-- **System Requirements**: 
-  - 2GB RAM minimum (4GB recommended)
-  - 1GB free disk space
-  - Internet connection for fetching lists
+- **Git**: For cloning the repository
 
-### For Manual Installation
-- **Python**: Version 3.8 or higher
+#### For Manual Installation
+- **Python**: Version 3.12 or higher
 - **Node.js**: Version 18 or higher (for web interface)
-- **System Requirements**:
-  - 4GB RAM minimum
-  - 2GB free disk space
-  - Chrome/Chromium browser (for Selenium)
-  - Internet connection
+- **Chrome/Chromium**: For Selenium web scraping
+- **Git**: For cloning the repository
 
-### Common Requirements
+### Seerr Requirements
 - **Seerr Instance**: Running and accessible
-- **Network Access**: To IMDb, Trakt, Letterboxd, MDBList, and other list providers
+- **API Key**: Obtained from Seerr settings
+- **User ID**: For making requests (usually 1)
+- **Network Access**: ListSync must be able to reach Seerr
+
+### Network Requirements
+- **Port 3222**: Web dashboard (configurable)
+- **Port 4222**: API backend (configurable)
+- **Outbound Access**: To IMDb, Trakt, Letterboxd, MDBList, Steven Lu
+
+## 🚀 Quick Start (Docker)
+
+### 30-Second Setup
+
+```mermaid
+flowchart LR
+    Start[Start Setup] --> Clone[Clone Repository]
+    Clone --> Config[Configure .env]
+    Config --> Deploy[Deploy with Docker]
+    Deploy --> Test[Test Installation]
+    Test --> Success[✅ Ready!]
+    
+    style Start fill:#4CAF50
+    style Success fill:#4CAF50
+    style Deploy fill:#2196F3
+```
+
+**Step-by-Step:**
+```bash
+# 1. Clone and configure
+git clone https://github.com/KaHooli/list-sync.git
+cd list-sync
+cp envsample.txt .env
+
+# 2. Edit .env with your details
+nano .env
+# Add: OVERSEERR_URL=https://your-overseerr-url.com
+# Add: OVERSEERR_API_KEY=your_api_key_here
+# Add: IMDB_LISTS=top
+
+# 3. Deploy
+docker-compose up -d
+
+# 4. Test (wait ~30 seconds)
+curl http://localhost:4222/api/system/health
+
+# 5. Access dashboard
+open http://localhost:3222
+```
 
 ## 🐳 Docker Installation (Recommended)
-
-Docker installation provides the easiest setup with all dependencies pre-configured.
-
-### Quick Start
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/KaHooli/list-sync.git
-   cd list-sync
-   ```
-
-2. **Create environment file**:
-   ```bash
-   cp env.example .env
-   ```
-
-3. **Configure your settings**:
-   ```bash
-   nano .env  # or use your preferred editor
-   ```
-   
-   Minimum required configuration:
-   ```bash
-   OVERSEERR_URL=https://your-overseerr-url.com
-   OVERSEERR_API_KEY=your_api_key_here
-   IMDB_LISTS=top  # Start with just one list
-   ```
-
-4. **Deploy**:
-   ```bash
-   docker-compose up -d
-   ```
-
-5. **Access the application**:
-   - Web Dashboard: http://localhost:3222
-   - API Backend: http://localhost:4222
 
 ### Deployment Decision Guide
 
 ```mermaid
 flowchart TD
-    Start[Choose Deployment] --> UseCase{What's your goal?}
+    Start[Choose Deployment Method] --> UseCase{What's your goal?}
     
     UseCase -->|Production use| Prod[Production Setup]
     UseCase -->|Development| Dev[Development Setup]
     UseCase -->|Just testing| Test[Quick Test]
+    UseCase -->|Advanced features| Advanced[Advanced Setup]
     
-    Prod --> NeedDashboard{Need web<br/>dashboard?}
+    Prod --> NeedDashboard{Need web dashboard?}
     NeedDashboard -->|Yes| FullDocker[Full Stack<br/>docker-compose.yml<br/>✓ Dashboard :3222<br/>✓ API :4222<br/>✓ Core Sync]
     NeedDashboard -->|No| CoreDocker[Core Only<br/>docker-compose.core.yml<br/>✓ API :4222<br/>✓ Core Sync]
     
-    Dev --> LocalOrDocker{Docker or<br/>native?}
+    Dev --> LocalOrDocker{Docker or native?}
     LocalOrDocker -->|Docker| DevDocker[Local Build<br/>docker-compose.local.yml<br/>Build from source]
     LocalOrDocker -->|Native| ManualSetup[Manual Installation<br/>Python + Node.js<br/>Full control]
     
     Test --> QuickDocker[Core Deployment<br/>Fastest setup<br/>API access only]
+    
+    Advanced --> MultiInstance[Multi-Instance<br/>Multiple configurations<br/>Load balancing]
     
     FullDocker --> DeployFull[docker-compose up -d]
     CoreDocker --> DeployCore[docker-compose -f<br/>docker-compose.core.yml up -d]
     DevDocker --> DeployDev[docker-compose -f<br/>docker-compose.local.yml up -d]
     QuickDocker --> DeployCore
     ManualSetup --> ManualSteps[Follow manual<br/>installation steps]
+    MultiInstance --> DeployMulti[Custom docker-compose<br/>Multiple services]
     
-    DeployFull --> Success[✓ Deployment complete]
+    DeployFull --> Success[✅ Deployment complete]
     DeployCore --> Success
     DeployDev --> Success
+    DeployMulti --> Success
     ManualSteps --> Success
     
     Success --> Access{Can access?}
@@ -118,47 +139,103 @@ flowchart TD
     style TroubleshootInstall fill:#FF9800
 ```
 
-### Docker Deployment Options
+### Production Deployment
 
-#### Production Deployment
-Uses the pre-built image from GitHub Container Registry:
+#### Full Stack (Recommended)
+Uses the pre-built image with web dashboard:
 
 ```bash
-# Use the main docker-compose.yml file
+# 1. Clone repository
+git clone https://github.com/KaHooli/list-sync.git
+cd list-sync
+
+# 2. Configure environment
+cp envsample.txt .env
+nano .env  # Edit with your settings
+
+# 3. Deploy
 docker-compose up -d
+
+# 4. Verify deployment
+docker-compose ps
+curl http://localhost:4222/api/system/health
 ```
 
-#### Local Development
-Builds the image locally for development:
-
+**Configuration Example:**
 ```bash
-# Use the local development compose file
-docker-compose -f docker-compose.local.yml up -d
+# .env file
+OVERSEERR_URL=https://overseerr.example.com
+OVERSEERR_API_KEY=your_api_key_here
+OVERSEERR_USER_ID=1
+OVERSEERR_4K=false
+
+SYNC_INTERVAL=24
+AUTOMATED_MODE=true
+
+IMDB_LISTS=top,ls123456789
+TRAKT_SPECIAL_LISTS=trending:movies,popular:shows
+LETTERBOXD_LISTS=username/watchlist
+
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 ```
 
-#### Component-Specific Deployment
-
-Deploy only specific components:
+#### Core Only (API + Sync)
+For headless deployments or when you don't need the web dashboard:
 
 ```bash
-# Core sync functionality only (no web UI)
+# Deploy core services only
 docker-compose -f docker-compose.core.yml up -d
 
-# Full application (recommended)
-docker-compose up -d
+# Access API directly
+curl http://localhost:4222/api/system/health
 ```
 
-**Note:** With Nuxt 3's CORS-free architecture, you only need the standard `docker-compose.yml` for production deployments. The frontend's built-in Nitro proxy eliminates the need for complex CORS configurations.
+### Development Deployment
+
+#### Local Build
+Build from source for development:
+
+```bash
+# Build development image
+docker-compose -f docker-compose.local.yml build
+
+# Start development environment
+docker-compose -f docker-compose.local.yml up -d
+
+# View logs
+docker-compose -f docker-compose.local.yml logs -f
+```
 
 ### Docker Configuration
 
 #### Environment Variables
+All configuration is done through environment variables in your `.env` file:
 
-All configuration is done through environment variables in your `.env` file. See our [Configuration Guide](configuration.md) for complete details.
+```bash
+# Required
+OVERSEERR_URL=https://your-overseerr-url.com
+OVERSEERR_API_KEY=your_api_key_here
+
+# Optional
+OVERSEERR_USER_ID=1
+OVERSEERR_4K=false
+SYNC_INTERVAL=24
+AUTOMATED_MODE=true
+
+# List providers
+IMDB_LISTS=top,ls123456789
+TRAKT_LISTS=123456,789012
+TRAKT_SPECIAL_LISTS=trending:movies,popular:shows
+LETTERBOXD_LISTS=username/watchlist
+MDBLIST_LISTS=username/collection
+STEVENLU_LISTS=stevenlu
+
+# Notifications
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+```
 
 #### Volume Mapping
-
-The default Docker setup includes these volume mappings:
+Default Docker setup includes these volume mappings:
 
 ```yaml
 volumes:
@@ -168,7 +245,6 @@ volumes:
 ```
 
 #### Port Configuration
-
 Default ports:
 - **3222**: Web Dashboard (Nuxt 3 frontend)
 - **4222**: API Backend (FastAPI)
@@ -184,8 +260,6 @@ services:
 ```
 
 ## 💻 Manual Installation
-
-For advanced users who prefer manual installation or need custom configurations.
 
 ### System Preparation
 
@@ -206,6 +280,9 @@ wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key ad
 sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
 sudo apt update
 sudo apt install google-chrome-stable
+
+# Install Chrome dependencies
+sudo apt install libxss1 libappindicator1 libindicator7
 ```
 
 #### CentOS/RHEL/Fedora
@@ -227,64 +304,79 @@ brew install python3 node git
 brew install --cask google-chrome
 ```
 
+#### Windows (WSL2)
+```bash
+# Install Ubuntu in WSL2, then follow Ubuntu instructions above
+# Or use Docker Desktop for Windows
+```
+
 ### Backend Installation
 
-1. **Clone and setup**:
-   ```bash
-   git clone https://github.com/KaHooli/list-sync.git
-   cd list-sync
-   ```
+#### Python Environment Setup
+```bash
+# 1. Clone repository
+git clone https://github.com/KaHooli/list-sync.git
+cd list-sync
 
-2. **Create Python virtual environment**:
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+# 2. Create Python virtual environment
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-3. **Install Python dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+# 3. Install Python dependencies
+pip install -r requirements.txt
 
-4. **Configure environment**:
-   ```bash
-   cp envsample.txt .env
-   # Edit .env with your configuration
-   ```
+# 4. Install additional API dependencies
+pip install -r api_requirements.txt
+```
 
-5. **Initialize database**:
-   ```bash
-   python -m list_sync.database
-   ```
+#### Database Setup
+```bash
+# Database will be automatically initialized on first run
+python -m list_sync.database
+
+# Or run the main application to initialize
+python -m list_sync
+```
+
+#### Configuration
+```bash
+# Copy example environment file
+cp envsample.txt .env
+
+# Edit configuration
+nano .env
+# Add your Seerr URL, API key, and list configurations
+```
 
 ### Frontend Installation
 
-1. **Navigate to frontend directory**:
-   ```bash
-   cd listsync-nuxt
-   ```
+#### Node.js Setup
+```bash
+# Navigate to frontend directory
+cd listsync-nuxt
 
-2. **Install Node.js dependencies**:
-   ```bash
-   npm install
-   ```
+# Install Node.js dependencies
+npm install
 
-3. **Configure environment**:
-   ```bash
-   # Nuxt 3 uses runtime config, main configuration is in .env at root
-   # API URL is configured via nuxt.config.ts proxy settings
-   ```
+# Build frontend
+npm run build
 
-4. **Build frontend**:
-   ```bash
-   npm run build
-   ```
+# Start development server (optional)
+npm run dev
+```
 
-### Manual Service Setup
+#### Production Build
+```bash
+# Build for production
+npm run build
+
+# Start production server
+npm start
+```
+
+### Service Setup
 
 #### Using Systemd (Linux)
-
-Create service files for automatic startup:
 
 **Backend Service** (`/etc/systemd/system/listsync-backend.service`):
 ```ini
@@ -299,6 +391,7 @@ WorkingDirectory=/path/to/list-sync
 Environment=PATH=/path/to/list-sync/venv/bin
 ExecStart=/path/to/list-sync/venv/bin/python -m list_sync
 Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
@@ -316,20 +409,21 @@ User=your-username
 WorkingDirectory=/path/to/list-sync/listsync-nuxt
 ExecStart=/usr/bin/npm start
 Restart=always
+RestartSec=10
 Environment=NODE_ENV=production
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Enable and start services:
+**Enable and start services:**
 ```bash
 sudo systemctl enable listsync-backend listsync-frontend
 sudo systemctl start listsync-backend listsync-frontend
+sudo systemctl status listsync-backend listsync-frontend
 ```
 
 #### Using PM2 (Node.js Process Manager)
-
 ```bash
 # Install PM2
 npm install -g pm2
@@ -345,50 +439,119 @@ pm2 save
 pm2 startup
 ```
 
-## 🔧 Post-Installation Setup
+## 🚀 Advanced Deployments
 
-### Initial Configuration
+### Multi-Instance Deployments
 
-1. **Test Seerr connection**:
-   ```bash
-   # Using curl
-   curl -H "X-Api-Key: your-api-key" http://your-overseerr-url/api/v1/status
-   ```
+#### Multiple Seerr Instances
+```yaml
+# docker-compose-multi.yml
+version: "3.8"
 
-2. **Add your first list**:
-   - Via environment variable: Add `IMDB_LISTS=top` to your `.env`
-   - Via web interface: Navigate to http://localhost:3222/dashboard/lists
+services:
+  listsync-main:
+    image: ghcr.io/kahooli/list-sync:main
+    container_name: listsync-main
+    environment:
+      - OVERSEERR_URL=https://overseerr.example.com
+      - OVERSEERR_API_KEY=${MAIN_API_KEY}
+      - AUTOMATED_MODE=true
+      - SYNC_INTERVAL=24
+      - IMDB_LISTS=ls123456789,top
+    volumes:
+      - ./data-main:/usr/src/app/data
+    restart: unless-stopped
 
-3. **Configure sync interval**:
-   ```bash
-   # Set in .env file
-   SYNC_INTERVAL=24  # Sync once per day
-   ```
+  listsync-4k:
+    image: ghcr.io/kahooli/list-sync:main
+    container_name: listsync-4k
+    environment:
+      - OVERSEERR_URL=https://overseerr-4k.example.com
+      - OVERSEERR_API_KEY=${4K_API_KEY}
+      - AUTOMATED_MODE=true
+      - SYNC_INTERVAL=12
+      - OVERSEERR_4K=true
+      - IMDB_LISTS=top,boxoffice
+      - TRAKT_SPECIAL_LISTS=trending:movies
+    volumes:
+      - ./data-4k:/usr/src/app/data
+    restart: unless-stopped
+```
 
-### Optional Setup
+#### Geographic Distribution
+```yaml
+# docker-compose-regions.yml
+version: "3.8"
 
-#### Discord Notifications
+services:
+  listsync-us:
+    image: ghcr.io/kahooli/list-sync:main
+    environment:
+      - OVERSEERR_URL=https://us-overseerr.example.com
+      - OVERSEERR_API_KEY=${US_API_KEY}
+      - IMDB_LISTS=boxoffice,moviemeter
+      - TRAKT_SPECIAL_LISTS=trending:movies,boxoffice:movies
+      - SYNC_INTERVAL=6
+    volumes:
+      - ./data-us:/usr/src/app/data
 
-1. Create a Discord webhook in your server
-2. Add to your `.env` file:
-   ```bash
-   DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-webhook-url
-   ```
+  listsync-eu:
+    image: ghcr.io/kahooli/list-sync:main
+    environment:
+      - OVERSEERR_URL=https://eu-overseerr.example.com
+      - OVERSEERR_API_KEY=${EU_API_KEY}
+      - LETTERBOXD_LISTS=${EU_LETTERBOXD_LISTS}
+      - MDBLIST_LISTS=${EU_MDBLIST}
+      - SYNC_INTERVAL=12
+    volumes:
+      - ./data-eu:/usr/src/app/data
+```
 
-#### Reverse Proxy Setup
+### Load Balancing
+```yaml
+# docker-compose-load-balance.yml
+version: "3.8"
 
-Example Nginx configuration:
+services:
+  listsync-imdb:
+    image: ghcr.io/kahooli/list-sync:main
+    environment:
+      - OVERSEERR_URL=${OVERSEERR_URL}
+      - OVERSEERR_API_KEY=${API_KEY}
+      - IMDB_LISTS=${ALL_IMDB_LISTS}
+      - SYNC_INTERVAL=24
+    volumes:
+      - ./data-shared:/usr/src/app/data:ro
+      - ./data-imdb:/usr/src/app/data/logs
 
+  listsync-trakt:
+    image: ghcr.io/kahooli/list-sync:main
+    environment:
+      - OVERSEERR_URL=${OVERSEERR_URL}
+      - OVERSEERR_API_KEY=${API_KEY}
+      - TRAKT_LISTS=${ALL_TRAKT_LISTS}
+      - TRAKT_SPECIAL_LISTS=${ALL_TRAKT_SPECIAL}
+      - SYNC_INTERVAL=12
+    volumes:
+      - ./data-shared:/usr/src/app/data:ro
+      - ./data-trakt:/usr/src/app/data/logs
+```
+
+### Reverse Proxy Setup
+
+#### Nginx Configuration
 ```nginx
 server {
     listen 80;
-    server_name your-domain.com;
+    server_name listsync.example.com;
 
     # Frontend
     location / {
         proxy_pass http://localhost:3222;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
     }
 
     # API
@@ -396,21 +559,162 @@ server {
         proxy_pass http://localhost:4222;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # WebSocket support
+    location /ws/ {
+        proxy_pass http://localhost:4222;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
     }
 }
 ```
 
-## ✅ Verification
+#### Apache Configuration
+```apache
+<VirtualHost *:80>
+    ServerName listsync.example.com
+    
+    # Frontend
+    ProxyPreserveHost On
+    ProxyPass / http://localhost:3222/
+    ProxyPassReverse / http://localhost:3222/
+    
+    # API
+    ProxyPass /api/ http://localhost:4222/api/
+    ProxyPassReverse /api/ http://localhost:4222/api/
+    
+    # WebSocket support
+    ProxyPass /ws/ ws://localhost:4222/ws/
+    ProxyPassReverse /ws/ ws://localhost:4222/ws/
+</VirtualHost>
+```
+
+## 🔧 Post-Installation Setup
+
+### Initial Configuration Workflow
+
+```mermaid
+flowchart TD
+    Start[Installation Complete] --> TestConnection[Test Seerr Connection]
+    TestConnection --> ConnOK{Connection OK?}
+    ConnOK -->|No| FixConnection[Fix Connection Issues<br/>- Check URL format<br/>- Verify API key<br/>- Test network access]
+    ConnOK -->|Yes| AddFirstList[Add First List]
+    
+    FixConnection --> TestConnection
+    
+    AddFirstList --> ChooseList{Which list to add?}
+    ChooseList -->|IMDb Top| AddIMDB[Add IMDb Top 250<br/>IMDB_LISTS=top]
+    ChooseList -->|Trakt Trending| AddTrakt[Add Trakt Trending<br/>TRAKT_SPECIAL_LISTS=trending:movies]
+    ChooseList -->|Custom| AddCustom[Add Custom List<br/>Follow provider format]
+    
+    AddIMDB --> ConfigureSync[Configure Sync Settings<br/>- Set interval<br/>- Enable automation<br/>- Set notifications]
+    AddTrakt --> ConfigureSync
+    AddCustom --> ConfigureSync
+    
+    ConfigureSync --> TestSync[Test First Sync<br/>- Trigger manual sync<br/>- Monitor progress<br/>- Check results]
+    TestSync --> SyncOK{Sync Successful?}
+    SyncOK -->|No| DebugSync[Debug Sync Issues<br/>- Check logs<br/>- Verify list access<br/>- Test Seerr]
+    SyncOK -->|Yes| SetupComplete[✅ Setup Complete!<br/>Ready for production]
+    
+    DebugSync --> FixIssues[Fix Issues<br/>- Update configuration<br/>- Fix list access<br/>- Resolve errors]
+    FixIssues --> TestSync
+    
+    style Start fill:#4CAF50
+    style SetupComplete fill:#4CAF50
+    style FixConnection fill:#FF9800
+    style DebugSync fill:#FF9800
+    style TestSync fill:#2196F3
+```
+
+### Configuration Steps
+
+#### 1. Test Seerr Connection
+```bash
+# Test API connectivity
+curl -H "X-Api-Key: your-api-key" http://your-overseerr-url/api/v1/status
+
+# Expected response: JSON with Seerr status
+```
+
+#### 2. Add Your First List
+```bash
+# Edit .env file
+nano .env
+
+# Add a simple list to start
+IMDB_LISTS=top
+
+# Or add via web dashboard
+# Open http://localhost:3222 and go to Lists page
+```
+
+#### 3. Configure Sync Settings
+```bash
+# Set sync interval (hours)
+SYNC_INTERVAL=24
+
+# Enable automated mode
+AUTOMATED_MODE=true
+
+# Optional: Add Discord notifications
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+```
+
+#### 4. Test First Sync
+```bash
+# Trigger manual sync
+curl -X POST http://localhost:4222/api/sync/trigger
+
+# Or use web dashboard
+# Go to Sync page and click "Sync Now"
+```
+
+### Optional Setup
+
+#### Discord Notifications
+1. **Create Discord webhook:**
+   - Go to your Discord server settings
+   - Navigate to Integrations → Webhooks
+   - Create a new webhook
+   - Copy the webhook URL
+
+2. **Add to configuration:**
+   ```bash
+   DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-webhook-url
+   ```
+
+3. **Test notifications:**
+   - Trigger a manual sync
+   - Check Discord for notification
+
+#### Email Notifications (Advanced)
+```bash
+# Add to .env file
+EMAIL_NOTIFICATIONS=true
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+SMTP_FROM=your-email@gmail.com
+SMTP_TO=admin@example.com
+```
+
+## ✅ Verification & Testing
 
 ### Post-Installation Verification Workflow
 
 ```mermaid
 flowchart TD
-    Start[Installation Complete] --> Step1[Check container status]
+    Start[Installation Complete] --> Step1[Check Container Status]
     
     Step1 --> Docker{Using Docker?}
     Docker -->|Yes| CheckPS[docker-compose ps<br/>All services Up?]
-    Docker -->|No| CheckProc[Check processes<br/>ps aux grep listsync]
+    Docker -->|No| CheckProc[Check processes<br/>ps aux | grep listsync]
     
     CheckPS --> AllUp{All up?}
     AllUp -->|No| StartServices[docker-compose up -d]
@@ -446,7 +750,7 @@ flowchart TD
     SyncWorks -->|Yes| VerifyResults[Verify results<br/>in dashboard]
     
     VerifyResults --> ItemsReq{Items<br/>requested?}
-    ItemsReq -->|Yes| AllGood[✓ Installation verified!<br/>Ready for production]
+    ItemsReq -->|Yes| AllGood[✅ Installation verified!<br/>Ready for production]
     ItemsReq -->|No| CheckWhy[Check why:<br/>- Already available?<br/>- Matching issues?]
     
     CheckAPIPort --> FixPort[Fix and retry]
@@ -471,77 +775,187 @@ flowchart TD
 
 ### Health Checks
 
-1. **Check system health**:
-   ```bash
-   curl http://localhost:4222/api/system/health
-   ```
+#### 1. System Health Check
+```bash
+# Basic health check
+curl http://localhost:4222/api/system/health
 
-2. **Verify database**:
-   ```bash
-   curl http://localhost:4222/api/lists
-   ```
+# Expected response:
+# {
+#   "database": true,
+#   "process": true,
+#   "sync_status": "idle",
+#   "last_sync": "2024-01-15T10:30:00Z",
+#   "next_sync": "2024-01-15T22:30:00Z"
+# }
+```
 
-3. **Test web interface**:
-   Open http://localhost:3222 in your browser
+#### 2. Detailed Status Check
+```bash
+# Comprehensive status
+curl http://localhost:4222/api/system/status
+
+# Check specific components
+curl http://localhost:4222/api/system/database/test
+curl http://localhost:4222/api/overseerr/status
+```
+
+#### 3. Web Interface Test
+```bash
+# Test dashboard accessibility
+curl -I http://localhost:3222
+
+# Expected: HTTP/1.1 200 OK
+```
 
 ### Manual Sync Test
 
-1. **Trigger a manual sync**:
-   ```bash
-   curl -X POST http://localhost:4222/api/sync/trigger
-   ```
+#### 1. Trigger Manual Sync
+```bash
+# Trigger sync via API
+curl -X POST http://localhost:4222/api/sync/trigger
 
-2. **Check sync results**:
-   ```bash
-   curl http://localhost:4222/api/processed?limit=10
-   ```
+# Expected response:
+# {
+#   "success": true,
+#   "message": "Sync triggered successfully",
+#   "sync_id": "sync_20240115_103000"
+# }
+```
+
+#### 2. Monitor Sync Progress
+```bash
+# Check sync status
+curl http://localhost:4222/api/sync/status
+
+# Stream live logs
+curl http://localhost:4222/api/logs/stream
+```
+
+#### 3. Verify Results
+```bash
+# Check processed items
+curl http://localhost:4222/api/processed?limit=10
+
+# Check analytics
+curl http://localhost:4222/api/analytics/overview
+```
 
 ### Log Verification
 
-Check logs for any errors:
-
+#### Docker Logs
 ```bash
-# Docker
+# View all logs
+docker-compose logs -f
+
+# View specific service logs
 docker-compose logs -f listsync-full
 
-# Manual installation
-tail -f data/list_sync.log
+# Filter by log level
+docker-compose logs listsync-full | grep ERROR
 ```
 
-## 🔄 Updating
-
-### Docker Update
-
+#### Manual Installation Logs
 ```bash
-# Pull latest image
+# Check application logs
+tail -f data/list_sync.log
+
+# Check system logs
+journalctl -u listsync-backend -f
+journalctl -u listsync-frontend -f
+```
+
+## 🔄 Updating & Maintenance
+
+### Docker Update Process
+
+```mermaid
+flowchart TD
+    Start[Need to Update?] --> Backup[Backup Configuration<br/>- Copy .env file<br/>- Backup database<br/>- Save custom configs]
+    
+    Backup --> StopServices[Stop Services<br/>docker-compose down]
+    StopServices --> PullImages[Pull Latest Images<br/>docker-compose pull]
+    PullImages --> StartServices[Start Services<br/>docker-compose up -d]
+    
+    StartServices --> WaitStart[Wait for Startup<br/>~30 seconds]
+    WaitStart --> TestHealth[Test Health<br/>curl localhost:4222/api/system/health]
+    
+    TestHealth --> HealthOK{Health OK?}
+    HealthOK -->|No| Rollback[Rollback to Previous<br/>docker-compose down<br/>docker-compose up -d]
+    HealthOK -->|Yes| TestSync[Test Sync Operation<br/>Trigger manual sync]
+    
+    TestSync --> SyncOK{Sync OK?}
+    SyncOK -->|No| DebugIssues[Debug Issues<br/>Check logs and config]
+    SyncOK -->|Yes| UpdateComplete[✅ Update Complete!<br/>All systems operational]
+    
+    Rollback --> DebugRollback[Debug Rollback Issues]
+    DebugIssues --> FixIssues[Fix Issues]
+    FixIssues --> TestHealth
+    
+    style Start fill:#4CAF50
+    style UpdateComplete fill:#4CAF50
+    style Rollback fill:#FF9800
+    style DebugIssues fill:#FF9800
+```
+
+### Update Commands
+
+#### Docker Update
+```bash
+# 1. Backup current configuration
+cp .env .env.backup
+cp data/list_sync.db data/list_sync.db.backup
+
+# 2. Pull latest images
 docker-compose pull
 
-# Restart with new image
+# 3. Restart with new images
 docker-compose up -d
+
+# 4. Verify update
+docker-compose ps
+curl http://localhost:4222/api/system/health
 ```
 
-### Manual Update
-
+#### Manual Update
 ```bash
-# Backup your configuration
+# 1. Backup configuration
 cp .env .env.backup
+cp data/list_sync.db data/list_sync.db.backup
 
-# Pull latest code
+# 2. Pull latest code
 git pull origin main
 
-# Update Python dependencies
+# 3. Update Python dependencies
 source venv/bin/activate
 pip install -r requirements.txt --upgrade
 
-# Update frontend dependencies
+# 4. Update frontend dependencies
 cd listsync-nuxt
 npm install
 npm run build
 cd ..
 
-# Restart services
+# 5. Restart services
 sudo systemctl restart listsync-backend listsync-frontend
 ```
+
+### Maintenance Tasks
+
+#### Daily Maintenance
+- Check sync operations completed successfully
+- Monitor error logs for issues
+- Verify system health status
+
+#### Weekly Maintenance
+- Review performance metrics
+- Check disk space usage
+- Update configuration if needed
+
+#### Monthly Maintenance
+- Analyze sync statistics and trends
+- Review and clean up old logs
+- Update to latest version if available
 
 ## 🔧 Troubleshooting
 
@@ -549,44 +963,56 @@ sudo systemctl restart listsync-backend listsync-frontend
 
 #### Docker Issues
 
-**Port already in use**:
+**Port Already in Use:**
 ```bash
 # Check what's using the port
 sudo netstat -tlnp | grep :3222
+sudo netstat -tlnp | grep :4222
 
-# Change port in docker-compose.yml
+# Change ports in docker-compose.yml
 ports:
-  - "8080:3222"
+  - "8080:3222"  # Use different host port
+  - "8081:4222"
 ```
 
-**Permission denied**:
+**Permission Denied:**
 ```bash
 # Add user to docker group
 sudo usermod -aG docker $USER
 # Log out and back in
+
+# Fix Docker socket permissions
+sudo chmod 666 /var/run/docker.sock
 ```
 
-**Container won't start**:
+**Container Won't Start:**
 ```bash
-# Check logs
+# Check logs for errors
 docker-compose logs listsync-full
 
 # Check container status
 docker-compose ps
+
+# Try rebuilding
+docker-compose build --no-cache
+docker-compose up -d
 ```
 
 #### Manual Installation Issues
 
-**Python version too old**:
+**Python Version Too Old:**
 ```bash
 # Check Python version
 python3 --version
 
 # Install newer Python (Ubuntu)
-sudo apt install python3.12
+sudo apt install python3.12 python3.12-venv
+
+# Use specific Python version
+python3.12 -m venv venv
 ```
 
-**Chrome/Selenium issues**:
+**Chrome/Selenium Issues:**
 ```bash
 # Install Chrome dependencies
 sudo apt install libxss1 libappindicator1 libindicator7
@@ -595,7 +1021,7 @@ sudo apt install libxss1 libappindicator1 libindicator7
 google-chrome --headless --no-sandbox --disable-gpu --dump-dom https://google.com
 ```
 
-**Node.js build failures**:
+**Node.js Build Failures:**
 ```bash
 # Clear npm cache
 npm cache clean --force
@@ -607,19 +1033,19 @@ npm install
 
 ### Performance Issues
 
-**High memory usage**:
+**High Memory Usage:**
 - Reduce `TRAKT_SPECIAL_ITEMS_LIMIT`
 - Increase `SYNC_INTERVAL`
 - Use fewer concurrent lists
 
-**Slow list fetching**:
+**Slow List Fetching:**
 - Check network connectivity
 - Verify list URLs are accessible
 - Enable debug logging to identify bottlenecks
 
 ### Network Issues
 
-**Cannot connect to Seerr**:
+**Cannot Connect to Seerr:**
 ```bash
 # Test connectivity
 curl -v http://your-overseerr-url/api/v1/status
@@ -629,7 +1055,7 @@ docker network ls
 docker network inspect list-sync_default
 ```
 
-**CORS errors in web interface**:
+**CORS Errors in Web Interface:**
 - Verify `CORS_ALLOWED_ORIGINS` includes your domain
 - Check `NEXT_PUBLIC_API_URL` is correct
 
@@ -645,4 +1071,8 @@ If you encounter issues not covered here:
    - Error messages
    - Configuration (sanitized)
 
-For more troubleshooting help, see our [Troubleshooting Guide](troubleshooting.md). 
+For more troubleshooting help, see our [Troubleshooting Guide](troubleshooting.md).
+
+---
+
+This comprehensive installation guide covers all deployment scenarios for ListSync. Choose the method that best fits your needs and follow the step-by-step instructions for a successful installation.

@@ -1,669 +1,1255 @@
-# 🔌 API Reference and Integration Guide
+# API Reference - Complete ListSync API Documentation
 
-This document provides comprehensive technical reference for ListSync's APIs, data structures, and integration interfaces.
+This comprehensive API reference covers all REST endpoints, data structures, and integration examples for ListSync's FastAPI backend.
 
-## 📚 Table of Contents
+## 📋 Table of Contents
 
-1. [Provider API Interface](#provider-api-interface)
-2. [Seerr API Integration](#overseerr-api-integration)
-3. [Database Schema](#database-schema)
-4. [Configuration API](#configuration-api)
-5. [Data Structures](#data-structures)
-6. [Error Handling](#error-handling)
-7. [Extension Points](#extension-points)
+1. [API Overview](#api-overview)
+2. [Authentication](#authentication)
+3. [System Endpoints](#system-endpoints)
+4. [List Management](#list-management)
+5. [Sync Operations](#sync-operations)
+6. [Analytics & Statistics](#analytics--statistics)
+7. [Configuration Management](#configuration-management)
+8. [Logging & Monitoring](#logging--monitoring)
+9. [Data Structures](#data-structures)
+10. [Error Handling](#error-handling)
+11. [Integration Examples](#integration-examples)
 
-## 🔗 Provider API Interface
+## 🌐 API Overview
 
-### Provider Registration
+### Base Information
+- **Base URL**: `http://localhost:4222/api` (default Docker setup)
+- **Content Type**: `application/json`
+- **Rate Limiting**: No explicit rate limiting (designed for internal use)
+- **API Version**: v1
 
-All list providers must be registered using the decorator pattern:
+### Interactive Documentation
+- **Swagger UI**: `http://localhost:4222/docs`
+- **ReDoc**: `http://localhost:4222/redoc`
+- **OpenAPI Spec**: `http://localhost:4222/openapi.json`
 
-```python
-from list_sync.providers import register_provider
-from typing import List, Dict, Any
+### API Architecture
 
-@register_provider("service_name")
-def fetch_service_list(list_id: str) -> List[Dict[str, Any]]:
-    """
-    Fetch media items from a list service.
+```mermaid
+graph TB
+    Client[API Client] --> Gateway[FastAPI Gateway]
+    Gateway --> Router[API Router]
     
-    Args:
-        list_id (str): Service-specific list identifier or URL
-        
-    Returns:
-        List[Dict[str, Any]]: Media items with standardized structure
-        
-    Raises:
-        ValueError: For invalid list IDs or inaccessible lists
-        ConnectionError: For network-related failures
-        Exception: For service-specific errors
-    """
-    pass
-```
-
-### Required Return Data Structure
-
-Each provider must return a list of dictionaries with the following structure:
-
-```python
-{
-    "title": str,           # Required: Media title
-    "media_type": str,      # Required: "movie" or "tv"
-    "year": int,            # Optional: Release year
-    "imdb_id": str,         # Optional but recommended: IMDb ID (tt1234567)
-    "description": str,     # Optional: Media description
-    "genres": List[str],    # Optional: Genre list
-    "rating": float,        # Optional: Rating (0.0-10.0)
-    "runtime": int,         # Optional: Runtime in minutes
-    "poster_url": str,      # Optional: Poster image URL
-}
-```
-
-### Provider Implementation Examples
-
-#### Basic HTTP Provider
-
-```python
-import requests
-from . import register_provider
-
-@register_provider("jsonapi")
-def fetch_jsonapi_list(list_id: str) -> List[Dict[str, Any]]:
-    """Example JSON API provider."""
-    response = requests.get(f"https://api.example.com/lists/{list_id}")
-    response.raise_for_status()
+    Router --> System[System Endpoints<br/>Health, Status, Time]
+    Router --> Lists[List Management<br/>CRUD Operations]
+    Router --> Sync[Sync Operations<br/>Trigger, Monitor, Control]
+    Router --> Analytics[Analytics<br/>Statistics, Metrics]
+    Router --> Config[Configuration<br/>Settings, Environment]
+    Router --> Logs[Logging<br/>Logs, Monitoring]
     
-    data = response.json()
-    return [
-        {
-            "title": item["name"],
-            "media_type": "movie" if item["type"] == "film" else "tv",
-            "year": item.get("release_year"),
-            "imdb_id": item.get("imdb"),
-        }
-        for item in data["items"]
-    ]
-```
-
-#### Selenium-Based Provider
-
-```python
-from seleniumbase import SB
-from . import register_provider
-
-@register_provider("webservice")
-def fetch_webservice_list(list_id: str) -> List[Dict[str, Any]]:
-    """Example Selenium-based provider."""
-    media_items = []
+    System --> DB[(SQLite Database)]
+    Lists --> DB
+    Sync --> Core[Core Sync Service]
+    Analytics --> DB
+    Config --> DB
+    Logs --> FileSystem[Log Files]
     
-    with SB(uc=True, headless=True) as sb:
-        sb.open(f"https://example.com/list/{list_id}")
-        sb.wait_for_element(".media-item", timeout=10)
-        
-        items = sb.find_elements(".media-item")
-        for item in items:
-            title = item.find_element("css selector", ".title").text
-            media_type = "movie" if "movie" in item.get_attribute("class") else "tv"
-            
-            media_items.append({
-                "title": title,
-                "media_type": media_type,
-            })
+    Core --> Providers[List Providers<br/>IMDb, Trakt, etc.]
+    Core --> Seerr[Seerr API]
     
-    return media_items
+    style Gateway fill:#4CAF50
+    style Router fill:#2196F3
+    style DB fill:#FF9800
+    style Core fill:#9C27B0
 ```
 
-### Provider Error Handling
+## 🔐 Authentication
 
-Providers should handle errors gracefully:
+Currently, the API does not require authentication as it's designed for internal use within the Docker container environment. For production deployments, consider implementing proper authentication and authorization.
 
+### Future Authentication (Planned)
 ```python
-@register_provider("robust_service")
-def fetch_robust_list(list_id: str) -> List[Dict[str, Any]]:
-    """Example with comprehensive error handling."""
-    try:
-        # Validate list_id format
-        if not list_id or not isinstance(list_id, str):
-            raise ValueError("Invalid list ID provided")
-        
-        # Attempt to fetch data
-        data = fetch_data_from_service(list_id)
-        
-        if not data:
-            logging.warning(f"No data found for list {list_id}")
-            return []
-            
-        return process_data(data)
-        
-    except requests.exceptions.Timeout:
-        raise ConnectionError(f"Timeout accessing list {list_id}")
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
-            raise ValueError(f"List {list_id} not found")
-        elif e.response.status_code == 403:
-            raise ValueError(f"Access denied to list {list_id}")
-        else:
-            raise ConnectionError(f"HTTP error {e.response.status_code}")
-    except Exception as e:
-        logging.error(f"Unexpected error in provider: {str(e)}")
-        raise
-```
-
-## 🎬 Seerr API Integration
-
-### OverseerrClient Class
-
-The main interface for Seerr communication:
-
-```python
-class OverseerrClient:
-    def __init__(self, overseerr_url: str, api_key: str, requester_user_id: str = "1"):
-        """Initialize Seerr client."""
-        
-    def test_connection(self) -> bool:
-        """Test API connectivity."""
-        
-    def search_media(self, media_title: str, media_type: str, release_year: int = None) -> Optional[Dict[str, Any]]:
-        """Search for media in Seerr."""
-        
-    def get_media_status(self, media_id: int, media_type: str) -> Tuple[bool, bool, int]:
-        """Get media availability status."""
-        
-    def request_media(self, media_id: int, media_type: str, is_4k: bool = False) -> str:
-        """Request media from Seerr."""
-```
-
-### API Endpoints Used
-
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/v1/status` | GET | Health check and version info |
-| `/api/v1/user` | GET | User management and requester setup |
-| `/api/v1/search` | GET | Media search functionality |
-| `/api/v1/movie/{id}` | GET | Movie details and status |
-| `/api/v1/tv/{id}` | GET | TV series details and status |
-| `/api/v1/request` | POST | Create new media requests |
-
-### Request Headers
-
-```python
+# Example future authentication
 headers = {
-    "X-Api-Key": "your-api-key",
-    "X-Api-User": "requester-user-id",  # For POST requests
+    "Authorization": "Bearer your-jwt-token",
     "Content-Type": "application/json"
 }
 ```
 
-### Search Algorithm
+## 🖥️ System Endpoints
 
-The search implementation uses sophisticated matching:
+### Health & Status
 
-```python
-def calculate_match_score(search_title: str, result_title: str, search_year: int, result_year: int) -> float:
-    """
-    Calculate matching score for search results.
-    
-    Returns:
-        float: Score from 0.0 to 2.0+ (higher is better)
-    """
-    # Base similarity using Levenshtein distance
-    base_similarity = calculate_title_similarity(search_title, result_title)
-    
-    # Year weighting
-    if search_year and result_year:
-        if search_year == result_year:
-            return base_similarity * 2.0  # Exact year match
-        elif abs(search_year - result_year) <= 1:
-            return base_similarity * 1.5  # Close year match
-    
-    return base_similarity
+#### Get System Health
+```http
+GET /api/system/health
 ```
 
-### Request Payloads
+Simple health check endpoint returning basic system status.
 
-#### Movie Request
-
+**Response:**
 ```json
 {
-    "mediaType": "movie",
-    "mediaId": 12345,
-    "is4k": false,
-    "serverId": 1,
-    "profileId": 1
+  "database": true,
+  "process": true,
+  "sync_status": "running",
+  "last_sync": "2024-01-15T10:30:00Z",
+  "next_sync": "2024-01-15T22:30:00Z"
 }
 ```
 
-#### TV Series Request
+**Status Codes:**
+- `200 OK` - System healthy
+- `503 Service Unavailable` - System unhealthy
 
+#### Get Detailed System Status
+```http
+GET /api/system/status
+```
+
+Comprehensive system health check with detailed information.
+
+**Response:**
 ```json
 {
-    "mediaType": "tv",
-    "mediaId": 67890,
-    "is4k": false,
-    "serverId": 1,
-    "profileId": 1,
-    "seasons": [1, 2, 3]
+  "database": {
+    "connected": true,
+    "file_exists": true,
+    "file_size": 1024000,
+    "last_modified": "2024-01-15T10:30:00Z",
+    "error": null
+  },
+  "process": {
+    "running": true,
+    "processes": [
+      {
+        "pid": 1234,
+        "name": "python -m list_sync",
+        "status": "running",
+        "cpu_percent": 2.5,
+        "memory_mb": 128.5
+      }
+    ],
+    "error": null
+  },
+  "sync": {
+    "status": "idle",
+    "last_sync": "2024-01-15T10:30:00Z",
+    "next_sync": "2024-01-15T22:30:00Z",
+    "interval_hours": 12,
+    "error": null
+  },
+  "overall_health": "healthy"
 }
 ```
 
-## 🗄️ Database Schema
-
-### Tables Overview
-
-```sql
--- Lists configuration
-CREATE TABLE lists (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    list_type TEXT NOT NULL,        -- Provider type (imdb, trakt, etc.)
-    list_id TEXT NOT NULL,          -- Provider-specific list ID/URL
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(list_type, list_id)
-);
-
--- Processed media tracking
-CREATE TABLE synced_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    media_type TEXT NOT NULL,       -- "movie" or "tv"
-    imdb_id TEXT,                   -- External reference
-    overseerr_id INTEGER,           -- Internal Seerr ID
-    status TEXT NOT NULL,           -- "requested", "available", "error"
-    last_synced TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    error_message TEXT,             -- Error details if status = "error"
-    year INTEGER,                   -- Release year
-    provider_source TEXT            -- Which provider added this item
-);
-
--- Automation settings
-CREATE TABLE sync_interval (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    interval_hours REAL NOT NULL,  -- Supports decimal values
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- Sync history and statistics
-CREATE TABLE sync_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    sync_started TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    sync_completed TIMESTAMP,
-    items_processed INTEGER DEFAULT 0,
-    items_requested INTEGER DEFAULT 0,
-    items_skipped INTEGER DEFAULT 0,
-    items_errored INTEGER DEFAULT 0,
-    sync_mode TEXT DEFAULT 'manual'  -- 'manual', 'automated', 'dry_run'
-);
+#### Get System Time
+```http
+GET /api/system/time
 ```
 
-### Database Operations
+Returns current system time and timezone information.
 
-#### Core Functions
-
-```python
-def init_database() -> None:
-    """Initialize database with required tables."""
-
-def save_list_id(list_id: str, list_type: str) -> None:
-    """Store list configuration."""
-
-def load_list_ids() -> List[Dict[str, str]]:
-    """Retrieve all configured lists."""
-
-def save_sync_result(title: str, media_type: str, imdb_id: Optional[str], 
-                    overseerr_id: Optional[int], status: str) -> None:
-    """Record sync operation result."""
-
-def should_sync_item(overseerr_id: int) -> bool:
-    """Check if item needs syncing based on last sync time."""
-
-def get_sync_stats() -> Dict[str, int]:
-    """Retrieve sync statistics."""
-
-def cleanup_old_sync_results(days: int = 30) -> int:
-    """Remove old sync records."""
+**Response:**
+```json
+{
+  "current_time": "2024-01-15T10:30:00Z",
+  "timezone": "UTC",
+  "timestamp": 1705312200
+}
 ```
 
-#### Query Examples
-
-```python
-# Get items synced in last 24 hours
-cursor.execute("""
-    SELECT title, status, COUNT(*) 
-    FROM synced_items 
-    WHERE last_synced > datetime('now', '-24 hours')
-    GROUP BY status
-""")
-
-# Find items needing re-sync
-cursor.execute("""
-    SELECT * FROM synced_items 
-    WHERE status = 'error' 
-    AND last_synced < datetime('now', '-7 days')
-""")
-
-# Get provider statistics
-cursor.execute("""
-    SELECT provider_source, COUNT(*), 
-           SUM(CASE WHEN status = 'requested' THEN 1 ELSE 0 END) as successful
-    FROM synced_items 
-    GROUP BY provider_source
-""")
+#### Test Database Connection
+```http
+GET /api/system/database/test
 ```
 
-## ⚙️ Configuration API
+Tests database connectivity and returns connection status.
 
-### Environment Variable Loading
+**Response:**
+```json
+{
+  "connected": true,
+  "response_time_ms": 5.2,
+  "error": null
+}
+```
 
-```python
-def load_env_config() -> Tuple[Optional[str], Optional[str], Optional[str], float, bool, bool]:
-    """
-    Load configuration from environment variables.
+### Process Management
+
+#### Get Running Processes
+```http
+GET /api/system/processes
+```
+
+Returns information about running ListSync processes.
+
+**Response:**
+```json
+{
+  "processes": [
+    {
+      "pid": 1234,
+      "name": "python -m list_sync",
+      "status": "running",
+      "cpu_percent": 2.5,
+      "memory_mb": 128.5,
+      "start_time": "2024-01-15T09:00:00Z"
+    }
+  ],
+  "total_processes": 1
+}
+```
+
+#### Get System Logs
+```http
+GET /api/system/logs
+```
+
+Returns recent system logs for debugging.
+
+**Query Parameters:**
+- `limit` (optional): Number of log entries to return (default: 100)
+- `level` (optional): Filter by log level (INFO, WARNING, ERROR)
+
+**Response:**
+```json
+{
+  "logs": [
+    {
+      "timestamp": "2024-01-15T10:30:00Z",
+      "level": "INFO",
+      "message": "Sync completed successfully",
+      "category": "sync"
+    }
+  ],
+  "total_entries": 100
+}
+```
+
+## 📚 List Management
+
+### List Management Workflow
+
+```mermaid
+flowchart TD
+    Start[List Management] --> CRUD{Operation Type}
     
-    Returns:
-        Tuple containing:
-        - overseerr_url: str
-        - api_key: str  
-        - user_id: str
-        - sync_interval: float
-        - automated_mode: bool
-        - is_4k: bool
-    """
+    CRUD -->|Create| CreateList[POST /api/lists<br/>Add New List]
+    CRUD -->|Read| ReadLists[GET /api/lists<br/>Get All Lists]
+    CRUD -->|Update| UpdateList[PUT /api/lists/{id}<br/>Update List]
+    CRUD -->|Delete| DeleteList[DELETE /api/lists/{id}<br/>Delete List]
+    
+    CreateList --> Validate[Validate Input<br/>- List type<br/>- List ID<br/>- URL format]
+    Validate --> Valid{Valid?}
+    Valid -->|No| ReturnError[Return Validation Error]
+    Valid -->|Yes| SaveList[Save to Database<br/>- Store configuration<br/>- Update environment<br/>- Refresh cache]
+    
+    ReadLists --> QueryDB[Query Database<br/>- Get all lists<br/>- Include metadata<br/>- Apply filters]
+    QueryDB --> FormatResponse[Format Response<br/>- Include statistics<br/>- Add status info<br/>- Paginate results]
+    
+    UpdateList --> FindList[Find List by ID<br/>- Check existence<br/>- Validate permissions]
+    FindList --> UpdateFields[Update Fields<br/>- Modify configuration<br/>- Validate changes<br/>- Save to database]
+    
+    DeleteList --> ConfirmDelete[Confirm Deletion<br/>- Check dependencies<br/>- Remove from sync<br/>- Clean up data]
+    
+    SaveList --> Success[Return Success Response]
+    FormatResponse --> Success
+    UpdateFields --> Success
+    ConfirmDelete --> Success
+    ReturnError --> Error[Return Error Response]
+    
+    style Start fill:#4CAF50
+    style Success fill:#4CAF50
+    style Error fill:#f44336
+    style Validate fill:#FF9800
 ```
 
-### Configuration Hierarchy
-
-1. **Environment Variables** (highest priority)
-2. **Encrypted Config File** (`data/config.enc`)
-3. **Interactive Input** (lowest priority)
-
-### Encrypted Configuration
-
-```python
-def encrypt_config(data: dict, password: str) -> bytes:
-    """Encrypt configuration with user password."""
-
-def decrypt_config(encrypted_data: bytes, password: str) -> dict:
-    """Decrypt configuration with user password."""
-
-def save_config(overseerr_url: str, api_key: str, requester_user_id: str) -> None:
-    """Save encrypted configuration to file."""
-
-def load_config() -> Tuple[Optional[str], Optional[str], Optional[str]]:
-    """Load and decrypt configuration from file."""
+### Get All Lists
+```http
+GET /api/lists
 ```
 
-### List Configuration
+Returns all configured lists with their metadata.
 
-```python
-def load_env_lists() -> bool:
-    """
-    Load list configurations from environment variables.
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 50)
+- `type` (optional): Filter by list type (imdb, trakt, etc.)
+- `status` (optional): Filter by status (active, inactive)
+
+**Response:**
+```json
+{
+  "lists": [
+    {
+      "id": 1,
+      "list_type": "imdb",
+      "list_id": "top",
+      "list_url": "https://www.imdb.com/chart/top",
+      "description": "IMDb Top 250 Movies",
+      "item_count": 250,
+      "last_synced": "2024-01-15T10:30:00Z",
+      "status": "active",
+      "auto_sync": true,
+      "priority": "normal",
+      "created_at": "2024-01-15T09:00:00Z"
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total_items": 1,
+    "total_pages": 1,
+    "has_next": false,
+    "has_prev": false
+  }
+}
+```
+
+### Add New List
+```http
+POST /api/lists
+```
+
+Adds a new list to the configuration.
+
+**Request Body:**
+```json
+{
+  "list_type": "imdb",
+  "list_id": "top",
+  "list_url": "https://www.imdb.com/chart/top",
+  "description": "IMDb Top 250 Movies",
+  "auto_sync": true,
+  "priority": "normal",
+  "item_limit": null
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "List added successfully",
+  "list": {
+    "id": 1,
+    "list_type": "imdb",
+    "list_id": "top",
+    "list_url": "https://www.imdb.com/chart/top",
+    "description": "IMDb Top 250 Movies",
+    "item_count": 0,
+    "last_synced": null,
+    "status": "pending",
+    "auto_sync": true,
+    "priority": "normal"
+  }
+}
+```
+
+### Update List
+```http
+PUT /api/lists/{list_id}
+```
+
+Updates an existing list configuration.
+
+**Path Parameters:**
+- `list_id`: ID of the list to update
+
+**Request Body:**
+```json
+{
+  "description": "Updated description",
+  "auto_sync": false,
+  "priority": "high",
+  "item_limit": 100
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "List updated successfully",
+  "list": {
+    "id": 1,
+    "list_type": "imdb",
+    "list_id": "top",
+    "description": "Updated description",
+    "auto_sync": false,
+    "priority": "high",
+    "item_limit": 100
+  }
+}
+```
+
+### Delete List
+```http
+DELETE /api/lists/{list_id}
+```
+
+Removes a list from the configuration.
+
+**Path Parameters:**
+- `list_id`: ID of the list to delete
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "List deleted successfully"
+}
+```
+
+## 🔄 Sync Operations
+
+### Sync Operation Workflow
+
+```mermaid
+flowchart TD
+    Start[Sync Operation] --> SyncType{Type of Sync?}
     
-    Environment variables parsed:
-    - IMDB_LISTS: "ls123,ur456,top,boxoffice"
-    - TRAKT_LISTS: "12345,67890,https://trakt.tv/..."
-    - TRAKT_SPECIAL_LISTS: "trending:movies,popular:shows"
-    - LETTERBOXD_LISTS: "https://letterboxd.com/..."
-    - MDBLIST_LISTS: "user/list,https://mdblist.com/..."
-    - STEVENLU_LISTS: "stevenlu"
+    SyncType -->|Manual All| ManualAll[POST /api/sync/trigger<br/>Sync All Lists]
+    SyncType -->|Single List| SingleList[POST /api/sync/single<br/>Sync Specific List]
+    SyncType -->|Bulk Lists| BulkSync[POST /api/sync/bulk<br/>Sync Selected Lists]
+    SyncType -->|Status Check| StatusCheck[GET /api/sync/status<br/>Check Sync Status]
     
-    Returns:
-        bool: True if any lists were loaded
-    """
+    ManualAll --> ValidateConfig[Validate Configuration<br/>- Check lists<br/>- Verify connections<br/>- Validate settings]
+    SingleList --> ValidateList[Validate List<br/>- Check list exists<br/>- Verify accessibility<br/>- Check dependencies]
+    BulkSync --> ValidateBulk[Validate Lists<br/>- Check all lists<br/>- Verify permissions<br/>- Validate limits]
+    StatusCheck --> GetStatus[Get Current Status<br/>- Check if running<br/>- Get progress<br/>- Return details]
+    
+    ValidateConfig --> StartSync[Start Sync Process<br/>- Initialize providers<br/>- Begin processing<br/>- Update status]
+    ValidateList --> StartSync
+    ValidateBulk --> StartSync
+    
+    StartSync --> Monitor[Monitor Progress<br/>- Track items<br/>- Update counters<br/>- Handle errors]
+    Monitor --> Complete[Sync Complete<br/>- Save results<br/>- Send notifications<br/>- Update statistics]
+    
+    GetStatus --> ReturnStatus[Return Status Info<br/>- Current state<br/>- Progress data<br/>- Error details]
+    
+    Complete --> Success[Return Success Response]
+    ReturnStatus --> Success
+    
+    style Start fill:#4CAF50
+    style Success fill:#4CAF50
+    style StartSync fill:#2196F3
+    style Monitor fill:#FF9800
+```
+
+### Trigger Manual Sync
+```http
+POST /api/sync/trigger
+```
+
+Triggers an immediate sync of all configured lists.
+
+**Request Body (optional):**
+```json
+{
+  "dry_run": false,
+  "force": false,
+  "notify": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Sync triggered successfully",
+  "sync_id": "sync_20240115_103000",
+  "estimated_duration": "5-10 minutes"
+}
+```
+
+### Trigger Single List Sync
+```http
+POST /api/sync/single
+```
+
+Syncs a specific list immediately.
+
+**Request Body:**
+```json
+{
+  "list_id": 1,
+  "list_type": "imdb",
+  "dry_run": false,
+  "force": false
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Single list sync completed",
+  "items_processed": 250,
+  "items_requested": 25,
+  "items_available": 200,
+  "items_failed": 0,
+  "duration_seconds": 120,
+  "list_info": {
+    "id": 1,
+    "type": "imdb",
+    "list_id": "top",
+    "description": "IMDb Top 250 Movies"
+  }
+}
+```
+
+### Get Sync Status
+```http
+GET /api/sync/status
+```
+
+Returns current sync operation status.
+
+**Response:**
+```json
+{
+  "active": false,
+  "status": "idle",
+  "current_operation": null,
+  "progress": {
+    "current": 0,
+    "total": 0,
+    "percentage": 0
+  },
+  "last_sync": {
+    "timestamp": "2024-01-15T10:30:00Z",
+    "duration_seconds": 120,
+    "items_processed": 250,
+    "success_count": 245,
+    "error_count": 5,
+    "lists_synced": 3
+  },
+  "next_sync": {
+    "timestamp": "2024-01-15T22:30:00Z",
+    "interval_hours": 12
+  }
+}
+```
+
+### Get Live Sync Status
+```http
+GET /api/sync/status/live
+```
+
+Server-sent events endpoint for real-time sync status updates.
+
+**Response Stream:**
+```
+data: {"status": "running", "progress": 25, "current_list": "imdb:top", "items_processed": 62}
+data: {"status": "running", "progress": 50, "current_list": "trakt:trending", "items_processed": 125}
+data: {"status": "completed", "results": {"requested": 25, "available": 200, "failed": 0}}
+```
+
+## 📊 Analytics & Statistics
+
+### Analytics Overview
+
+```mermaid
+graph TB
+    Analytics[Analytics System] --> DataCollection[Data Collection]
+    Analytics --> Processing[Data Processing]
+    Analytics --> Storage[Data Storage]
+    Analytics --> Visualization[Visualization]
+    
+    DataCollection --> SyncData[Sync Operations<br/>- Success/failure rates<br/>- Processing times<br/>- Item counts]
+    DataCollection --> SystemData[System Metrics<br/>- Resource usage<br/>- Performance data<br/>- Error rates]
+    DataCollection --> UserData[User Activity<br/>- Dashboard usage<br/>- API calls<br/>- Configuration changes]
+    
+    Processing --> Aggregation[Data Aggregation<br/>- Time-based grouping<br/>- Provider analysis<br/>- Trend calculation]
+    Processing --> Calculation[Metric Calculation<br/>- Success rates<br/>- Performance metrics<br/>- Error analysis]
+    
+    Storage --> Database[(SQLite Database<br/>- Historical data<br/>- Aggregated metrics<br/>- Configuration)]
+    Storage --> Cache[Memory Cache<br/>- Real-time data<br/>- Performance optimization<br/>- Quick access]
+    
+    Visualization --> Dashboard[Web Dashboard<br/>- Charts and graphs<br/>- Real-time updates<br/>- Interactive elements]
+    Visualization --> API[API Endpoints<br/>- JSON responses<br/>- Filtered data<br/>- Pagination]
+    
+    style Analytics fill:#4CAF50
+    style DataCollection fill:#2196F3
+    style Processing fill:#FF9800
+    style Storage fill:#9C27B0
+    style Visualization fill:#607D8B
+```
+
+### Get Analytics Overview
+```http
+GET /api/analytics/overview
+```
+
+**Query Parameters:**
+- `time_range`: `1h`, `24h`, `7d`, `30d` (default: `24h`)
+
+**Response:**
+```json
+{
+  "total_items": 1500,
+  "success_rate": 95.2,
+  "avg_processing_time": 2.3,
+  "active_sync": false,
+  "total_sync_operations": 12,
+  "total_errors": 8,
+  "last_sync_time": "2024-01-15T10:30:00Z",
+  "time_range": "24h",
+  "provider_breakdown": {
+    "imdb": {"items": 800, "success_rate": 96.5},
+    "trakt": {"items": 500, "success_rate": 94.0},
+    "letterboxd": {"items": 200, "success_rate": 95.0}
+  }
+}
+```
+
+### Get Comprehensive Analytics
+```http
+GET /api/analytics
+```
+
+**Query Parameters:**
+- `time_range`: `1h`, `24h`, `7d`, `30d` (default: `24h`)
+- `category`: `all`, `sync`, `fetching`, `matching`, `scraping` (default: `all`)
+
+**Response:**
+```json
+{
+  "overview": {
+    "total_items": 1500,
+    "success_rate": 95.2,
+    "avg_processing_time": 2.3
+  },
+  "sync_analytics": {
+    "total_operations": 12,
+    "successful_operations": 11,
+    "failed_operations": 1,
+    "avg_duration_seconds": 120
+  },
+  "fetching_analytics": {
+    "total_fetches": 36,
+    "successful_fetches": 34,
+    "failed_fetches": 2,
+    "avg_fetch_time_seconds": 15.5
+  },
+  "matching_analytics": {
+    "perfect_matches": 450,
+    "partial_matches": 45,
+    "failed_matches": 5,
+    "average_score": 0.92
+  },
+  "scraping_analytics": {
+    "total_scrapes": 24,
+    "successful_scrapes": 23,
+    "failed_scrapes": 1,
+    "avg_scrape_time_seconds": 8.2
+  }
+}
+```
+
+### Get Media Addition Analytics
+```http
+GET /api/analytics/media-additions
+```
+
+Returns data about media items added over time.
+
+**Response:**
+```json
+{
+  "time_series": [
+    {
+      "timestamp": "2024-01-15T10:00:00Z",
+      "items_requested": 25,
+      "items_available": 200,
+      "items_failed": 0
+    },
+    {
+      "timestamp": "2024-01-15T11:00:00Z",
+      "items_requested": 30,
+      "items_available": 180,
+      "items_failed": 2
+    }
+  ],
+  "total_requested": 1500,
+  "total_available": 12000,
+  "total_failed": 50
+}
+```
+
+### Get Source Distribution
+```http
+GET /api/analytics/source-distribution
+```
+
+Returns distribution of media by source (IMDb, Trakt, etc.).
+
+**Response:**
+```json
+{
+  "distribution": {
+    "imdb": {
+      "count": 800,
+      "percentage": 53.3,
+      "success_rate": 96.5
+    },
+    "trakt": {
+      "count": 500,
+      "percentage": 33.3,
+      "success_rate": 94.0
+    },
+    "letterboxd": {
+      "count": 200,
+      "percentage": 13.3,
+      "success_rate": 95.0
+    }
+  },
+  "total_items": 1500
+}
+```
+
+## ⚙️ Configuration Management
+
+### Get Sync Interval
+```http
+GET /api/sync-interval
+```
+
+Returns current sync interval configuration.
+
+**Response:**
+```json
+{
+  "interval_hours": 24,
+  "next_sync": "2024-01-15T22:30:00Z",
+  "last_sync": "2024-01-15T10:30:00Z",
+  "automated_mode": true
+}
+```
+
+### Update Sync Interval
+```http
+PUT /api/sync-interval
+```
+
+**Request Body:**
+```json
+{
+  "interval_hours": 12,
+  "automated_mode": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Sync interval updated successfully",
+  "new_interval_hours": 12,
+  "next_sync": "2024-01-15T22:30:00Z"
+}
+```
+
+### Get Seerr Status
+```http
+GET /api/overseerr/status
+```
+
+Returns Seerr connection status and configuration.
+
+**Response:**
+```json
+{
+  "connected": true,
+  "url": "https://overseerr.example.com",
+  "user_id": 1,
+  "api_key_configured": true,
+  "last_check": "2024-01-15T10:30:00Z",
+  "response_time_ms": 45.2
+}
+```
+
+## 📝 Logging & Monitoring
+
+### Get Log Entries
+```http
+GET /api/logs/entries
+```
+
+**Query Parameters:**
+- `limit`: Number of entries (default: 100)
+- `offset`: Pagination offset (default: 0)
+- `level`: Log level filter (INFO, WARNING, ERROR)
+- `category`: Category filter
+- `search`: Text search in log messages
+
+**Response:**
+```json
+{
+  "logs": [
+    {
+      "timestamp": "2024-01-15T10:30:00Z",
+      "level": "INFO",
+      "category": "sync",
+      "message": "Sync completed successfully",
+      "details": {
+        "items_processed": 250,
+        "items_requested": 25,
+        "duration_seconds": 120
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "limit": 100,
+    "total_entries": 1000,
+    "has_next": true
+  }
+}
+```
+
+### Get Live Log Stream
+```http
+GET /api/logs/stream
+```
+
+**Query Parameters:**
+- `last_position`: Last known file position
+- `level_filter`: Log level filter
+- `category_filters`: Category filters (comma-separated)
+- `search`: Text search
+
+**Response Stream:**
+```
+data: {"timestamp": "2024-01-15T10:30:00Z", "level": "INFO", "message": "Sync started"}
+data: {"timestamp": "2024-01-15T10:30:05Z", "level": "INFO", "message": "Processing list: imdb:top"}
+data: {"timestamp": "2024-01-15T10:30:10Z", "level": "INFO", "message": "Found 250 items"}
 ```
 
 ## 📋 Data Structures
 
-### Media Item Structure
-
-```python
-class MediaItem(TypedDict):
-    title: str                  # Required
-    media_type: str            # Required: "movie" or "tv"
-    year: NotRequired[int]     # Optional: Release year
-    imdb_id: NotRequired[str]  # Optional: IMDb ID (tt1234567)
-    description: NotRequired[str]
-    genres: NotRequired[List[str]]
-    rating: NotRequired[float]
-    runtime: NotRequired[int]
-    poster_url: NotRequired[str]
+### List Object
+```json
+{
+  "id": 1,
+  "list_type": "imdb",
+  "list_id": "top",
+  "list_url": "https://www.imdb.com/chart/top",
+  "description": "IMDb Top 250 Movies",
+  "item_count": 250,
+  "last_synced": "2024-01-15T10:30:00Z",
+  "status": "active",
+  "auto_sync": true,
+  "priority": "normal",
+  "item_limit": null,
+  "created_at": "2024-01-15T09:00:00Z",
+  "updated_at": "2024-01-15T10:30:00Z"
+}
 ```
 
-### Search Result Structure
-
-```python
-class SearchResult(TypedDict):
-    id: int                    # Seerr internal ID
-    mediaType: str            # "movie" or "tv"
-    title: NotRequired[str]   # For movies
-    name: NotRequired[str]    # For TV shows
-    releaseDate: NotRequired[str]
-    firstAirDate: NotRequired[str]
-    overview: NotRequired[str]
-    posterPath: NotRequired[str]
+### Sync Result Object
+```json
+{
+  "sync_id": "sync_20240115_103000",
+  "started_at": "2024-01-15T10:30:00Z",
+  "completed_at": "2024-01-15T10:32:00Z",
+  "duration_seconds": 120,
+  "status": "completed",
+  "items_processed": 250,
+  "items_requested": 25,
+  "items_available": 200,
+  "items_failed": 0,
+  "items_skipped": 25,
+  "lists_synced": 3,
+  "error_message": null
+}
 ```
 
-### Sync Result Structure
-
-```python
-class SyncResults:
-    def __init__(self):
-        self.total_items = 0
-        self.requested_items = []
-        self.already_available = []
-        self.already_requested = []
-        self.errors = []
-        self.skipped_items = []
-        self.synced_lists = []
-        
-    def add_result(self, result_type: str, item: Dict[str, Any]):
-        """Add sync result for tracking."""
-        
-    def get_summary(self) -> Dict[str, int]:
-        """Get summary statistics."""
-```
-
-### Configuration Structure
-
-```python
-class Config:
-    overseerr_url: str
-    api_key: str
-    user_id: str = "1"
-    sync_interval: float = 24.0
-    automated_mode: bool = False
-    is_4k: bool = False
-    trakt_special_limit: int = 20
-    discord_webhook: Optional[str] = None
-    
-    lists: Dict[str, List[str]] = {
-        "imdb": [],
-        "trakt": [],
-        "trakt_special": [],
-        "letterboxd": [],
-        "mdblist": [],
-        "stevenlu": []
-    }
+### Media Item Object
+```json
+{
+  "id": 1,
+  "title": "The Shawshank Redemption",
+  "year": 1994,
+  "media_type": "movie",
+  "imdb_id": "tt0111161",
+  "overseerr_id": 12345,
+  "status": "requested",
+  "provider_source": "imdb",
+  "last_synced": "2024-01-15T10:30:00Z",
+  "error_message": null
+}
 ```
 
 ## ⚠️ Error Handling
 
-### Exception Hierarchy
+### HTTP Status Codes
 
-```python
-class ListSyncError(Exception):
-    """Base exception for ListSync errors."""
-    pass
+| Code | Description | Usage |
+|------|-------------|-------|
+| `200 OK` | Successful operation | GET, PUT requests |
+| `201 Created` | Resource created successfully | POST requests |
+| `400 Bad Request` | Invalid request parameters | Validation errors |
+| `404 Not Found` | Resource not found | Missing resources |
+| `422 Unprocessable Entity` | Validation error | Data validation failures |
+| `500 Internal Server Error` | Server error | Unexpected errors |
 
-class ProviderError(ListSyncError):
-    """Error in list provider operation."""
-    pass
-
-class APIError(ListSyncError):
-    """Error in API communication."""
-    pass
-
-class ConfigurationError(ListSyncError):
-    """Error in configuration or setup."""
-    pass
-
-class DatabaseError(ListSyncError):
-    """Error in database operation."""
-    pass
+### Error Response Format
+```json
+{
+  "success": false,
+  "error": "Error description",
+  "detail": "Detailed error information",
+  "error_code": "ERROR_CODE",
+  "timestamp": "2024-01-15T10:30:00Z",
+  "request_id": "req_123456"
+}
 ```
 
-### Error Response Structure
+### Common Error Codes
 
+| Error Code | Description | Solution |
+|------------|-------------|----------|
+| `OVERSEERR_CONNECTION_ERROR` | Cannot connect to Seerr | Check Seerr URL and API key |
+| `DATABASE_ERROR` | Database operation failed | Check database file permissions |
+| `INVALID_LIST_FORMAT` | List ID format is invalid | Verify list ID format |
+| `SYNC_IN_PROGRESS` | Sync already running | Wait for current sync to complete |
+| `LIST_NOT_FOUND` | Specified list doesn't exist | Check list ID and type |
+| `VALIDATION_ERROR` | Request validation failed | Check request parameters |
+
+## 🔧 Integration Examples
+
+### Python Integration
 ```python
-class ErrorResult:
-    def __init__(self, error_type: str, message: str, details: Optional[Dict] = None):
-        self.error_type = error_type
-        self.message = message
-        self.details = details or {}
-        self.timestamp = datetime.now()
-        
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "error_type": self.error_type,
-            "message": self.message,
-            "details": self.details,
-            "timestamp": self.timestamp.isoformat()
+import requests
+import json
+
+class ListSyncClient:
+    def __init__(self, base_url="http://localhost:4222/api"):
+        self.base_url = base_url
+        self.session = requests.Session()
+    
+    def get_system_health(self):
+        """Get system health status"""
+        response = self.session.get(f"{self.base_url}/system/health")
+        return response.json()
+    
+    def add_list(self, list_type, list_id, description=None):
+        """Add a new list"""
+        data = {
+            "list_type": list_type,
+            "list_id": list_id,
+            "description": description,
+            "auto_sync": True
         }
-```
-
-### Retry Logic
-
-```python
-def with_retry(max_attempts: int = 3, delay: float = 1.0):
-    """Decorator for automatic retry with exponential backoff."""
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            for attempt in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, requests.exceptions.Timeout) as e:
-                    if attempt == max_attempts - 1:
-                        raise
-                    time.sleep(delay * (2 ** attempt))
-            return None
-        return wrapper
-    return decorator
-```
-
-## 🔧 Extension Points
-
-### Custom Provider Development
-
-1. **Create provider function:**
-   ```python
-   @register_provider("myservice")
-   def fetch_myservice_list(list_id: str) -> List[Dict[str, Any]]:
-       # Implementation
-   ```
-
-2. **Handle different input formats:**
-   ```python
-   def fetch_myservice_list(list_id: str) -> List[Dict[str, Any]]:
-       if list_id.startswith("http"):
-           return fetch_from_url(list_id)
-       else:
-           return fetch_from_id(list_id)
-   ```
-
-3. **Add to environment configuration:**
-   ```python
-   # In config.py
-   myservice_lists = os.getenv('MYSERVICE_LISTS', '').split(',')
-   for list_id in myservice_lists:
-       if list_id.strip():
-           save_list_id(list_id.strip(), "myservice")
-   ```
-
-### Custom Media Server Support
-
-1. **Implement client interface:**
-   ```python
-   class CustomServerClient:
-       def search_media(self, title: str, media_type: str, year: int = None):
-           # Implementation
-           
-       def get_media_status(self, media_id: int, media_type: str):
-           # Implementation
-           
-       def request_media(self, media_id: int, media_type: str, is_4k: bool = False):
-           # Implementation
-   ```
-
-2. **Adapt main sync logic:**
-   ```python
-   # Replace OverseerrClient with CustomServerClient
-   client = CustomServerClient(url, api_key, user_id)
-   ```
-
-### Notification Extensions
-
-```python
-class NotificationHandler:
-    def send_sync_summary(self, results: SyncResults):
-        """Send sync completion notification."""
-        
-    def send_error_alert(self, error: ErrorResult):
-        """Send error notification."""
-        
-    def send_item_requested(self, item: Dict[str, Any]):
-        """Send individual item notification."""
-
-# Register notification handlers
-handlers = [
-    DiscordNotificationHandler(),
-    SlackNotificationHandler(),
-    EmailNotificationHandler()
-]
-```
-
-### Database Extensions
-
-```python
-# Custom migrations
-def migrate_database(current_version: int, target_version: int):
-    """Handle database schema migrations."""
+        response = self.session.post(f"{self.base_url}/lists", json=data)
+        return response.json()
     
-# Custom queries
-def get_provider_performance() -> Dict[str, Any]:
-    """Analyze provider success rates."""
+    def trigger_sync(self, dry_run=False):
+        """Trigger manual sync"""
+        data = {"dry_run": dry_run}
+        response = self.session.post(f"{self.base_url}/sync/trigger", json=data)
+        return response.json()
     
-def get_trending_requests() -> List[Dict[str, Any]]:
-    """Find most requested items."""
+    def get_analytics(self, time_range="24h"):
+        """Get analytics data"""
+        params = {"time_range": time_range}
+        response = self.session.get(f"{self.base_url}/analytics/overview", params=params)
+        return response.json()
+
+# Usage example
+client = ListSyncClient()
+
+# Check system health
+health = client.get_system_health()
+print(f"System healthy: {health['database']}")
+
+# Add a new list
+result = client.add_list("imdb", "top", "IMDb Top 250 Movies")
+print(f"List added: {result['success']}")
+
+# Trigger sync
+sync_result = client.trigger_sync()
+print(f"Sync triggered: {sync_result['sync_id']}")
+
+# Get analytics
+analytics = client.get_analytics("7d")
+print(f"Success rate: {analytics['success_rate']}%")
 ```
 
-## 📊 Monitoring and Metrics
-
-### Performance Metrics
-
-```python
-class MetricsCollector:
-    def track_sync_duration(self, duration: float):
-        """Track sync operation timing."""
-        
-    def track_provider_success_rate(self, provider: str, success: bool):
-        """Track provider reliability."""
-        
-    def track_api_response_time(self, endpoint: str, duration: float):
-        """Track API performance."""
-        
-    def export_metrics(self) -> Dict[str, Any]:
-        """Export collected metrics."""
-```
-
-### Health Checks
-
-```python
-def health_check() -> Dict[str, Any]:
-    """Comprehensive health check."""
-    return {
-        "database": check_database_connectivity(),
-        "overseerr_api": check_overseerr_connectivity(),
-        "selenium": check_selenium_availability(),
-        "disk_space": check_disk_space(),
-        "memory_usage": check_memory_usage()
+### JavaScript Integration
+```javascript
+class ListSyncAPI {
+    constructor(baseURL = 'http://localhost:4222/api') {
+        this.baseURL = baseURL;
     }
-``` 
+    
+    async request(endpoint, options = {}) {
+        const url = `${this.baseURL}${endpoint}`;
+        const response = await fetch(url, {
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            },
+            ...options
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        return response.json();
+    }
+    
+    async getSystemHealth() {
+        return this.request('/system/health');
+    }
+    
+    async getLists() {
+        return this.request('/lists');
+    }
+    
+    async addList(listData) {
+        return this.request('/lists', {
+            method: 'POST',
+            body: JSON.stringify(listData)
+        });
+    }
+    
+    async triggerSync(options = {}) {
+        return this.request('/sync/trigger', {
+            method: 'POST',
+            body: JSON.stringify(options)
+        });
+    }
+    
+    async getAnalytics(timeRange = '24h') {
+        return this.request(`/analytics/overview?time_range=${timeRange}`);
+    }
+    
+    async streamLogs() {
+        const response = await fetch(`${this.baseURL}/logs/stream`);
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = JSON.parse(line.slice(6));
+                    console.log('Log entry:', data);
+                }
+            }
+        }
+    }
+}
+
+// Usage example
+const api = new ListSyncAPI();
+
+// Check system health
+api.getSystemHealth().then(health => {
+    console.log('System healthy:', health.database);
+});
+
+// Add a new list
+api.addList({
+    list_type: 'imdb',
+    list_id: 'top',
+    description: 'IMDb Top 250 Movies',
+    auto_sync: true
+}).then(result => {
+    console.log('List added:', result.success);
+});
+
+// Trigger sync
+api.triggerSync({ dry_run: false }).then(result => {
+    console.log('Sync triggered:', result.sync_id);
+});
+
+// Stream logs
+api.streamLogs();
+```
+
+### cURL Examples
+```bash
+# Get system health
+curl http://localhost:4222/api/system/health
+
+# Get all lists
+curl http://localhost:4222/api/lists
+
+# Add a new list
+curl -X POST http://localhost:4222/api/lists \
+  -H "Content-Type: application/json" \
+  -d '{
+    "list_type": "imdb",
+    "list_id": "top",
+    "description": "IMDb Top 250 Movies",
+    "auto_sync": true
+  }'
+
+# Trigger sync
+curl -X POST http://localhost:4222/api/sync/trigger \
+  -H "Content-Type: application/json" \
+  -d '{"dry_run": false}'
+
+# Get analytics
+curl "http://localhost:4222/api/analytics/overview?time_range=24h"
+
+# Get sync status
+curl http://localhost:4222/api/sync/status
+
+# Stream logs
+curl http://localhost:4222/api/logs/stream
+```
+
+---
+
+This comprehensive API reference provides complete documentation for all ListSync API endpoints. For additional help, refer to the [User Guide](user-guide.md) or [Troubleshooting Guide](troubleshooting.md).
+
+## 📎 Additional Endpoints (merged from legacy api.md)
+
+### Get Log Categories
+```http
+GET /api/logs/categories
+```
+
+Returns available log categories and their counts.
+
+### Get Log Statistics
+```http
+GET /api/logs/stats
+```
+
+Returns log file statistics and recent activity summary.
+
+### Sync Interval from Environment
+```http
+POST /api/sync-interval/sync-from-env
+```
+
+Synchronizes sync interval from environment variables.
+
+### Get Seerr Configuration
+```http
+GET /api/overseerr/config
+```
+
+Returns Seerr configuration details.
+
+## 🌍 Timezone & Localization
+
+### Get Supported Timezones
+```http
+GET /api/timezone/supported
+```
+
+Returns list of supported timezones.
+
+### Get Current Timezone
+```http
+GET /api/timezone/current
+```
+
+Returns current system timezone information.
+
+### Validate Timezone
+```http
+POST /api/timezone/validate
+```
+
+**Request Body**:
+```json
+{
+  "timezone": "America/New_York"
+}
+```
+
+Validates a timezone identifier.
+
+## 📈 Data Endpoints
+
+### Get Recent Activity
+```http
+GET /api/activity/recent
+```
+
+**Query Parameters**:
+- `limit`: Number of activities to return (default: 50)
+- `offset`: Pagination offset (default: 0)
+
+Returns recent sync activities and operations.
+
+### Get Processed Items
+```http
+GET /api/processed
+```
+
+**Query Parameters**:
+- `page`: Page number (default: 1)
+- `limit`: Items per page (default: 50)
+- `status_filter`: Filter by status
+- `media_type_filter`: Filter by media type
+
+Returns items that have been processed.
+
+### Get Failed Items
+```http
+GET /api/failures
+```
+
+Returns items that failed to sync with error details.
+
+### Get Successful Items
+```http
+GET /api/successful
+```
+
+Returns items that were successfully requested.
+
+### Get Requested Items
+```http
+GET /api/requested
+```
+
+Returns items that were requested in Seerr.
+
+## 📁 Response Formats
+
+### Standard Success Response 
+```json
+{
+  "success": true,
+  "message": "Operation completed successfully",
+  "data": { ... }
+}
+```
+
+### Pagination Response
+```json
+{
+  "items": [ ... ],
+  "pagination": {
+    "page": 1,
+    "limit": 50,
+    "total_items": 250,
+    "total_pages": 5,
+    "has_next": true,
+    "has_prev": false
+  }
+}
+```
+
+### Error Response
+```json
+{
+  "success": false,
+  "error": "Error description",
+  "detail": "Detailed error information",
+  "error_code": "ERROR_CODE"
+}
+```

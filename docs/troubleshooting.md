@@ -1,6 +1,6 @@
-# Troubleshooting Guide
+# Troubleshooting Guide - Complete ListSync Diagnostics
 
-This guide helps you diagnose and resolve common issues with ListSync. Follow the steps systematically for the best results.
+This comprehensive troubleshooting guide helps you diagnose and resolve common issues with ListSync using systematic diagnostic flows and detailed solutions.
 
 ## 📋 Table of Contents
 
@@ -13,7 +13,7 @@ This guide helps you diagnose and resolve common issues with ListSync. Follow th
 7. [List Provider Issues](#list-provider-issues)
 8. [Docker-Specific Issues](#docker-specific-issues)
 9. [Manual Installation Issues](#manual-installation-issues)
-10. [Debugging Tools](#debugging-tools)
+10. [Advanced Debugging](#advanced-debugging)
 11. [Getting Help](#getting-help)
 
 ## 🔍 Quick Diagnostics
@@ -28,6 +28,7 @@ flowchart TD
     CheckType -->|Sync not working| SyncIssue[Sync Problem]
     CheckType -->|Can't connect| ConnIssue[Connection Problem]
     CheckType -->|Slow performance| PerfIssue[Performance Problem]
+    CheckType -->|Container issues| DockerIssue[Docker Problem]
     
     WebIssue --> CheckPort{Port 3222 accessible?}
     CheckPort -->|No| FixPort[Check port mapping<br/>& firewall]
@@ -50,6 +51,12 @@ flowchart TD
     PerfIssue --> CheckResources{High resource usage?}
     CheckResources -->|Yes| OptimizeResources[Reduce sync interval<br/>or list sizes]
     CheckResources -->|No| CheckDatabase[Check database<br/>for issues]
+    
+    DockerIssue --> CheckDocker{Docker running?}
+    CheckDocker -->|No| StartDocker[Start Docker service]
+    CheckDocker -->|Yes| CheckImages{Images available?}
+    CheckImages -->|No| PullImages[Pull images:<br/>docker-compose pull]
+    CheckImages -->|Yes| CheckLogs[Check container logs]
     
     style Start fill:#4CAF50
     style FixPort fill:#2196F3
@@ -80,106 +87,167 @@ curl -H "X-Api-Key: your-api-key" http://your-overseerr-url/api/v1/status
 
 ### Status Indicators
 
-| Component | Healthy | Unhealthy | Check |
-|-----------|---------|-----------|--------|
-| **Database** | ✅ Connected | ❌ Connection failed | File exists, writable |
-| **Process** | ✅ Running | ❌ Not running | ListSync process active |
-| **Seerr** | ✅ Connected | ❌ Connection failed | API key valid, URL accessible |
-| **Web UI** | ✅ Accessible | ❌ Not loading | Port 3222 accessible |
-| **API** | ✅ Responding | ❌ Not responding | Port 4222 accessible |
+| Component | Healthy | Unhealthy | Check Command |
+|-----------|---------|-----------|---------------|
+| **Database** | ✅ Connected | ❌ Connection failed | `curl localhost:4222/api/system/health` |
+| **Process** | ✅ Running | ❌ Not running | `docker-compose ps` |
+| **Seerr** | ✅ Connected | ❌ Connection failed | `curl -H "X-Api-Key: key" http://overseerr-url/api/v1/status` |
+| **Web UI** | ✅ Accessible | ❌ Not loading | `curl -I localhost:3222` |
+| **API** | ✅ Responding | ❌ Not responding | `curl localhost:4222/api/system/health` |
 
 ## 🚨 Common Issues
 
 ### "No lists configured" Error
 
-**Symptoms**: Sync fails with "No lists configured" message
+#### Symptoms
+- Sync fails with "No lists configured" message
+- Dashboard shows 0 lists
+- API returns empty lists array
 
-**Causes**:
+#### Causes
 - Environment variables not set
 - Database not properly initialized
-- Configuration file missing
+- Configuration file missing or corrupted
 
-**Solutions**:
-1. **Check environment variables**:
-   ```bash
-   # Verify lists are configured
-   echo $IMDB_LISTS
-   echo $TRAKT_LISTS
-   ```
+#### Solutions
 
-2. **Add lists via web interface**:
-   - Go to http://localhost:3222/dashboard/lists
-   - Click "Add New List"
-   - Enter your list details
+**1. Check Environment Variables**
+```bash
+# Verify lists are configured
+echo $IMDB_LISTS
+echo $TRAKT_LISTS
+echo $LETTERBOXD_LISTS
 
-3. **Add lists via environment**:
-   ```bash
-   # Add to .env file
-   IMDB_LISTS=top,boxoffice
-   
-   # Restart container
-   docker-compose restart
-   ```
+# Check .env file
+cat .env | grep -E "(IMDB|TRAKT|LETTERBOXD|MDBLIST|STEVENLU)_LISTS"
+```
+
+**2. Add Lists via Web Interface**
+- Go to http://localhost:3222/dashboard/lists
+- Click "Add New List"
+- Enter your list details
+- Save configuration
+
+**3. Add Lists via Environment**
+```bash
+# Add to .env file
+IMDB_LISTS=top,boxoffice
+TRAKT_SPECIAL_LISTS=trending:movies
+
+# Restart container
+docker-compose restart
+```
+
+**4. Verify Database**
+```bash
+# Check database file exists
+ls -la data/list_sync.db
+
+# Check database contents
+sqlite3 data/list_sync.db "SELECT * FROM lists;"
+```
 
 ### "Already available" for Everything
 
-**Symptoms**: All items show as "already available" even for new content
+#### Symptoms
+- All items show as "already available" even for new content
+- No items are being requested
+- Sync completes but no new requests made
 
-**Causes**:
+#### Causes
 - Items already exist in your media library
 - Seerr has different availability rules
 - 4K vs standard quality mismatch
+- Cached data showing outdated status
 
-**Solutions**:
-1. **Check Seerr directly**:
-   - Log into Seerr web interface
-   - Search for the specific titles
-   - Verify their actual status
+#### Solutions
 
-2. **Review 4K settings**:
-   ```bash
-   # Check your 4K setting
-   OVERSEERR_4K=false  # or true
-   ```
+**1. Check Seerr Directly**
+- Log into Seerr web interface
+- Search for the specific titles
+- Verify their actual status
+- Check if they're already requested or available
 
-3. **Clear cache and retry**:
-   ```bash
-   # Restart with fresh data
-   docker-compose down
-   docker volume prune
-   docker-compose up -d
-   ```
+**2. Review 4K Settings**
+```bash
+# Check your 4K setting
+OVERSEERR_4K=false  # or true
+
+# Test with different 4K setting
+# Edit .env and restart
+docker-compose restart
+```
+
+**3. Clear Cache and Retry**
+```bash
+# Restart with fresh data
+docker-compose down
+docker volume prune
+docker-compose up -d
+
+# Or clear specific cache
+rm -rf data/cache/*
+```
+
+**4. Check Item Status in Database**
+```bash
+# Check what's in the database
+sqlite3 data/list_sync.db "SELECT title, status, last_synced FROM synced_items ORDER BY last_synced DESC LIMIT 10;"
+```
 
 ### Sync Stops After Few Items
 
-**Symptoms**: Sync process stops after processing only a few items
+#### Symptoms
+- Sync process stops after processing only a few items
+- No error messages in logs
+- Sync status shows as "completed" but incomplete
 
-**Causes**:
+#### Causes
 - Rate limiting from list providers
-- Memory issues
+- Memory issues causing crashes
 - Network timeouts
 - Selenium/browser crashes
+- Database locks
 
-**Solutions**:
-1. **Check for rate limiting**:
-   ```bash
-   # Look for rate limit messages in logs
-   docker-compose logs | grep -i "rate\|limit\|429"
-   ```
+#### Solutions
 
-2. **Increase memory allocation**:
-   ```yaml
-   # In docker-compose.yml
-   services:
-     listsync-full:
-       mem_limit: 2g  # Increase memory limit
-   ```
+**1. Check for Rate Limiting**
+```bash
+# Look for rate limit messages in logs
+docker-compose logs | grep -i "rate\|limit\|429"
 
-3. **Reduce concurrent processing**:
-   ```bash
-   # Reduce special list limits
-   TRAKT_SPECIAL_ITEMS_LIMIT=20  # Lower from default
-   ```
+# Check provider-specific logs
+docker-compose logs | grep -i "imdb\|trakt\|letterboxd"
+```
+
+**2. Increase Memory Allocation**
+```yaml
+# In docker-compose.yml
+services:
+  listsync-full:
+    mem_limit: 2g
+    mem_reservation: 1g
+```
+
+**3. Reduce Concurrent Processing**
+```bash
+# Reduce special list limits
+TRAKT_SPECIAL_ITEMS_LIMIT=20  # Lower from default 50
+
+# Reduce parallel workers
+MAX_WORKERS=2  # Lower from default 4
+```
+
+**4. Check Resource Usage**
+```bash
+# Monitor container resources
+docker stats listsync-full
+
+# Check system resources
+htop
+free -h
+df -h
+```
 
 ## 🔌 Connection Problems
 
@@ -221,85 +289,134 @@ flowchart TD
 
 ### Cannot Connect to Seerr
 
-**Error Messages**:
+#### Error Messages
 - "Connection refused"
 - "Host unreachable"
 - "Invalid API key"
+- "Timeout connecting to Seerr"
 
-**Debugging Steps**:
+#### Debugging Steps
 
-1. **Test network connectivity**:
-   ```bash
-   # From inside container
-   docker exec -it listsync-full curl http://your-overseerr-url
-   
-   # Test specific API endpoint
-   curl -H "X-Api-Key: your-key" http://your-overseerr-url/api/v1/status
-   ```
+**1. Test Network Connectivity**
+```bash
+# From inside container
+docker exec -it listsync-full curl http://your-overseerr-url
 
-2. **Check API key**:
-   ```bash
-   # Get API key from Seerr
-   # Settings → General → API Key
-   
-   # Test in browser
-   http://your-overseerr-url/api/v1/status?apikey=your-key
-   ```
+# Test specific API endpoint
+curl -H "X-Api-Key: your-key" http://your-overseerr-url/api/v1/status
 
-3. **Verify URL format**:
-   ```bash
-   # Correct formats
-   OVERSEERR_URL=http://192.168.1.100:5055
-   OVERSEERR_URL=https://overseerr.yourdomain.com
-   
-   # Incorrect (missing protocol)
-   OVERSEERR_URL=overseerr.yourdomain.com  # ❌
-   ```
+# Test from host machine
+curl -H "X-Api-Key: your-key" http://your-overseerr-url/api/v1/status
+```
 
-4. **Docker networking**:
-   ```bash
-   # If Seerr is also in Docker
-   OVERSEERR_URL=http://overseerr:5055  # Use container name
-   
-   # Check Docker network
-   docker network ls
-   docker network inspect list-sync_default
-   ```
+**2. Check API Key**
+```bash
+# Get API key from Seerr
+# Settings → General → API Key
+
+# Test in browser
+http://your-overseerr-url/api/v1/status?apikey=your-key
+
+# Test with curl
+curl "http://your-overseerr-url/api/v1/status?apikey=your-key"
+```
+
+**3. Verify URL Format**
+```bash
+# Correct formats
+OVERSEERR_URL=http://192.168.1.100:5055
+OVERSEERR_URL=https://overseerr.yourdomain.com
+OVERSEERR_URL=http://overseerr:5055  # Docker container name
+
+# Incorrect (missing protocol)
+OVERSEERR_URL=overseerr.yourdomain.com  # ❌
+OVERSEERR_URL=overseerr.yourdomain.com/  # ❌ (trailing slash)
+```
+
+**4. Docker Networking**
+```bash
+# If Seerr is also in Docker
+OVERSEERR_URL=http://overseerr:5055  # Use container name
+
+# Check Docker network
+docker network ls
+docker network inspect list-sync_default
+
+# Test container-to-container connectivity
+docker exec -it listsync-full ping overseerr
+```
+
+**5. Firewall and Network Issues**
+```bash
+# Check if port is accessible
+telnet your-overseerr-url 5055
+
+# Check firewall rules
+sudo ufw status
+sudo iptables -L
+
+# Check if service is listening
+netstat -tlnp | grep 5055
+```
 
 ### Web Interface Not Loading
 
-**Symptoms**: 
+#### Symptoms
 - http://localhost:3222 not accessible
 - "Connection refused" in browser
 - Blank page or loading indefinitely
+- 502 Bad Gateway error
 
-**Solutions**:
+#### Solutions
 
-1. **Check container status**:
-   ```bash
-   docker-compose ps
-   # Should show "Up" status for listsync-full
-   ```
+**1. Check Container Status**
+```bash
+docker-compose ps
+# Should show "Up" status for listsync-full
 
-2. **Check port mapping**:
-   ```bash
-   # Verify ports are exposed
-   docker-compose config | grep -A5 ports
-   
-   # Check if port is in use
-   netstat -tlnp | grep :3222
-   ```
+# Check container logs
+docker-compose logs listsync-full
+```
 
-3. **Check logs**:
-   ```bash
-   # Look for frontend startup issues
-   docker-compose logs listsync-full | grep -i frontend
-   ```
+**2. Check Port Mapping**
+```bash
+# Verify ports are exposed
+docker-compose config | grep -A5 ports
 
-4. **Restart container**:
-   ```bash
-   docker-compose restart listsync-full
-   ```
+# Check if port is in use
+netstat -tlnp | grep :3222
+
+# Test port accessibility
+curl -I http://localhost:3222
+```
+
+**3. Check Frontend Logs**
+```bash
+# Look for frontend startup issues
+docker-compose logs listsync-full | grep -i frontend
+docker-compose logs listsync-full | grep -i nuxt
+docker-compose logs listsync-full | grep -i error
+```
+
+**4. Restart Container**
+```bash
+# Restart specific container
+docker-compose restart listsync-full
+
+# Or restart all services
+docker-compose down
+docker-compose up -d
+```
+
+**5. Check Resource Usage**
+```bash
+# Check if container has enough resources
+docker stats listsync-full
+
+# Check system resources
+free -h
+df -h
+```
 
 ## 🔄 Sync Issues
 
@@ -356,553 +473,869 @@ flowchart TD
 
 ### Lists Not Being Fetched
 
-**Symptoms**: Lists show 0 items or "Failed to fetch"
+#### Symptoms
+- Lists show 0 items or "Failed to fetch"
+- Error messages about list access
+- Timeout errors when fetching lists
 
-**Debugging**:
+#### Debugging
 
-1. **Check list accessibility**:
-   ```bash
-   # Test list URLs manually in browser
-   https://www.imdb.com/chart/top
-   https://www.imdb.com/list/ls123456789
-   ```
-
-2. **Verify list IDs**:
-   ```bash
-   # IMDb list examples
-   IMDB_LISTS=top                    # ✅ Chart
-   IMDB_LISTS=ls123456789           # ✅ List ID
-   IMDB_LISTS=https://www.imdb.com/list/ls123456789  # ✅ Full URL
-   
-   # Trakt examples  
-   TRAKT_LISTS=123456               # ✅ Numeric ID
-   TRAKT_SPECIAL_LISTS=trending:movies  # ✅ Special format
-   ```
-
-3. **Check for browser issues**:
-   ```bash
-   # Look for Selenium errors
-   docker-compose logs | grep -i "selenium\|chrome\|webdriver"
-   ```
-
-### Stuck on "Sync in Progress"
-
-**Symptoms**: Every list card shows "Sync in Progress..." with the sync button
-disabled, and the sidebar reads "Syncing all", long after the lists finished
-syncing. Nothing clears it short of restarting the container.
-
-**Cause**: A sync that dies without finishing - a crash, a kill, a container
-restart mid-run - leaves its record in the database marked as in progress, and
-the dashboard reports that record as a running sync.
-
-**What happens now**: A running sync updates a heartbeat every 30 seconds. A
-record that stops being updated is closed out automatically as `interrupted`,
-so the dashboard returns to idle within about 15 minutes of the sync dying, and
-immediately when the process that owned it is gone.
-
-**Checking it**:
-
+**1. Check List Accessibility**
 ```bash
-# Should read "is_running": false when no sync is running
-curl -s http://localhost:4222/api/sync/status/live
-
-# Records closed out automatically are logged
-docker-compose logs listsync-full | grep -i "stale sync record"
+# Test list URLs manually in browser
+https://www.imdb.com/chart/top
+https://www.imdb.com/list/ls123456789
+https://trakt.tv/lists/123456
+https://letterboxd.com/username/list-name
 ```
 
-**Tuning**: Set `LISTSYNC_SYNC_STALE_MINUTES` to change how long a sync may go
-silent before its record is closed out. The default of 15 minutes suits most
-setups; raise it only if you see live syncs being marked interrupted.
+**2. Verify List IDs**
+```bash
+# IMDb list examples
+IMDB_LISTS=top                    # ✅ Chart
+IMDB_LISTS=ls123456789           # ✅ List ID
+IMDB_LISTS=https://www.imdb.com/list/ls123456789  # ✅ Full URL
+
+# Trakt examples  
+TRAKT_LISTS=123456               # ✅ Numeric ID
+TRAKT_SPECIAL_LISTS=trending:movies  # ✅ Special format
+```
+
+**3. Check for Browser Issues**
+```bash
+# Look for Selenium errors
+docker-compose logs | grep -i "selenium\|chrome\|webdriver"
+
+# Check Chrome installation in container
+docker exec -it listsync-full google-chrome --version
+```
+
+**4. Test Individual Providers**
+```bash
+# Test IMDb provider
+docker exec -it listsync-full python -c "
+from list_sync.providers.imdb import fetch_imdb_list
+print(fetch_imdb_list('top'))
+"
+
+# Test Trakt provider
+docker exec -it listsync-full python -c "
+from list_sync.providers.trakt import fetch_trakt_list
+print(fetch_trakt_list('123456'))
+"
+```
 
 ### Slow Sync Performance
 
-**Symptoms**: Syncs take very long time to complete
+#### Symptoms
+- Syncs take very long time to complete
+- High CPU or memory usage
+- Timeout errors during sync
 
-**Optimization Steps**:
+#### Optimization Steps
 
-1. **Reduce list sizes**:
-   ```bash
-   # Limit special lists
-   TRAKT_SPECIAL_ITEMS_LIMIT=25  # Reduce from 50+
-   
-   # Use fewer lists initially
-   IMDB_LISTS=top  # Start with one list
-   ```
+**1. Reduce List Sizes**
+```bash
+# Limit special lists
+TRAKT_SPECIAL_ITEMS_LIMIT=25  # Reduce from 50+
 
-2. **Increase sync interval**:
-   ```bash
-   # Sync less frequently
-   SYNC_INTERVAL=24  # Once per day instead of hourly
-   ```
+# Use fewer lists initially
+IMDB_LISTS=top  # Start with one list
+```
 
-3. **Monitor resource usage**:
-   ```bash
-   # Check Docker stats
-   docker stats listsync-full
-   
-   # Check system resources
-   htop
-   ```
+**2. Increase Sync Interval**
+```bash
+# Sync less frequently
+SYNC_INTERVAL=24  # Once per day instead of hourly
+```
+
+**3. Monitor Resource Usage**
+```bash
+# Check Docker stats
+docker stats listsync-full
+
+# Check system resources
+htop
+iostat -x 1
+```
+
+**4. Optimize Database**
+```bash
+# Check database size
+ls -lh data/list_sync.db
+
+# Optimize database
+sqlite3 data/list_sync.db "VACUUM; ANALYZE;"
+
+# Check for database locks
+sqlite3 data/list_sync.db "PRAGMA database_list;"
+```
 
 ### Title Matching Issues
 
-**Symptoms**: Many items showing as "not found" that should exist
+#### Symptoms
+- Many items showing as "not found" that should exist
+- Low success rate in sync results
+- Items found but not requested
 
-**Debugging**:
+#### Debugging
 
-1. **Check Seerr search**:
-   - Manually search for failing titles in Seerr
-   - Note any differences in title format
+**1. Check Seerr Search**
+- Manually search for failing titles in Seerr
+- Note any differences in title format
+- Check if items exist in Seerr database
 
-2. **Enable debug logging**:
-   ```bash
-   # Add to .env
-   LOG_LEVEL=DEBUG
-   
-   # Restart and check logs for matching details
-   docker-compose restart
-   docker-compose logs | grep -i "matching\|similarity"
-   ```
+**2. Enable Debug Logging**
+```bash
+# Add to .env
+LOG_LEVEL=DEBUG
+VERBOSE_LOGGING=true
 
-3. **Year matching issues**:
-   ```bash
-   # Look for year-related matching problems
-   docker-compose logs | grep -i "year"
-   ```
+# Restart and check logs for matching details
+docker-compose restart
+docker-compose logs | grep -i "matching\|similarity"
+```
+
+**3. Check Year Matching**
+```bash
+# Look for year-related matching problems
+docker-compose logs | grep -i "year"
+
+# Check if year data is available
+docker exec -it listsync-full python -c "
+from list_sync.providers.imdb import fetch_imdb_list
+items = fetch_imdb_list('top')
+for item in items[:5]:
+    print(f'{item[\"title\"]} ({item.get(\"year\", \"No year\")})')
+"
+```
+
+**4. Test Search Algorithm**
+```bash
+# Test search with specific titles
+docker exec -it listsync-full python -c "
+from list_sync.api.overseerr import OverseerrClient
+client = OverseerrClient('http://overseerr:5055', 'your-api-key', '1')
+result = client.search_media('The Shawshank Redemption', 'movie', 1994)
+print(result)
+"
+```
 
 ## ⚡ Performance Problems
 
 ### High Memory Usage
 
-**Symptoms**: Container uses excessive RAM, system becomes slow
+#### Symptoms
+- Container uses excessive RAM
+- System becomes slow or unresponsive
+- Out of memory errors
 
-**Solutions**:
+#### Solutions
 
-1. **Set memory limits**:
-   ```yaml
-   # In docker-compose.yml
-   services:
-     listsync-full:
-       mem_limit: 1g
-       mem_reservation: 512m
-   ```
+**1. Set Memory Limits**
+```yaml
+# In docker-compose.yml
+services:
+  listsync-full:
+    mem_limit: 1g
+    mem_reservation: 512m
+```
 
-2. **Reduce concurrent operations**:
-   ```bash
-   # Process fewer items at once
-   TRAKT_SPECIAL_ITEMS_LIMIT=20
-   
-   # Increase sync interval
-   SYNC_INTERVAL=12
-   ```
+**2. Reduce Concurrent Operations**
+```bash
+# Process fewer items at once
+TRAKT_SPECIAL_ITEMS_LIMIT=20
 
-3. **Clear browser cache**:
-   ```bash
-   # Restart container to clear browser cache
-   docker-compose restart
-   ```
+# Reduce parallel workers
+MAX_WORKERS=2
+
+# Increase sync interval
+SYNC_INTERVAL=12
+```
+
+**3. Clear Browser Cache**
+```bash
+# Restart container to clear browser cache
+docker-compose restart
+
+# Or clear specific cache directories
+docker exec -it listsync-full rm -rf /tmp/.com.google.Chrome*
+```
+
+**4. Monitor Memory Usage**
+```bash
+# Check container memory usage
+docker stats listsync-full
+
+# Check memory usage inside container
+docker exec -it listsync-full free -h
+docker exec -it listsync-full ps aux --sort=-%mem
+```
 
 ### High CPU Usage
 
-**Symptoms**: High CPU utilization, system becomes unresponsive
+#### Symptoms
+- High CPU utilization
+- System becomes unresponsive
+- Slow sync operations
 
-**Solutions**:
+#### Solutions
 
-1. **Check for infinite loops**:
-   ```bash
-   # Look for repeated error messages
-   docker-compose logs --tail=100 | grep -E "(ERROR|WARNING)" | sort | uniq -c
-   ```
+**1. Check for Infinite Loops**
+```bash
+# Look for repeated error messages
+docker-compose logs --tail=100 | grep -E "(ERROR|WARNING)" | sort | uniq -c
 
-2. **Reduce processing load**:
-   ```bash
-   # Sync less frequently
-   SYNC_INTERVAL=24
-   
-   # Use fewer lists
-   IMDB_LISTS=top  # Start with minimal lists
-   ```
+# Check for stuck processes
+docker exec -it listsync-full ps aux
+```
+
+**2. Reduce Processing Load**
+```bash
+# Sync less frequently
+SYNC_INTERVAL=24
+
+# Use fewer lists
+IMDB_LISTS=top  # Start with minimal lists
+
+# Reduce parallel processing
+MAX_WORKERS=1
+```
+
+**3. Check for Resource Contention**
+```bash
+# Check system load
+uptime
+htop
+
+# Check for other processes using CPU
+ps aux --sort=-%cpu | head -10
+```
+
+**4. Optimize Database Queries**
+```bash
+# Check database performance
+sqlite3 data/list_sync.db "EXPLAIN QUERY PLAN SELECT * FROM synced_items WHERE status = 'requested';"
+
+# Add indexes if needed
+sqlite3 data/list_sync.db "CREATE INDEX IF NOT EXISTS idx_status ON synced_items(status);"
+```
+
+### Slow Database Operations
+
+#### Symptoms
+- Slow sync operations
+- Database timeout errors
+- High I/O wait times
+
+#### Solutions
+
+**1. Optimize Database Settings**
+```bash
+# Set database pragmas
+sqlite3 data/list_sync.db "PRAGMA journal_mode = WAL;"
+sqlite3 data/list_sync.db "PRAGMA synchronous = NORMAL;"
+sqlite3 data/list_sync.db "PRAGMA cache_size = 10000;"
+sqlite3 data/list_sync.db "PRAGMA temp_store = memory;"
+```
+
+**2. Add Database Indexes**
+```sql
+-- Add indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_synced_items_last_synced ON synced_items(last_synced);
+CREATE INDEX IF NOT EXISTS idx_synced_items_status ON synced_items(status);
+CREATE INDEX IF NOT EXISTS idx_synced_items_overseerr_id ON synced_items(overseerr_id);
+CREATE INDEX IF NOT EXISTS idx_synced_items_imdb_id ON synced_items(imdb_id);
+```
+
+**3. Vacuum and Analyze Database**
+```bash
+# Optimize database
+sqlite3 data/list_sync.db "VACUUM; ANALYZE;"
+
+# Check database size
+ls -lh data/list_sync.db
+```
+
+**4. Check Disk I/O**
+```bash
+# Check disk usage
+df -h
+
+# Check I/O wait
+iostat -x 1
+
+# Check for disk errors
+dmesg | grep -i error
+```
 
 ## 🌐 Web Interface Issues
 
 ### Dashboard Shows Incorrect Data
 
-**Symptoms**: Wrong statistics, outdated information, missing data
+#### Symptoms
+- Wrong statistics displayed
+- Outdated information
+- Missing data
+- Inconsistent state
 
-**Solutions**:
+#### Solutions
 
-1. **Clear browser cache**:
-   - Hard refresh: Ctrl+F5 (Windows/Linux) or Cmd+Shift+R (Mac)
-   - Clear browser cache and cookies
+**1. Clear Browser Cache**
+- Hard refresh: Ctrl+F5 (Windows/Linux) or Cmd+Shift+R (Mac)
+- Clear browser cache and cookies
+- Try incognito/private mode
 
-2. **Check API connectivity**:
-   ```bash
-   # Test API directly
-   curl http://localhost:4222/api/system/health
-   curl http://localhost:4222/api/analytics/overview
-   ```
+**2. Check API Connectivity**
+```bash
+# Test API directly
+curl http://localhost:4222/api/system/health
+curl http://localhost:4222/api/analytics/overview
 
-3. **Restart frontend**:
-   ```bash
-   docker-compose restart listsync-full
-   ```
+# Check API response times
+curl -w "@curl-format.txt" -o /dev/null -s http://localhost:4222/api/system/health
+```
+
+**3. Restart Frontend**
+```bash
+# Restart container
+docker-compose restart listsync-full
+
+# Or restart just the frontend
+docker-compose restart listsync-full
+```
+
+**4. Check Data Consistency**
+```bash
+# Check database directly
+sqlite3 data/list_sync.db "SELECT COUNT(*) FROM synced_items;"
+sqlite3 data/list_sync.db "SELECT COUNT(*) FROM lists;"
+
+# Compare with API response
+curl http://localhost:4222/api/processed | jq '.total_items'
+```
 
 ### Real-time Updates Not Working
 
-**Symptoms**: Dashboard doesn't update automatically, manual refresh required
+#### Symptoms
+- Dashboard doesn't update automatically
+- Manual refresh required
+- WebSocket connection errors
 
-**Solutions**:
+#### Solutions
 
-1. **Check WebSocket connections**:
-   - Open browser developer tools
-   - Check Network tab for WebSocket connections
-   - Look for connection errors
+**1. Check WebSocket Connections**
+- Open browser developer tools
+- Check Network tab for WebSocket connections
+- Look for connection errors or timeouts
 
-2. **Verify server-sent events**:
-   ```bash
-   # Test SSE endpoint
-   curl http://localhost:4222/api/logs/stream
-   ```
+**2. Verify Server-Sent Events**
+```bash
+# Test SSE endpoint
+curl http://localhost:4222/api/logs/stream
 
-3. **Check CORS settings**:
-   ```bash
-   # Verify CORS configuration
-   CORS_ALLOWED_ORIGINS=http://localhost:3222
-   ```
+# Check for SSE errors in logs
+docker-compose logs | grep -i "sse\|websocket\|stream"
+```
+
+**3. Check CORS Settings**
+```bash
+# Verify CORS configuration
+CORS_ALLOWED_ORIGINS=http://localhost:3222
+CORS_ALLOWED_METHODS=GET,POST,PUT,DELETE,OPTIONS
+CORS_ALLOWED_HEADERS=Content-Type,Authorization,X-Requested-With
+```
+
+**4. Check Network Issues**
+```bash
+# Test network connectivity
+ping localhost
+telnet localhost 4222
+
+# Check for firewall issues
+sudo ufw status
+sudo iptables -L
+```
 
 ## 📚 List Provider Issues
 
 ### IMDb Lists
 
-**Common Issues**:
+#### Common Issues
 - "Access denied" errors
 - Empty results from valid lists
 - Slow loading times
+- CAPTCHA challenges
 
-**Solutions**:
-1. **Verify list is public**:
-   - Open list URL in incognito browser
-   - Ensure no login required
+#### Solutions
 
-2. **Check for CAPTCHA**:
-   ```bash
-   # Look for CAPTCHA-related messages
-   docker-compose logs | grep -i "captcha\|verification"
-   ```
+**1. Verify List is Public**
+- Open list URL in incognito browser
+- Ensure no login required
+- Check if list is still accessible
 
-3. **Use alternative format**:
-   ```bash
-   # Try different formats
-   IMDB_LISTS=ls123456789  # Instead of full URL
-   ```
+**2. Check for CAPTCHA**
+```bash
+# Look for CAPTCHA-related messages
+docker-compose logs | grep -i "captcha\|verification"
+
+# Check if Chrome is being detected
+docker-compose logs | grep -i "bot\|detected"
+```
+
+**3. Use Alternative Format**
+```bash
+# Try different formats
+IMDB_LISTS=ls123456789  # Instead of full URL
+IMDB_LISTS=https://www.imdb.com/list/ls123456789  # Full URL
+
+# Try different list types
+IMDB_LISTS=top  # Chart instead of user list
+```
+
+**4. Check Rate Limiting**
+```bash
+# Look for rate limit messages
+docker-compose logs | grep -i "rate\|limit\|429"
+
+# Add delays between requests
+IMDB_REQUEST_DELAY=2  # 2 seconds between requests
+```
 
 ### Trakt Lists
 
-**Common Issues**:
+#### Common Issues
 - Invalid list IDs
 - Special list format errors
 - Rate limiting
+- Authentication issues
 
-**Solutions**:
-1. **Verify list ID format**:
-   ```bash
-   # Regular lists (numeric)
-   TRAKT_LISTS=123456
-   
-   # Special lists (category:type)
-   TRAKT_SPECIAL_LISTS=trending:movies,popular:shows
-   ```
+#### Solutions
 
-2. **Check Trakt status**:
-   - Visit https://trakt.tv to ensure service is available
-   - Verify your list URLs work in browser
+**1. Verify List ID Format**
+```bash
+# Regular lists (numeric)
+TRAKT_LISTS=123456
+
+# Special lists (category:type)
+TRAKT_SPECIAL_LISTS=trending:movies,popular:shows
+
+# Check Trakt URL format
+# https://trakt.tv/lists/123456 -> use 123456
+```
+
+**2. Check Trakt Status**
+- Visit https://trakt.tv to ensure service is available
+- Verify your list URLs work in browser
+- Check Trakt API status
+
+**3. Handle Rate Limiting**
+```bash
+# Add delays between requests
+TRAKT_REQUEST_DELAY=1
+
+# Reduce concurrent requests
+TRAKT_MAX_CONCURRENT=2
+```
+
+**4. Check Authentication**
+```bash
+# Add Trakt API credentials if needed
+TRAKT_API_KEY=your_trakt_api_key
+TRAKT_CLIENT_ID=your_client_id
+```
 
 ### Letterboxd Lists
 
-**Common Issues**:
+#### Common Issues
 - Watchlist vs regular list confusion
 - User privacy settings
 - Pagination problems
+- Slow loading
 
-**Solutions**:
-1. **Use correct format**:
-   ```bash
-   # Regular lists
-   LETTERBOXD_LISTS=username/list-name
-   
-   # Watchlists
-   LETTERBOXD_LISTS=username/watchlist
-   ```
+#### Solutions
 
-2. **Check list privacy**:
-   - Ensure lists are public
-   - Test URLs in incognito browser
+**1. Use Correct Format**
+```bash
+# Regular lists
+LETTERBOXD_LISTS=username/list-name
+
+# Watchlists
+LETTERBOXD_LISTS=username/watchlist
+
+# Check URL format
+# https://letterboxd.com/username/list-name -> use username/list-name
+```
+
+**2. Check List Privacy**
+- Ensure lists are public
+- Test URLs in incognito browser
+- Verify user hasn't changed privacy settings
+
+**3. Handle Pagination**
+```bash
+# Increase pagination limit
+LETTERBOXD_PAGE_LIMIT=20
+
+# Add delays for pagination
+LETTERBOXD_PAGE_DELAY=2
+```
+
+**4. Check for Changes**
+- Verify list still exists
+- Check if user renamed the list
+- Ensure list hasn't been deleted
 
 ## 🐳 Docker-Specific Issues
 
-### Docker Troubleshooting Flowchart
-
-```mermaid
-flowchart TD
-    Start[Docker Issue] --> IssueType{What's the problem?}
-    
-    IssueType -->|Won't start| WontStart[Container won't start]
-    IssueType -->|Keeps restarting| Restarting[Container restarts]
-    IssueType -->|Volume issues| VolumeIssue[Volume/data issues]
-    IssueType -->|Network issues| NetworkIssue[Network problems]
-    
-    WontStart --> CheckPort{Port conflict?}
-    CheckPort -->|Yes| ChangePort[Change port in<br/>docker-compose.yml:<br/>8080:3222]
-    CheckPort -->|No| CheckPerms{Permission denied?}
-    CheckPerms -->|Yes| FixPerms[Add user to docker group:<br/>sudo usermod -aG docker $USER]
-    CheckPerms -->|No| CheckImage{Image exists?}
-    CheckImage -->|No| PullImage[Pull image:<br/>docker-compose pull]
-    CheckImage -->|Yes| CheckLogs[Check container logs:<br/>docker-compose logs]
-    
-    Restarting --> CheckExit[Check exit code:<br/>docker-compose ps]
-    CheckExit --> ViewLogs[View container logs:<br/>docker logs listsync-full]
-    ViewLogs --> FixError{Identify error<br/>in logs?}
-    FixError -->|Yes| ApplyFix[Apply specific fix<br/>based on error]
-    FixError -->|No| RunInteractive[Run interactive:<br/>docker-compose up]
-    
-    VolumeIssue --> CheckMount{Volume mounted?}
-    CheckMount -->|No| FixMount[Check docker-compose.yml<br/>volumes section]
-    CheckMount -->|Yes| CheckPermissions{Write permissions?}
-    CheckPermissions -->|No| ChmodData[Fix permissions:<br/>chmod 755 ./data]
-    CheckPermissions -->|Yes| CheckSELinux[Check SELinux:<br/>ls -laZ ./data]
-    
-    NetworkIssue --> CheckNetworking{Can ping host?}
-    CheckNetworking -->|No| FixNetwork[Check Docker network:<br/>docker network inspect]
-    CheckNetworking -->|Yes| CheckDNS{DNS working?}
-    CheckDNS -->|No| FixDNS[Add DNS to<br/>docker-compose.yml]
-    CheckDNS -->|Yes| CheckFirewall[Check firewall rules]
-    
-    ChangePort --> Restart[Restart container:<br/>docker-compose up -d]
-    FixPerms --> Restart
-    PullImage --> Restart
-    CheckLogs --> ApplyFix
-    RunInteractive --> ApplyFix
-    FixMount --> Restart
-    ChmodData --> Restart
-    CheckSELinux --> FixSELinux[Disable SELinux or<br/>add :Z to volume mount]
-    FixSELinux --> Restart
-    FixNetwork --> Restart
-    FixDNS --> Restart
-    CheckFirewall --> OpenPorts[Open required ports:<br/>3222, 4222]
-    OpenPorts --> Restart
-    ApplyFix --> Restart
-    Restart --> Success[Container running!]
-    
-    style Start fill:#FF9800
-    style Success fill:#4CAF50
-    style Restart fill:#2196F3
-```
-
 ### Container Won't Start
 
-**Error Messages**:
+#### Error Messages
 - "Port already in use"
 - "Permission denied"
 - "Image not found"
+- "Container exited with code 1"
 
-**Solutions**:
+#### Solutions
 
-1. **Port conflicts**:
-   ```bash
-   # Check what's using the port
-   sudo netstat -tlnp | grep :3222
-   
-   # Change ports in docker-compose.yml
-   ports:
-     - "8080:3222"  # Use different host port
-   ```
+**1. Port Conflicts**
+```bash
+# Check what's using the port
+sudo netstat -tlnp | grep :3222
+sudo netstat -tlnp | grep :4222
 
-2. **Permission issues**:
-   ```bash
-   # Fix Docker permissions
-   sudo chmod 666 /var/run/docker.sock
-   
-   # Add user to docker group
-   sudo usermod -aG docker $USER
-   # Log out and back in
-   ```
+# Change ports in docker-compose.yml
+ports:
+  - "8080:3222"  # Use different host port
+  - "8081:4222"
+```
 
-3. **Image issues**:
-   ```bash
-   # Pull latest image
-   docker-compose pull
-   
-   # Rebuild if using local build
-   docker-compose build --no-cache
-   ```
+**2. Permission Issues**
+```bash
+# Fix Docker permissions
+sudo chmod 666 /var/run/docker.sock
 
-### Volume Mount Issues
+# Add user to docker group
+sudo usermod -aG docker $USER
+# Log out and back in
 
-**Symptoms**: Configuration not persisting, data loss after restart
+# Fix file permissions
+sudo chown -R $USER:$USER .
+```
 
-**Solutions**:
+**3. Image Issues**
+```bash
+# Pull latest image
+docker-compose pull
 
-1. **Check volume permissions**:
-   ```bash
-   # Ensure data directory is writable
-   chmod 755 ./data
-   
-   # Check SELinux (if applicable)
-   ls -laZ ./data
-   ```
+# Rebuild if using local build
+docker-compose build --no-cache
 
-2. **Verify mount paths**:
-   ```bash
-   # Check volume configuration
-   docker-compose config | grep -A5 volumes
-   
-   # Inspect container mounts
-   docker inspect listsync-full | grep -A10 Mounts
-   ```
+# Check available images
+docker images | grep list-sync
+```
+
+**4. Resource Issues**
+```bash
+# Check available disk space
+df -h
+
+# Check available memory
+free -h
+
+# Clean up Docker resources
+docker system prune -a
+```
 
 ### Container Keeps Restarting
 
-**Symptoms**: Container starts then immediately exits, restart loop
+#### Symptoms
+- Container starts then immediately exits
+- Restart loop in docker-compose ps
+- Exit code 1 or 2
 
-**Debugging**:
+#### Debugging
 
-1. **Check exit codes**:
-   ```bash
-   # Look at container status
-   docker-compose ps
-   
-   # Check exit reason
-   docker logs listsync-full
-   ```
+**1. Check Exit Codes**
+```bash
+# Look at container status
+docker-compose ps
 
-2. **Run interactively**:
-   ```bash
-   # Start container without daemon mode
-   docker-compose up
-   
-   # Or run bash to debug
-   docker run -it --entrypoint bash ghcr.io/kahooli/list-sync:main
-   ```
+# Check exit reason
+docker logs listsync-full
+
+# Check container details
+docker inspect listsync-full
+```
+
+**2. Run Interactively**
+```bash
+# Start container without daemon mode
+docker-compose up
+
+# Or run bash to debug
+docker run -it --entrypoint bash ghcr.io/kahooli/list-sync:main
+```
+
+**3. Check Resource Limits**
+```bash
+# Check if container hit resource limits
+docker stats listsync-full
+
+# Check system resources
+htop
+free -h
+```
+
+**4. Check Dependencies**
+```bash
+# Check if required services are running
+docker-compose ps
+
+# Check network connectivity
+docker exec -it listsync-full ping google.com
+```
+
+### Volume Mount Issues
+
+#### Symptoms
+- Configuration not persisting
+- Data loss after restart
+- Permission denied errors
+
+#### Solutions
+
+**1. Check Volume Permissions**
+```bash
+# Ensure data directory is writable
+chmod 755 ./data
+chown -R $USER:$USER ./data
+
+# Check SELinux (if applicable)
+ls -laZ ./data
+```
+
+**2. Verify Mount Paths**
+```bash
+# Check volume configuration
+docker-compose config | grep -A5 volumes
+
+# Inspect container mounts
+docker inspect listsync-full | grep -A10 Mounts
+```
+
+**3. Check Volume Drivers**
+```bash
+# Check available volume drivers
+docker volume ls
+
+# Check volume details
+docker volume inspect list-sync_data
+```
+
+**4. Fix SELinux Issues**
+```bash
+# Check SELinux status
+sestatus
+
+# Fix SELinux context
+chcon -Rt svirt_sandbox_file_t ./data
+
+# Or disable SELinux temporarily
+sudo setenforce 0
+```
 
 ## 💻 Manual Installation Issues
 
 ### Python Version Problems
 
-**Error Messages**:
+#### Error Messages
 - "Python version not supported"
 - "Module not found"
 - "Syntax errors"
 
-**Solutions**:
+#### Solutions
 
-1. **Check Python version**:
-   ```bash
-   python3 --version  # Should be 3.8+
-   
-   # Install newer Python if needed
-   sudo apt install python3.12 python3.12-venv
-   ```
+**1. Check Python Version**
+```bash
+python3 --version  # Should be 3.12+
 
-2. **Virtual environment issues**:
-   ```bash
-   # Recreate virtual environment
-   rm -rf venv
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   ```
+# Install newer Python (Ubuntu)
+sudo apt install python3.12 python3.12-venv
+
+# Use specific Python version
+python3.12 -m venv venv
+```
+
+**2. Virtual Environment Issues**
+```bash
+# Recreate virtual environment
+rm -rf venv
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+**3. Module Import Issues**
+```bash
+# Check installed packages
+pip list
+
+# Reinstall requirements
+pip install -r requirements.txt --force-reinstall
+
+# Check Python path
+python3 -c "import sys; print(sys.path)"
+```
 
 ### Node.js/Frontend Issues
 
-**Common Problems**:
+#### Common Problems
 - Build failures
 - Dependency conflicts
 - Port conflicts
+- Module not found errors
 
-**Solutions**:
+#### Solutions
 
-1. **Node.js version**:
-   ```bash
-   node --version  # Should be 18+
-   
-   # Install/update Node.js
-   curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
-   sudo apt-get install -y nodejs
-   ```
+**1. Node.js Version**
+```bash
+node --version  # Should be 18+
 
-2. **Clean installation**:
-   ```bash
-   cd listsync-nuxt
-   rm -rf node_modules package-lock.json
-   npm cache clean --force
-   npm install
-   ```
+# Install/update Node.js
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+
+**2. Clean Installation**
+```bash
+cd listsync-nuxt
+rm -rf node_modules package-lock.json
+npm cache clean --force
+npm install
+```
+
+**3. Build Issues**
+```bash
+# Check build logs
+npm run build 2>&1 | tee build.log
+
+# Check for specific errors
+npm run build | grep -i error
+
+# Try different Node.js version
+nvm use 18
+npm install
+npm run build
+```
 
 ### Chrome/Selenium Issues
 
-**Error Messages**:
+#### Error Messages
 - "Chrome not found"
 - "WebDriver errors"
 - "Selenium timeouts"
+- "Chrome crashed"
 
-**Solutions**:
+#### Solutions
 
-1. **Install Chrome**:
-   ```bash
-   # Ubuntu/Debian
-   wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-   sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
-   sudo apt update
-   sudo apt install google-chrome-stable
-   ```
+**1. Install Chrome**
+```bash
+# Ubuntu/Debian
+wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
+sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+sudo apt update
+sudo apt install google-chrome-stable
+```
 
-2. **Fix dependencies**:
-   ```bash
-   # Install Chrome dependencies
-   sudo apt install libxss1 libappindicator1 libindicator7
-   ```
+**2. Fix Dependencies**
+```bash
+# Install Chrome dependencies
+sudo apt install libxss1 libappindicator1 libindicator7
 
-3. **Test Chrome**:
-   ```bash
-   # Test headless Chrome
-   google-chrome --headless --no-sandbox --disable-gpu --dump-dom https://google.com
-   ```
+# Install additional dependencies
+sudo apt install libnss3 libatk-bridge2.0-0 libdrm2 libxcomposite1 libxdamage1 libxrandr2 libgbm1 libxss1 libasound2
+```
 
-## 🛠️ Debugging Tools
+**3. Test Chrome**
+```bash
+# Test headless Chrome
+google-chrome --headless --no-sandbox --disable-gpu --dump-dom https://google.com
+
+# Test with Selenium
+python3 -c "
+from seleniumbase import SB
+with SB(uc=True, headless=True) as sb:
+    sb.open('https://google.com')
+    print('Chrome test successful')
+"
+```
+
+**4. Fix Permission Issues**
+```bash
+# Fix Chrome permissions
+sudo chmod +x /usr/bin/google-chrome
+
+# Fix user permissions
+sudo usermod -a -G audio,video $USER
+```
+
+## 🔧 Advanced Debugging
 
 ### Log Analysis
 
+#### Log Levels
+```bash
+# Set log level
+LOG_LEVEL=DEBUG  # DEBUG, INFO, WARNING, ERROR
+
+# Enable verbose logging
+VERBOSE_LOGGING=true
+
+# Enable specific log categories
+LOG_CATEGORIES=sync,providers,api
+```
+
+#### Log Analysis Commands
 ```bash
 # View real-time logs
 docker-compose logs -f listsync-full
 
 # Filter by log level
 docker-compose logs listsync-full | grep ERROR
+docker-compose logs listsync-full | grep WARNING
 
 # Search for specific terms
 docker-compose logs listsync-full | grep -i "overseerr\|sync\|error"
 
 # Last 100 lines
 docker-compose logs --tail=100 listsync-full
+
+# Logs from specific time
+docker-compose logs --since="2024-01-15T10:00:00" listsync-full
 ```
 
-### API Testing
-
+#### Log File Locations
 ```bash
-# Test all major endpoints
-curl http://localhost:4222/api/system/health
-curl http://localhost:4222/api/lists
-curl http://localhost:4222/api/analytics/overview
-curl http://localhost:4222/api/processed?limit=5
+# Docker logs
+docker-compose logs listsync-full
 
-# Test with verbose output
-curl -v http://localhost:4222/api/system/status
+# Application logs
+tail -f data/list_sync.log
+
+# System logs
+journalctl -u listsync-backend -f
+journalctl -u listsync-frontend -f
+
+# Supervisor logs
+tail -f logs/supervisord.log
 ```
 
-### Database Inspection
+### Database Debugging
 
+#### Database Inspection
 ```bash
-# Connect to database directly
+# Connect to database
 sqlite3 data/list_sync.db
 
 # View tables
@@ -913,26 +1346,32 @@ SELECT * FROM lists;
 
 # Check recent sync results
 SELECT * FROM synced_items ORDER BY last_synced DESC LIMIT 10;
+
+# Check sync statistics
+SELECT status, COUNT(*) FROM synced_items GROUP BY status;
+
+# Check database integrity
+PRAGMA integrity_check;
+
+# Check database size
+SELECT page_count * page_size as size FROM pragma_page_count(), pragma_page_size();
 ```
 
-### Container Debugging
-
+#### Database Performance
 ```bash
-# Enter running container
-docker exec -it listsync-full bash
+# Check slow queries
+sqlite3 data/list_sync.db "EXPLAIN QUERY PLAN SELECT * FROM synced_items WHERE status = 'requested';"
 
-# Check processes inside container
-docker exec -it listsync-full ps aux
+# Check indexes
+sqlite3 data/list_sync.db ".indices"
 
-# Check container resources
-docker stats listsync-full
-
-# Inspect container configuration
-docker inspect listsync-full
+# Analyze query performance
+sqlite3 data/list_sync.db "ANALYZE;"
 ```
 
-### Network Testing
+### Network Debugging
 
+#### Network Testing
 ```bash
 # Test connectivity from container
 docker exec -it listsync-full curl http://your-overseerr-url
@@ -942,38 +1381,92 @@ docker exec -it listsync-full nslookup your-overseerr-url
 
 # Test specific ports
 docker exec -it listsync-full nc -zv your-overseerr-url 5055
+
+# Check routing
+docker exec -it listsync-full ip route
+```
+
+#### Network Configuration
+```bash
+# Check Docker network
+docker network ls
+docker network inspect list-sync_default
+
+# Check container networking
+docker exec -it listsync-full ip addr
+docker exec -it listsync-full netstat -tlnp
+```
+
+### Performance Profiling
+
+#### Resource Monitoring
+```bash
+# Monitor container resources
+docker stats listsync-full
+
+# Monitor system resources
+htop
+iostat -x 1
+vmstat 1
+
+# Monitor disk I/O
+iotop
+```
+
+#### Application Profiling
+```bash
+# Enable performance logging
+PERFORMANCE_LOGGING=true
+
+# Monitor specific operations
+docker exec -it listsync-full python -c "
+import cProfile
+import pstats
+from list_sync.main import run_sync
+cProfile.run('run_sync()', 'profile.stats')
+p = pstats.Stats('profile.stats')
+p.sort_stats('cumulative').print_stats(10)
+"
 ```
 
 ## 🆘 Getting Help
 
 ### Before Asking for Help
 
-1. **Gather information**:
-   ```bash
-   # System info
-   docker --version
-   docker-compose --version
-   
-   # Container status
-   docker-compose ps
-   
-   # Recent logs
-   docker-compose logs --tail=50 listsync-full > listsync-logs.txt
-   ```
+#### 1. Gather Information
+```bash
+# System info
+uname -a
+docker --version
+docker-compose --version
 
-2. **Test basic functionality**:
-   ```bash
-   # Health check
-   curl http://localhost:4222/api/system/health
-   
-   # Manual sync test
-   curl -X POST http://localhost:4222/api/sync/trigger
-   ```
+# Container status
+docker-compose ps
 
-3. **Sanitize sensitive information**:
-   - Remove API keys from logs
-   - Replace URLs with placeholders
-   - Remove personal list IDs
+# Recent logs
+docker-compose logs --tail=50 listsync-full > listsync-logs.txt
+
+# Configuration
+cp .env .env.backup
+```
+
+#### 2. Test Basic Functionality
+```bash
+# Health check
+curl http://localhost:4222/api/system/health
+
+# Manual sync test
+curl -X POST http://localhost:4222/api/sync/trigger
+
+# Check system status
+curl http://localhost:4222/api/system/status
+```
+
+#### 3. Sanitize Sensitive Information
+- Remove API keys from logs
+- Replace URLs with placeholders
+- Remove personal list IDs
+- Remove any personal information
 
 ### Information to Include
 
@@ -987,31 +1480,90 @@ When reporting issues, include:
 - **Steps to reproduce**
 - **Expected vs actual behavior**
 - **Recent logs** (relevant portions)
+- **System resources** (RAM, CPU, disk space)
 
 ### Support Channels
 
-1. **GitHub Issues**: [https://github.com/soluify/list-sync/issues](https://github.com/soluify/list-sync/issues)
-   - Bug reports
-   - Feature requests
-   - Configuration help
+#### 1. GitHub Issues
+- **URL**: https://github.com/Woahai321/list-sync/issues
+- **Use for**: Bug reports, feature requests, configuration help
+- **Response time**: 1-3 business days
 
-2. **GitHub Discussions**: [https://github.com/soluify/list-sync/discussions](https://github.com/soluify/list-sync/discussions)
-   - General questions
-   - Setup help
-   - Community support
+#### 2. GitHub Discussions
+- **URL**: https://github.com/Woahai321/list-sync/discussions
+- **Use for**: General questions, setup help, community support
+- **Response time**: Community-driven
 
-3. **Discord**: [Join our Discord](https://discord.gg/your-invite-link)
-   - Real-time help
-   - Community chat
-   - Quick questions
+#### 3. Self-Help Resources
+- **Documentation**: This comprehensive guide
+- **API Documentation**: http://localhost:4222/docs
+- **Example Configurations**: Check `envsample.txt`
+- **Source Code**: Review the codebase for understanding
 
-### Self-Help Resources
+### Creating Effective Issue Reports
 
-- **Documentation**: Read all docs in the `/docs` folder
-- **Example Configurations**: Check `envsample.txt` for examples
-- **API Documentation**: Use http://localhost:4222/docs for API reference
-- **Source Code**: Review the codebase for understanding implementation
+#### Issue Title
+```
+[BUG] Sync fails with "Connection refused" error
+[FEATURE] Add support for custom list providers
+[CONFIG] Help with multi-instance setup
+```
+
+#### Issue Body Template
+```markdown
+## Description
+Brief description of the issue
+
+## Environment
+- OS: Ubuntu 20.04
+- Docker: 20.10.21
+- ListSync: latest
+- Installation method: Docker
+
+## Configuration
+```bash
+# Sanitized .env file
+OVERSEERR_URL=https://overseerr.example.com
+OVERSEERR_API_KEY=***sanitized***
+IMDB_LISTS=top
+```
+
+## Steps to Reproduce
+1. Start ListSync with docker-compose up -d
+2. Go to dashboard and click "Sync Now"
+3. See error message
+
+## Expected Behavior
+Sync should complete successfully
+
+## Actual Behavior
+Sync fails with "Connection refused" error
+
+## Logs
+```
+# Relevant log excerpts
+2024-01-15T10:30:00Z ERROR: Connection refused
+```
+
+## Additional Context
+Any other relevant information
+```
+
+### Community Support
+
+#### Best Practices
+1. **Search first** - Check existing issues and discussions
+2. **Be specific** - Provide detailed information
+3. **Be patient** - Community support is volunteer-based
+4. **Be respectful** - Follow community guidelines
+5. **Help others** - Share solutions when you find them
+
+#### Contributing Solutions
+- Share working configurations
+- Document solutions for common issues
+- Improve documentation
+- Submit pull requests for fixes
 
 ---
 
-**Remember**: Most issues are configuration-related. Double-check your environment variables, API keys, and network connectivity before seeking help. 
+This comprehensive troubleshooting guide covers all major issues you might encounter with ListSync. For additional help, refer to the [User Guide](user-guide.md) or [API Reference](api-reference.md).

@@ -1,120 +1,218 @@
-# User Guide
+# User Guide - Complete ListSync Usage Guide
 
-This comprehensive guide covers all aspects of using ListSync, from initial setup to advanced configuration and monitoring.
+This comprehensive guide covers all aspects of using ListSync, from initial setup to advanced configuration and monitoring. Each section includes detailed step-by-step workflows with visual diagrams.
 
-## Table of Contents
+## 📋 Table of Contents
 
 1. [Getting Started](#getting-started)
-2. [Web Dashboard](#web-dashboard)
+2. [Web Dashboard Overview](#web-dashboard-overview)
 3. [List Management](#list-management)
 4. [Sync Operations](#sync-operations)
 5. [Analytics & Monitoring](#analytics--monitoring)
 6. [Configuration Management](#configuration-management)
-7. [Troubleshooting](#troubleshooting)
-8. [Best Practices](#best-practices)
+7. [Advanced Features](#advanced-features)
+8. [Troubleshooting](#troubleshooting)
+9. [Best Practices](#best-practices)
 
-## Getting Started
+## 🚀 Getting Started
 
 ### First-Time Setup Workflow
 
 ```mermaid
-flowchart LR
-    A[Start] --> B[Install ListSync]
-    B --> C[Configure .env file]
-    C --> D[Add API credentials]
-    D --> E[Add first list]
-    E --> F[Start containers]
-    F --> G[Access dashboard<br/>:3222]
-    G --> H[Test sync]
-    H --> I{Sync successful?}
-    I -->|Yes| J[Ready to use!]
-    I -->|No| K[Check troubleshooting]
-    K --> L[Fix issues]
-    L --> H
+flowchart TD
+    Start[Start ListSync Setup] --> CheckReq[Check Prerequisites]
+    CheckReq --> Prereq{Prerequisites Met?}
+    Prereq -->|No| InstallReq[Install Prerequisites<br/>- Docker & Docker Compose<br/>- Seerr running<br/>- Internet connection]
+    Prereq -->|Yes| CloneRepo[Clone Repository]
     
-    style A fill:#4CAF50
-    style J fill:#4CAF50
-    style K fill:#FF9800
-    style H fill:#2196F3
+    InstallReq --> CloneRepo
+    CloneRepo --> CreateEnv[Create .env file]
+    CreateEnv --> ConfigBasic[Configure Basic Settings<br/>- OVERSEERR_URL<br/>- OVERSEERR_API_KEY<br/>- IMDB_LISTS=top]
+    
+    ConfigBasic --> StartContainers[Start Containers<br/>docker-compose up -d]
+    StartContainers --> WaitStart[Wait for Startup<br/>~30 seconds]
+    WaitStart --> CheckHealth[Check System Health<br/>curl localhost:4222/api/system/health]
+    
+    CheckHealth --> HealthOK{Health Check OK?}
+    HealthOK -->|No| Troubleshoot[Check logs and troubleshoot<br/>docker-compose logs -f]
+    HealthOK -->|Yes| AccessDashboard[Access Dashboard<br/>http://localhost:3222]
+    
+    Troubleshoot --> FixIssues[Fix Issues]
+    FixIssues --> CheckHealth
+    
+    AccessDashboard --> TestSync[Test First Sync<br/>Click 'Sync Now' in dashboard]
+    TestSync --> SyncOK{Sync Successful?}
+    SyncOK -->|No| DebugSync[Debug sync issues<br/>Check logs and configuration]
+    SyncOK -->|Yes| SetupComplete[✅ Setup Complete!<br/>Ready for production use]
+    
+    DebugSync --> FixSync[Fix sync issues]
+    FixSync --> TestSync
+    
+    style Start fill:#4CAF50
+    style SetupComplete fill:#4CAF50
+    style Troubleshoot fill:#FF9800
+    style DebugSync fill:#FF9800
+    style AccessDashboard fill:#2196F3
 ```
 
-### First-Time Setup
+### Prerequisites Checklist
 
-1. **Install ListSync** following the [Installation Guide](installation.md)
-2. **Configure your environment** using the [Configuration Guide](configuration.md)
-3. **Start the application** and access the web dashboard
+**System Requirements:**
+- [ ] Docker 20.10+ installed
+- [ ] Docker Compose 2.0+ installed
+- [ ] 2GB RAM available (4GB recommended)
+- [ ] 1GB free disk space
+- [ ] Internet connection for list fetching
 
-### Quick Start Checklist
+**Seerr Setup:**
+- [ ] Seerr instance running and accessible
+- [ ] API key obtained from Seerr settings
+- [ ] User ID identified for making requests
+- [ ] Network connectivity confirmed
 
-- [ ] Seerr URL and API key configured
-- [ ] At least one list provider configured (IMDb, Trakt, etc.)
-- [ ] Sync interval set to your preference
-- [ ] Optional: Discord/Gotify notification webhook for notifications
-- [ ] Test sync operation completed successfully
+**Network Requirements:**
+- [ ] Port 3222 available for web dashboard
+- [ ] Port 4222 available for API backend
+- [ ] Access to external list providers (IMDb, Trakt, etc.)
 
-## Web Dashboard
+### Quick Start Steps
 
-The ListSync web dashboard provides a modern, responsive interface built with Nuxt 3 and Vue 3 for managing all aspects of your sync operations.
+1. **Clone and Configure**
+   ```bash
+   git clone https://github.com/KaHooli/list-sync.git
+   cd list-sync
+   cp envsample.txt .env
+   ```
 
-### Dashboard Overview
+2. **Edit Configuration**
+   ```bash
+   # Edit .env file with your details
+   OVERSEERR_URL=https://your-overseerr-url.com
+   OVERSEERR_API_KEY=your_api_key_here
+   IMDB_LISTS=top
+   ```
 
-**Main Navigation:**
-- **Dashboard** - Overview and quick actions
-- **Lists** - Manage your configured lists
-- **Analytics** - Sync statistics and performance
-- **Activity** - Recent sync operations and logs
-- **Settings** - Configuration management
+3. **Deploy and Test**
+   ```bash
+   docker-compose up -d
+   # Wait ~30 seconds, then test
+   curl http://localhost:4222/api/system/health
+   ```
 
-### Key Features
+4. **Access Dashboard**
+   - Open http://localhost:3222 in your browser
+   - Click "Sync Now" to test your first sync
 
-- **Real-time Status Updates** - Live sync progress with Vue composables
-- **Responsive Design** - Works on desktop, tablet, and mobile
-- **Dark/Light Mode** - Theme selection with persistent preferences
-- **Interactive Charts** - Visual analytics with reactive data
-- **Quick Actions** - One-click operations
-- **Server-Side Rendering** - Fast initial page loads with Nuxt SSR
+## 🖥️ Web Dashboard Overview
 
-## List Management
+### Dashboard Navigation
 
-### List Management Workflow
+```mermaid
+graph TB
+    Dashboard[Web Dashboard :3222] --> Nav[Navigation Menu]
+    
+    Nav --> Home[🏠 Dashboard<br/>Overview & Quick Actions]
+    Nav --> Lists[📋 Lists<br/>Manage Your Lists]
+    Nav --> Sync[🔄 Sync<br/>Sync Operations]
+    Nav --> History[📊 History<br/>Sync History & Analytics]
+    Nav --> Settings[⚙️ Settings<br/>Configuration]
+    
+    Home --> QuickActions[Quick Actions Panel]
+    Home --> Stats[Statistics Overview]
+    Home --> RecentActivity[Recent Activity]
+    Home --> SystemStatus[System Status]
+    
+    Lists --> AddList[Add New List]
+    Lists --> ListGrid[Lists Grid View]
+    Lists --> BulkActions[Bulk Actions]
+    Lists --> ListFilters[Filter & Search]
+    
+    Sync --> ManualSync[Manual Sync]
+    Sync --> AutoSync[Automated Sync]
+    Sync --> SyncProgress[Sync Progress]
+    Sync --> SyncSettings[Sync Settings]
+    
+    History --> SyncHistory[Sync History]
+    History --> Analytics[Analytics Dashboard]
+    History --> FailedItems[Failed Items]
+    History --> ProcessedItems[Processed Items]
+    
+    Settings --> OverseerrConfig[Seerr Configuration]
+    Settings --> NotificationSettings[Notification Settings]
+    Settings --> SyncSettings[Sync Settings]
+    Settings --> ThemeSettings[Theme Settings]
+    
+    style Dashboard fill:#4CAF50
+    style Home fill:#2196F3
+    style Lists fill:#FF9800
+    style Sync fill:#9C27B0
+    style History fill:#607D8B
+    style Settings fill:#795548
+```
+
+### Dashboard Features
+
+**Real-time Updates:**
+- Live sync progress with progress bars
+- Real-time statistics updates
+- Automatic refresh of data
+- WebSocket connections for instant updates
+
+**Responsive Design:**
+- Works on desktop, tablet, and mobile
+- Adaptive layout for different screen sizes
+- Touch-friendly interface elements
+- Optimized for all devices
+
+**Theme Support:**
+- Light and dark mode themes
+- Persistent theme preferences
+- System theme detection
+- Custom theme options
+
+## 📚 List Management
+
+### Adding Lists - Complete Workflow
 
 ```mermaid
 flowchart TD
-    Start[Want to add a list] --> Method{How to add?}
+    Start[Want to Add a List?] --> ChooseMethod{How to Add?}
     
-    Method -->|Web Dashboard| WebUI[Go to Lists page<br/>Click Add New List]
-    Method -->|Environment| EnvVar[Edit .env file<br/>Add to IMDB_LISTS etc.]
-    Method -->|API| APICall[POST /api/lists]
+    ChooseMethod -->|Web Dashboard| WebUI[Go to Lists Page<br/>Click 'Add New List']
+    ChooseMethod -->|Environment| EnvVar[Edit .env file<br/>Add to provider lists]
+    ChooseMethod -->|API| APICall[POST /api/lists<br/>with list details]
     
     WebUI --> SelectType[Select List Type:<br/>IMDb, Trakt, Letterboxd<br/>MDBList, Steven Lu]
     EnvVar --> SelectType
     APICall --> SelectType
     
-    SelectType --> EnterID[Enter List ID or URL]
-    EnterID --> Validate{Valid format?}
+    SelectType --> EnterDetails[Enter List Details:<br/>- List ID or URL<br/>- Description<br/>- Auto-sync preference]
+    EnterDetails --> Validate[Validate Input:<br/>- Check format<br/>- Verify accessibility<br/>- Test connection]
     
-    Validate -->|No| ShowError[Show format error<br/>Check documentation]
-    Validate -->|Yes| Configure[Configure options:<br/>- Auto-sync<br/>- Priority<br/>- 4K requests]
+    Validate --> Valid{Valid?}
+    Valid -->|No| ShowError[Show Error Message<br/>- Format error<br/>- Access denied<br/>- Invalid ID]
+    Valid -->|Yes| Configure[Configure Options:<br/>- Auto-sync enabled<br/>- Priority level<br/>- 4K requests<br/>- Item limits]
     
-    ShowError --> EnterID
-    Configure --> Save[Save list configuration]
-    Save --> TriggerSync{Auto-sync enabled?}
+    ShowError --> EnterDetails
+    Configure --> Save[Save List Configuration<br/>- Store in database<br/>- Update environment<br/>- Refresh UI]
     
-    TriggerSync -->|Yes| AutoSync[Wait for next<br/>scheduled sync]
-    TriggerSync -->|No| ManualSync[Click Sync Now<br/>to start manually]
+    Save --> TriggerSync{Auto-sync Enabled?}
+    TriggerSync -->|Yes| AutoSync[Wait for Next<br/>Scheduled Sync]
+    TriggerSync -->|No| ManualSync[Click 'Sync Now'<br/>to Start Manually]
     
-    AutoSync --> Monitor[Monitor in dashboard]
+    AutoSync --> Monitor[Monitor in Dashboard<br/>- View progress<br/>- Check results<br/>- Handle errors]
     ManualSync --> Monitor
-    Monitor --> ViewResults[View sync results:<br/>- Requested<br/>- Available<br/>- Failed]
     
-    ViewResults --> Manage{Need changes?}
-    Manage -->|Edit| EditList[Modify list settings]
-    Manage -->|Delete| DeleteList[Remove from sync]
-    Manage -->|Keep| Done[List managed!]
+    Monitor --> ViewResults[View Sync Results:<br/>- Items requested<br/>- Already available<br/>- Failed items<br/>- Skipped items]
+    
+    ViewResults --> Manage{Need Changes?}
+    Manage -->|Edit| EditList[Modify List Settings<br/>- Change options<br/>- Update description<br/>- Adjust limits]
+    Manage -->|Delete| DeleteList[Remove from Sync<br/>- Confirm deletion<br/>- Clean up data<br/>- Update configuration]
+    Manage -->|Keep| Done[✅ List Managed!<br/>Ready for regular sync]
     
     EditList --> Configure
-    DeleteList --> Confirm{Confirm deletion?}
-    Confirm -->|Yes| Removed[List removed]
+    DeleteList --> Confirm{Confirm Deletion?}
+    Confirm -->|Yes| Removed[✅ List Removed<br/>Configuration updated]
     Confirm -->|No| Monitor
     
     style Start fill:#4CAF50
@@ -124,214 +222,143 @@ flowchart TD
     style Monitor fill:#2196F3
 ```
 
-### Adding Lists
-
-1. **Navigate to Lists section**
-2. **Click "Add New List"**
-3. **Select List Type:**
-   - IMDb Lists
-   - Trakt Lists
-   - Letterboxd Lists
-   - MDBList Collections
-   - Simkl Lists
-   - TVDB Lists
-   - TMDB Lists
-   - Steven Lu Lists
-
-4. **Configure List Details:**
+### List Provider Details
 
 #### IMDb Lists
 
-**Chart Lists:**
-```
-List ID: top
-Description: IMDb Top 250 Movies
+**Supported Formats:**
+```bash
+# Chart Lists
+IMDB_LISTS=top,boxoffice,moviemeter,tvmeter
+
+# User Lists
+IMDB_LISTS=ls123456789,ls987654321
+
+# User Watchlists
+IMDB_LISTS=ur123456789,ur987654321
+
+# Full URLs
+IMDB_LISTS=https://www.imdb.com/list/ls123456789
 ```
 
-**User Lists:**
-```
-List ID: ls123456789
-Description: My Watchlist
-```
+**Available Charts:**
+- `top` - IMDb Top 250 Movies
+- `boxoffice` - Box Office
+- `moviemeter` - Most Popular Movies
+- `tvmeter` - Most Popular TV Shows
 
-**User Watchlists:**
-```
-List ID: ur987654321
-Description: User's Watchlist
-```
+**Configuration Options:**
+- Auto-sync: Include in automated sync cycles
+- Priority: High, Normal, Low sync priority
+- 4K Requests: Send requests as 4K to Seerr
+- Item Limit: Maximum items to sync (optional)
 
 #### Trakt Lists
 
 **Regular Lists:**
-```
-List ID: username/list-name
-Description: User's custom list
+```bash
+# Numeric IDs from Trakt URLs
+TRAKT_LISTS=123456,789012,345678
 ```
 
 **Special Collections:**
-```
-List ID: trending:movies
-Description: Trending Movies
-Limit: 50 (optional)
+```bash
+# Trending and Popular content
+TRAKT_SPECIAL_LISTS=trending:movies,popular:shows,anticipated:movies
+TRAKT_SPECIAL_ITEMS_LIMIT=50
 ```
 
-**Popular Collections:**
-```
-List ID: popular:shows
-Description: Popular TV Shows
-Limit: 100 (optional)
-```
+**Special List Categories:**
+| Category | Movies | TV Shows |
+|----------|--------|----------|
+| **Trending** | `trending:movies` | `trending:shows` |
+| **Popular** | `popular:movies` | `popular:shows` |
+| **Anticipated** | `anticipated:movies` | `anticipated:shows` |
 
 #### Letterboxd Lists
 
-**User Lists:**
-```
-List ID: username/list-name
-Description: User's film list
-```
+**Format:**
+```bash
+# User lists
+LETTERBOXD_LISTS=username/list-name,username/favorites
 
-**Watchlists:**
-```
-List ID: username/watchlist
-Description: User's watchlist
+# Watchlists
+LETTERBOXD_LISTS=username/watchlist,friend/watchlist
+
+# Full URLs
+LETTERBOXD_LISTS=https://letterboxd.com/username/list-name
 ```
 
 #### MDBList Collections
 
-**User Collections:**
-```
-List ID: username/collection-name
-Description: Custom collection
-```
+**Format:**
+```bash
+# User collections
+MDBLIST_LISTS=username/collection-name,curator/best-movies
 
-#### Simkl Lists
-
-**User Lists:**
+# Full URLs
+MDBLIST_LISTS=https://mdblist.com/lists/username/collection-name
 ```
-List ID: https://simkl.com/5/list/2707-marvel-cinematic-universe-mcu-movies
-Description: MCU Movies Collection
-```
-
-**User Watchlists:**
-```
-List ID: https://simkl.com/5/list/1234-my-watchlist
-Description: My Simkl Watchlist
-```
-
-**Note**: Simkl lists require full URLs for proper access.
-
-#### TVDB Lists
-
-**User Favorites:**
-```
-List ID: https://www.thetvdb.com/user/12345/favorites
-Description: User's TV Favorites
-```
-
-**Public Lists:**
-```
-List ID: https://www.thetvdb.com/lists/67890
-Description: Public TV List
-```
-
-**Note**: TVDB primarily supports user favorites and requires full URLs.
-
-#### TMDB Lists
-
-**Public Collections:**
-```
-List ID: https://www.themoviedb.org/list/12345
-Description: Public Movie Collection
-```
-
-**User Lists:**
-```
-List ID: https://www.themoviedb.org/list/67890-my-favorite-movies
-Description: User's Favorite Movies
-```
-
-**Note**: TMDB lists require full URLs for proper access.
 
 #### Steven Lu Lists
 
-**Popular Movies:**
+**Format:**
+```bash
+# Only one list available
+STEVENLU_LISTS=stevenlu
 ```
-List ID: stevenlu
-Description: Popular movies collection
-```
-
-### List Configuration Options
-
-**Sync Settings:**
-- **Auto-sync** - Include in automated sync cycles
-- **Priority** - Sync order (high, normal, low)
-- **4K Requests** - Send requests as 4K to Seerr
-- **Media Types** - Movies only, TV only, or both
-
-**Advanced Options:**
-- **Item Limit** - Maximum items to sync from list
-- **Skip Existing** - Skip items already in Seerr
-- **Custom Filters** - Year range, genre filters, etc.
 
 ### Managing Existing Lists
 
-**List Actions:**
-- **Edit** - Modify list configuration
-- **Sync Now** - Trigger immediate sync
-- **View Items** - See list contents
-- **Disable/Enable** - Toggle list in sync operations
-- **Delete** - Remove list from sync
+**List Actions Available:**
+- **Edit** - Modify list configuration and options
+- **Sync Now** - Trigger immediate sync for this list
+- **View Items** - See list contents and sync status
+- **Enable/Disable** - Toggle list in sync operations
+- **Delete** - Remove list from sync permanently
 
 **Bulk Operations:**
-- **Select Multiple Lists** - Checkbox selection
-- **Bulk Sync** - Sync selected lists
-- **Bulk Enable/Disable** - Toggle multiple lists
-- **Export Configuration** - Save list configuration
+- **Select Multiple** - Checkbox selection for multiple lists
+- **Bulk Sync** - Sync all selected lists simultaneously
+- **Bulk Enable/Disable** - Toggle multiple lists at once
+- **Export Configuration** - Save list configuration to file
+- **Import Configuration** - Load list configuration from file
 
-## Sync Operations
+## 🔄 Sync Operations
 
 ### Sync Operation Decision Flow
 
 ```mermaid
 flowchart TD
-    Start[Need to sync?] --> SyncType{What type of sync?}
+    Start[Need to Sync?] --> SyncType{What Type of Sync?}
     
-    SyncType -->|Single list| SingleList[Select list in dashboard]
-    SyncType -->|All lists| AllLists[Click Sync All Lists]
-    SyncType -->|Automated| AutoSync[Configure sync interval]
-    SyncType -->|Custom selection| CustomSync[Select multiple lists]
+    SyncType -->|Single List| SingleList[Select List in Dashboard<br/>Click 'Sync Now']
+    SyncType -->|All Lists| AllLists[Click 'Sync All Lists'<br/>Confirm Action]
+    SyncType -->|Automated| AutoSync[Configure Sync Interval<br/>Enable Automation]
+    SyncType -->|Custom Selection| CustomSync[Select Multiple Lists<br/>Choose Sync Options]
     
-    SingleList --> ClickSync[Click Sync Now button]
-    AllLists --> ClickSyncAll[Confirm sync all]
-    CustomSync --> SelectLists[Check desired lists]
-    SelectLists --> BulkSync[Click Bulk Sync]
-    
-    AutoSync --> SetInterval[Set SYNC_INTERVAL<br/>in .env or UI]
-    SetInterval --> EnableAuto[Enable AUTOMATED_MODE=true]
-    EnableAuto --> WaitSchedule[Wait for next<br/>scheduled sync]
-    
-    ClickSync --> StartSync[Sync begins]
-    ClickSyncAll --> StartSync
-    BulkSync --> StartSync
+    SingleList --> StartSync[Sync Begins<br/>- Initialize providers<br/>- Fetch list data<br/>- Process items]
+    AllLists --> StartSync
+    CustomSync --> StartSync
+    AutoSync --> WaitSchedule[Wait for Next<br/>Scheduled Sync]
     WaitSchedule --> StartSync
     
-    StartSync --> Monitor[Monitor progress:<br/>- Live progress bars<br/>- Item counters<br/>- Status messages]
+    StartSync --> Monitor[Monitor Progress:<br/>- Live progress bars<br/>- Item counters<br/>- Status messages<br/>- Error indicators]
     
-    Monitor --> Processing{Sync status?}
+    Monitor --> Processing{Sync Status?}
     Processing -->|In Progress| Monitor
-    Processing -->|Complete| ViewResults[View results]
-    Processing -->|Error| CheckError[Check error details]
+    Processing -->|Complete| ViewResults[View Results:<br/>✓ Requested items<br/>✓ Already available<br/>✓ Failed items<br/>✓ Skipped items]
+    Processing -->|Error| CheckError[Check Error Details:<br/>- Error messages<br/>- Failed items<br/>- Provider issues]
     
-    ViewResults --> ResultBreakdown[See breakdown:<br/>✓ Requested<br/>✓ Already available<br/>✓ Failed<br/>✓ Skipped]
+    ViewResults --> Notification{Notifications<br/>Enabled?}
+    Notification -->|Yes| SendNotif[Send Notifications:<br/>- Discord webhook<br/>- Email alerts<br/>- Status updates]
+    Notification -->|No| Done[✅ Sync Complete!<br/>Results saved]
     
-    CheckError --> FixError[Fix issue based<br/>on error message]
+    CheckError --> FixError[Fix Issues:<br/>- Check configuration<br/>- Verify connections<br/>- Review logs]
     FixError --> RetrySync{Retry?}
     RetrySync -->|Yes| StartSync
-    RetrySync -->|No| End[End]
+    RetrySync -->|No| End[❌ Sync Failed<br/>Manual intervention needed]
     
-    ResultBreakdown --> Notification{Notifications<br/>enabled?}
-    Notification -->|Yes| SendNotif[Send Discord/Gotify<br/>notification]
-    Notification -->|No| Done[Sync complete!]
     SendNotif --> Done
     
     style Start fill:#4CAF50
@@ -339,78 +366,109 @@ flowchart TD
     style StartSync fill:#2196F3
     style CheckError fill:#FF9800
     style Monitor fill:#2196F3
+    style End fill:#f44336
 ```
 
-### Manual Sync
+### Manual Sync Operations
 
-1. **Single List Sync:**
-   - Navigate to Lists
-   - Click "Sync Now" on desired list
-   - Monitor progress in real-time
+#### Single List Sync
+1. **Navigate to Lists page**
+2. **Find your desired list**
+3. **Click "Sync Now" button**
+4. **Monitor progress in real-time**
+5. **Review results when complete**
 
-2. **Full Sync:**
-   - Click "Sync All Lists" button
-   - View progress dashboard
-   - Receive completion notification
+#### Full Sync (All Lists)
+1. **Go to Sync page**
+2. **Click "Sync All Lists" button**
+3. **Confirm the action**
+4. **Watch progress dashboard**
+5. **Receive completion notification**
 
-3. **Custom Sync:**
-   - Select specific lists
-   - Choose sync options
-   - Execute custom sync operation
+#### Custom Sync (Selected Lists)
+1. **Go to Lists page**
+2. **Select multiple lists using checkboxes**
+3. **Click "Bulk Sync" button**
+4. **Choose sync options**
+5. **Execute custom sync operation**
 
-### Automated Sync
+### Automated Sync Configuration
 
-**Sync Scheduling:**
-- **Interval Configuration** - 30 minutes to 24+ hours
-- **Time-based Scheduling** - Specific times of day
-- **Conditional Sync** - Based on list changes
+#### Sync Scheduling Options
+```bash
+# Sync intervals (in hours)
+SYNC_INTERVAL=24    # Once per day
+SYNC_INTERVAL=12    # Twice per day
+SYNC_INTERVAL=6     # Every 6 hours
+SYNC_INTERVAL=1     # Every hour
+SYNC_INTERVAL=0.5   # Every 30 minutes (minimum)
+SYNC_INTERVAL=0     # Manual sync only
+```
 
-**Automated Features:**
+#### Automated Features
 - **Smart Retry** - Automatic retry on failures
 - **Rate Limiting** - Respectful API usage
 - **Error Recovery** - Resume from interruptions
-- **Progress Notifications** - Discord/Gotify updates
+- **Progress Notifications** - Discord/email updates
+- **Resource Management** - Memory and CPU optimization
 
 ### Sync Status Monitoring
 
-**Real-time Updates:**
-- **Progress Bars** - Visual sync progress
-- **Item Counters** - Processed/total items
+#### Real-time Updates
+- **Progress Bars** - Visual sync progress indicators
+- **Item Counters** - Processed/total items display
 - **Status Messages** - Current operation details
 - **Error Indicators** - Failed items highlighting
+- **Time Estimates** - Estimated completion time
 
-**Sync Results:**
+#### Sync Results Breakdown
 - **Success Count** - Successfully requested items
 - **Already Available** - Items already in library
 - **Already Requested** - Previously requested items
 - **Failed Items** - Items that couldn't be processed
 - **Skipped Items** - Items excluded by filters
 
-## Analytics & Monitoring
+## 📊 Analytics & Monitoring
 
-### Dashboard Analytics
+### Dashboard Analytics Overview
 
-**Overview Metrics:**
-- **Total Lists** - Number of configured lists
-- **Total Items** - All items across lists
-- **Success Rate** - Overall sync success percentage
-- **Last Sync** - Most recent sync operation
+```mermaid
+graph TB
+    Analytics[Analytics Dashboard] --> Overview[Overview Metrics]
+    Analytics --> Detailed[Detailed Analytics]
+    Analytics --> Monitoring[Monitoring Tools]
+    
+    Overview --> TotalLists[Total Lists<br/>Configured lists count]
+    Overview --> TotalItems[Total Items<br/>All items across lists]
+    Overview --> SuccessRate[Success Rate<br/>Overall sync success %]
+    Overview --> LastSync[Last Sync<br/>Most recent operation]
+    
+    Detailed --> SyncHistory[Sync History<br/>Timeline view]
+    Detailed --> ProviderPerf[Provider Performance<br/>Success rates by provider]
+    Detailed --> MediaBreakdown[Media Breakdown<br/>Movies vs TV shows]
+    Detailed --> ErrorPatterns[Error Patterns<br/>Common failure reasons]
+    
+    Monitoring --> RealTime[Real-time Updates<br/>Live data refresh]
+    Monitoring --> Alerts[Alert System<br/>Threshold notifications]
+    Monitoring --> Logs[Log Viewer<br/>Structured log access]
+    Monitoring --> Health[Health Checks<br/>System status monitoring]
+    
+    style Analytics fill:#4CAF50
+    style Overview fill:#2196F3
+    style Detailed fill:#FF9800
+    style Monitoring fill:#9C27B0
+```
 
-**Performance Metrics:**
+### Performance Metrics
+
+#### Key Performance Indicators
 - **Average Sync Time** - Time per sync operation
 - **Items Per Hour** - Processing rate
 - **API Response Time** - Seerr API performance
 - **Error Rate** - Failure percentage
+- **Success Rate** - Overall success percentage
 
-### Detailed Analytics
-
-**Sync History:**
-- **Timeline View** - Sync operations over time
-- **Success/Failure Trends** - Performance patterns
-- **List Performance** - Per-list success rates
-- **Media Type Breakdown** - Movies vs TV shows
-
-**Provider Analytics:**
+#### Provider Analytics
 - **Provider Performance** - Success rates by provider
 - **Response Times** - Provider response performance
 - **Error Patterns** - Common failure reasons
@@ -418,37 +476,44 @@ flowchart TD
 
 ### Monitoring Alerts
 
-**Notification Settings:**
-- **Discord Webhooks** - Rich notifications with embeds
-- **Gotify Notifications** - Self-hosted push notifications via Gotify
-- **Email Alerts** - Simple text notifications
-- **Threshold Alerts** - Warnings when metrics exceed limits
-- **Schedule Notifications** - Regular status updates
+#### Notification Settings
+```bash
+# Discord webhook for sync notifications
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/123456789/abcdef...
 
-**Alert Types:**
+# Email alerts (if configured)
+EMAIL_NOTIFICATIONS=true
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+```
+
+#### Alert Types
 - **Sync Completion** - Operation finished successfully
 - **Sync Failures** - Operations that failed
 - **High Error Rates** - Unusual failure patterns
 - **System Health** - Service availability issues
+- **Performance Warnings** - Resource usage alerts
 
-## Configuration Management
+## ⚙️ Configuration Management
 
 ### Environment Configuration
 
-**Core Settings:**
+#### Core Settings
 ```bash
 # Seerr Connection
 OVERSEERR_URL=http://your-overseerr-url:5055
 OVERSEERR_API_KEY=your-api-key-here
 OVERSEERR_USER_ID=1
+OVERSEERR_4K=false
 
 # Sync Configuration
 SYNC_INTERVAL=24
 AUTOMATED_MODE=true
-OVERSEERR_4K=false
 ```
 
-**List Configuration:**
+#### List Configuration
 ```bash
 # IMDb Lists (comma-separated)
 IMDB_LISTS=top,ls123456789,ur987654321
@@ -466,14 +531,14 @@ STEVENLU_LISTS=stevenlu
 
 ### Web-based Configuration
 
-**Settings Interface:**
+#### Settings Interface
 - **Connection Settings** - Seerr configuration
 - **Sync Settings** - Intervals and automation
 - **Provider Settings** - List configuration
-- **Notification Settings** - Discord/Gotify setup
+- **Notification Settings** - Discord/email setup
 - **Advanced Settings** - Performance tuning
 
-**Configuration Validation:**
+#### Configuration Validation
 - **Connection Testing** - Verify API connectivity
 - **List Validation** - Check list accessibility
 - **Setting Verification** - Validate configuration values
@@ -481,119 +546,212 @@ STEVENLU_LISTS=stevenlu
 
 ### Backup & Restore
 
-**Configuration Backup:**
-- **Export Settings** - Save configuration to file
-- **Database Backup** - Backup sync history
-- **List Configuration** - Export list settings
-- **Schedule Backups** - Automated backup creation
+#### Configuration Backup
+```bash
+# Export settings
+curl -X GET http://localhost:4222/api/config/export > config-backup.json
 
-**Configuration Restore:**
-- **Import Settings** - Restore from backup file
-- **Database Restore** - Restore sync history
-- **Selective Restore** - Choose specific settings
-- **Validation** - Verify restored configuration
+# Backup database
+cp data/list_sync.db data/list_sync.db.backup
 
-## Troubleshooting
+# Backup environment
+cp .env .env.backup
+```
 
-### Common Issues
+#### Configuration Restore
+```bash
+# Import settings
+curl -X POST http://localhost:4222/api/config/import -d @config-backup.json
 
-**Sync Failures:**
-1. **Check Seerr Connection**
-   - Verify URL and API key
-   - Test connection in settings
-   - Check network connectivity
+# Restore database
+cp data/list_sync.db.backup data/list_sync.db
 
-2. **List Access Issues**
-   - Verify list URLs/IDs
-   - Check provider availability
-   - Review privacy settings
+# Restart services
+docker-compose restart
+```
 
-3. **Performance Issues**
-   - Adjust sync intervals
-   - Reduce concurrent operations
-   - Monitor resource usage
+## 🔧 Advanced Features
 
-**Web Dashboard Issues:**
-1. **Cannot Access Dashboard**
-   - Check port 3222 availability
-   - Verify container health
-   - Review firewall settings
+### Multi-Instance Deployments
 
-2. **API Errors**
-   - Check backend on port 4222
-   - Review API logs
-   - Verify database connectivity
+#### Scenario: Multiple Seerr Instances
+```yaml
+# docker-compose-multi.yml
+version: "3.8"
+
+services:
+  listsync-main:
+    image: ghcr.io/kahooli/list-sync:main
+    environment:
+      - OVERSEERR_URL=https://overseerr.example.com
+      - OVERSEERR_API_KEY=${MAIN_API_KEY}
+      - IMDB_LISTS=ls123456789,top
+    volumes:
+      - ./data-main:/usr/src/app/data
+
+  listsync-4k:
+    image: ghcr.io/kahooli/list-sync:main
+    environment:
+      - OVERSEERR_URL=https://overseerr-4k.example.com
+      - OVERSEERR_API_KEY=${4K_API_KEY}
+      - OVERSEERR_4K=true
+      - IMDB_LISTS=top,boxoffice
+    volumes:
+      - ./data-4k:/usr/src/app/data
+```
+
+### Custom Provider Development
+
+#### Adding New List Providers
+1. **Create provider function**
+2. **Register with decorator**
+3. **Handle different input formats**
+4. **Add to environment configuration**
+5. **Test and validate**
+
+### Integration Examples
+
+#### Home Assistant Integration
+```yaml
+# configuration.yaml
+shell_command:
+  trigger_listsync: "docker exec listsync python -m list_sync --sync-now"
+  
+sensor:
+  - platform: command_line
+    name: "ListSync Status"
+    command: 'docker logs listsync --tail 1 | grep -o "Sync completed\|Error\|Running"'
+    scan_interval: 300
+```
+
+#### Plex Integration
+```python
+# plex-integration.py
+from plexapi.server import PlexServer
+import requests
+
+def sync_plex_watchlist_to_overseerr():
+    plex = PlexServer(PLEX_URL, PLEX_TOKEN)
+    watchlist = plex.watchlist()
+    
+    # Format for ListSync
+    media_items = []
+    for item in watchlist:
+        media_items.append({
+            "title": item.title,
+            "year": item.year,
+            "media_type": "movie" if item.type == "movie" else "tv",
+            "imdb_id": item.guid if "imdb://" in item.guid else None
+        })
+    
+    # Trigger ListSync via API
+    requests.post('http://listsync:4222/api/sync/trigger', json={
+        'custom_list': media_items
+    })
+```
+
+## 🔧 Troubleshooting
+
+### Common Issues Quick Reference
+
+| Issue | Quick Fix | Full Guide |
+|-------|-----------|------------|
+| **Can't access dashboard** | Check port 3222, restart container | [Web Interface Issues](#web-interface-issues) |
+| **Sync not working** | Check Seerr connection, verify lists | [Sync Issues](#sync-issues) |
+| **All items "already available"** | Check 4K settings, verify Seerr | [Already Available Issue](#already-available-issue) |
+| **High memory usage** | Reduce list limits, increase sync interval | [Performance Issues](#performance-issues) |
+| **Container won't start** | Check port conflicts, permissions | [Docker Issues](#docker-issues) |
 
 ### Diagnostic Tools
 
-**Built-in Diagnostics:**
-- **System Health Check** - Overall system status
-- **Connection Testing** - Test external connections
-- **Database Integrity** - Check database health
-- **Log Analysis** - Review error patterns
+#### Health Check Commands
+```bash
+# System health
+curl http://localhost:4222/api/system/health
 
-**Log Access:**
-- **Web Interface** - View logs in dashboard
-- **Container Logs** - Docker container output
-- **File Logs** - Persistent log files
-- **Structured Logging** - JSON formatted logs
+# Detailed status
+curl http://localhost:4222/api/system/status
 
-## Best Practices
+# Check logs
+docker-compose logs -f listsync-full
 
-### List Management
+# Test API connectivity
+curl -H "X-Api-Key: your-key" http://your-overseerr-url/api/v1/status
+```
 
-**Organization:**
-- **Descriptive Names** - Clear list identification
-- **Categorization** - Group related lists
-- **Priority Setting** - Important lists first
-- **Regular Cleanup** - Remove unused lists
+#### Log Analysis
+```bash
+# View real-time logs
+docker-compose logs -f listsync-full
 
-**Performance:**
-- **Reasonable Intervals** - Avoid too frequent syncing
-- **List Size Management** - Monitor large lists
-- **Provider Distribution** - Balance across providers
-- **Resource Monitoring** - Watch system resources
+# Filter by log level
+docker-compose logs listsync-full | grep ERROR
 
-### Sync Strategy
+# Search for specific terms
+docker-compose logs listsync-full | grep -i "overseerr\|sync\|error"
 
-**Timing:**
-- **Off-peak Hours** - Sync during low usage
+# Last 100 lines
+docker-compose logs --tail=100 listsync-full
+```
+
+## 📋 Best Practices
+
+### List Management Best Practices
+
+#### Organization
+- **Descriptive Names** - Use clear, descriptive list names
+- **Categorization** - Group related lists by type or purpose
+- **Priority Setting** - Set appropriate priorities for important lists
+- **Regular Cleanup** - Remove unused or outdated lists
+
+#### Performance
+- **Reasonable Intervals** - Don't sync more frequently than necessary
+- **List Size Management** - Monitor large lists for performance impact
+- **Provider Distribution** - Balance load across different providers
+- **Resource Monitoring** - Watch system resources during sync
+
+### Sync Strategy Best Practices
+
+#### Timing
+- **Off-peak Hours** - Schedule syncs during low usage periods
 - **Staggered Syncing** - Avoid simultaneous operations
-- **Maintenance Windows** - Schedule for maintenance
+- **Maintenance Windows** - Plan syncs around maintenance schedules
 - **User Activity** - Consider user request patterns
 
-**Error Handling:**
-- **Monitor Failures** - Watch error rates
-- **Retry Logic** - Configure appropriate retries
-- **Fallback Plans** - Alternative sync strategies
+#### Error Handling
+- **Monitor Failures** - Watch error rates and patterns
+- **Retry Logic** - Configure appropriate retry attempts
+- **Fallback Plans** - Have alternative sync strategies
 - **Alert Thresholds** - Set appropriate alert levels
 
-### Security
+### Security Best Practices
 
-**API Keys:**
-- **Secure Storage** - Use environment variables
-- **Regular Rotation** - Update keys periodically
+#### API Keys
+- **Secure Storage** - Use environment variables for sensitive data
+- **Regular Rotation** - Update API keys periodically
 - **Access Monitoring** - Watch for unusual activity
-- **Backup Keys** - Keep secure backups
+- **Backup Keys** - Keep secure backups of important keys
 
-**Network Security:**
+#### Network Security
 - **Firewall Rules** - Restrict unnecessary access
-- **HTTPS Usage** - Use secure connections
+- **HTTPS Usage** - Use secure connections where possible
 - **Network Monitoring** - Monitor traffic patterns
-- **Update Management** - Keep system updated
+- **Update Management** - Keep system components updated
 
-### Monitoring
+### Monitoring Best Practices
 
-**Regular Checks:**
-- **Daily Status** - Check sync operations
-- **Weekly Reviews** - Review performance metrics
-- **Monthly Analysis** - Analyze trends
-- **Quarterly Planning** - Plan improvements
+#### Regular Checks
+- **Daily Status** - Check sync operations daily
+- **Weekly Reviews** - Review performance metrics weekly
+- **Monthly Analysis** - Analyze trends monthly
+- **Quarterly Planning** - Plan improvements quarterly
 
-**Alerting:**
+#### Alerting
 - **Critical Alerts** - Immediate attention needed
-- **Warning Alerts** - Potential issues
-- **Info Notifications** - Status updates
-- **Scheduled Reports** - Regular summaries
+- **Warning Alerts** - Potential issues to monitor
+- **Info Notifications** - Status updates and confirmations
+- **Scheduled Reports** - Regular summary reports
 
-This user guide provides comprehensive coverage of ListSync functionality. For additional support, refer to the [Troubleshooting Guide](troubleshooting.md) or the [API Documentation](api.md) for advanced usage scenarios. 
+---
+
+This comprehensive user guide provides detailed coverage of all ListSync functionality. For additional support, refer to the [Troubleshooting Guide](troubleshooting.md) or the [API Reference](api-reference.md) for advanced usage scenarios.

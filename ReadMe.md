@@ -738,8 +738,12 @@ For comprehensive documentation, visit our [Documentation Hub](/docs/README.md) 
 - **[User Guide](/docs/user-guide.md)** - Complete usage guide with examples
 - **[Installation Guide](/docs/installation.md)** - Detailed installation instructions
 - **[Configuration Guide](/docs/configuration.md)** - Environment setup and configuration
-- **[API Documentation](/docs/api.md)** - Complete REST API reference
+- **[API Documentation](/docs/api-reference.md)** - Complete REST API reference
 - **[Architecture Overview](/docs/architecture.md)** - Technical architecture and design
+- **[How It Works](/docs/how-it-works.md)** - Detailed system workflow and internals
+- **[Advanced Usage](/docs/advanced-usage.md)** - Advanced usage patterns and tips
+- **[Developer Reference](/docs/developer-reference.md)** - Provider API, Seerr client and extension points
+- **[Roadmap](/docs/roadmap.md)** - Project roadmap and planned features
 
 ---
 

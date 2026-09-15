@@ -5,7 +5,7 @@ Command-line interface for the ListSync application.
 import logging
 from collections.abc import Callable
 
-from ..database import configure_sync_interval, delete_list, load_list_ids, save_list_id
+from ..database import configure_sync_interval, delete_list, load_list_ids, replace_lists, save_list_id
 from ..providers import get_provider
 from ..utils.helpers import color_gradient, custom_input
 from ..utils.logger import get_console_logger
@@ -518,18 +518,7 @@ def edit_lists():
         )
 
     # Update database
-    import sqlite3
-
-    from ..database import DB_FILE
-
-    with sqlite3.connect(DB_FILE) as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM lists")
-        cursor.executemany(
-            "INSERT INTO lists (list_type, list_id) VALUES (?, ?)",
-            [(list_info["type"], list_info["id"]) for list_info in updated_lists],
-        )
-        conn.commit()
+    replace_lists(updated_lists)
     console.info(color_gradient("\n✅ Lists updated successfully.", "#00ff00", "#00aa00"))
 
 

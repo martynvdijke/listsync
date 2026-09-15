@@ -6,6 +6,7 @@ import hashlib
 import logging
 import os
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -13,6 +14,9 @@ from .utils.logger import DATA_DIR
 
 # Define database file path
 DB_FILE = os.path.join(DATA_DIR, "list_sync.db")
+
+# Re-exported so modules outside the DAL never import sqlite3.
+DatabaseError = sqlite3.Error
 
 # Default Seerr requester when a list has no user assigned (admin account)
 DEFAULT_REQUESTER_USER_ID = "1"
@@ -2231,3 +2235,192 @@ def get_cached_image_stats() -> dict[str, Any]:
             "oldest_image": oldest,
             "newest_image": newest,
         }
+
+
+@contextmanager
+def get_db_connection(row_factory: bool = False):
+    """Open the app database as a context manager.
+
+    Commits on success, rolls back on error, and always closes, so every call
+    site has identical transaction behavior.
+    """
+    conn = sqlite3.connect(DB_FILE)
+    try:
+        if row_factory:
+            conn.row_factory = sqlite3.Row
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+def get_last_synced_time() -> str | None:
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT MAX(last_synced) FROM synced_items")
+        row = cursor.fetchone()
+        return row[0] if row else None
+
+
+def get_all_synced_items() -> list[tuple]:
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, title, media_type, year, imdb_id, overseerr_id, status, last_synced, source_list_type, source_list_id FROM synced_items"
+        )
+        return cursor.fetchall()
+
+
+def get_synced_items_quality_rows() -> list[tuple]:
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT title, media_type, year, imdb_id, overseerr_id, status, last_synced FROM synced_items")
+        return cursor.fetchall()
+
+
+def check_database_connection() -> None:
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT 1")
+
+
+def get_raw_lists() -> list[tuple]:
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT list_type, list_id, list_url, item_count, last_synced FROM lists")
+        return cursor.fetchall()
+
+
+def get_poster_urls(item_ids: list) -> dict:
+    if not item_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in item_ids)
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT id, poster_url FROM synced_items WHERE id IN ({placeholders})", item_ids)
+        return {row[0]: row[1] for row in cursor.fetchall()}
+
+
+def count_item_lists() -> int:
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM item_lists")
+        row = cursor.fetchone()
+        return row[0] if row else 0
+
+
+def get_item_lists_for_items(item_ids: list) -> dict:
+    if not item_ids:
+        return {}
+    placeholders = ", ".join("?" for _ in item_ids)
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        # Detect display_name column
+        cursor.execute("PRAGMA table_info(lists)")
+        cols = [r[1] for r in cursor.fetchall()]
+        has_display = "display_name" in cols
+        if has_display:
+            cursor.execute(
+                f"SELECT il.item_id, il.list_type, il.list_id, l.display_name FROM item_lists il LEFT JOIN lists l ON il.list_type = l.list_type AND il.list_id = l.list_id WHERE il.item_id IN ({placeholders}) ORDER BY il.synced_at DESC",
+                item_ids,
+            )
+        else:
+            cursor.execute(
+                f"SELECT il.item_id, il.list_type, il.list_id, NULL as display_name FROM item_lists il WHERE il.item_id IN ({placeholders}) ORDER BY il.synced_at DESC",
+                item_ids,
+            )
+        result: dict = {}
+        for row in cursor.fetchall():
+            item_id, list_type, list_id, display_name = row[0], row[1], row[2], row[3]
+            result.setdefault(item_id, []).append(
+                {"list_type": list_type, "list_id": list_id, "display_name": display_name}
+            )
+        return result
+
+
+def get_item_tmdb_and_posters(item_ids: list) -> tuple[dict, dict]:
+    if not item_ids:
+        return ({}, {})
+    placeholders = ", ".join("?" for _ in item_ids)
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT id, tmdb_id, poster_url FROM synced_items WHERE id IN ({placeholders})", item_ids)
+        tmdb_id_map: dict = {}
+        poster_url_map: dict = {}
+        for row in cursor.fetchall():
+            _id, tmdb_id, poster_url = row[0], row[1], row[2]
+            if tmdb_id:
+                tmdb_id_map[_id] = tmdb_id
+            poster_url_map[_id] = poster_url
+        return (tmdb_id_map, poster_url_map)
+
+
+def query_requested_items(search: str, status_filter: str, media_type_filter: str, limit: int, offset: int) -> dict:
+    where_clauses = ["status = 'requested'"]
+    params: list = []
+    if search.strip():
+        where_clauses.append("LOWER(title) LIKE ?")
+        params.append(f"%{search.strip().lower()}%")
+    if status_filter.strip():
+        where_clauses.append("status = ?")
+        params.append(status_filter)
+    if media_type_filter.strip():
+        where_clauses.append("media_type = ?")
+        params.append(media_type_filter)
+    where_sql = " AND ".join(where_clauses)
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT COUNT(*) FROM synced_items WHERE {where_sql}", params)
+        total_items = cursor.fetchone()[0]
+        cursor.execute("SELECT COUNT(*) FROM synced_items WHERE status = 'requested'")
+        total_count = cursor.fetchone()[0]
+        cursor.execute(
+            f"SELECT id, title, media_type, imdb_id, overseerr_id, status, last_synced FROM synced_items WHERE {where_sql} ORDER BY last_synced DESC LIMIT ? OFFSET ?",
+            [*params, limit, offset],
+        )
+        items = cursor.fetchall()
+        return {"items": items, "total_items": total_items, "total_count": total_count}
+
+
+def get_historic_enrichment_rows() -> list[tuple]:
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT title, media_type, imdb_id, overseerr_id, status, year, source_list_type, source_list_id FROM synced_items"
+            )
+            return cursor.fetchall()
+        except sqlite3.OperationalError:
+            pass
+        try:
+            cursor.execute("SELECT title, media_type, imdb_id, overseerr_id, status, year FROM synced_items")
+            rows = cursor.fetchall()
+            return [(r[0], r[1], r[2], r[3], r[4], r[5], None, None) for r in rows]
+        except sqlite3.OperationalError:
+            pass
+        cursor.execute("SELECT title, media_type, imdb_id, overseerr_id, status FROM synced_items")
+        rows = cursor.fetchall()
+        return [(r[0], r[1], r[2], r[3], r[4], None, None, None) for r in rows]
+
+
+def fetch_cached_images(limit: int) -> list[dict]:
+    with get_db_connection(row_factory=True) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, image_url, mime_type, file_size, cached_at, last_accessed, source FROM cached_images ORDER BY last_accessed DESC LIMIT ?",
+            (limit,),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def replace_lists(updated_lists: list[dict]) -> None:
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM lists")
+        cursor.executemany(
+            "INSERT INTO lists (list_type, list_id) VALUES (?, ?)",
+            [(entry["type"], entry["id"]) for entry in updated_lists],
+        )

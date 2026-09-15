@@ -11,7 +11,6 @@ import multiprocessing
 import os
 import re
 import signal
-import sqlite3
 import statistics
 import time
 from collections import Counter, defaultdict
@@ -32,12 +31,27 @@ from list_sync.config import load_env_config
 # Import existing ListSync modules
 from list_sync.database import (
     DB_FILE,
+    DatabaseError,
+    check_database_connection,
     configure_sync_interval,
+    count_item_lists,
     delete_list,
+    fetch_cached_images,
+    get_all_synced_items,
+    get_historic_enrichment_rows,
+    get_item_lists_for_items,
+    get_item_tmdb_and_posters,
+    get_last_synced_time,
+    get_list_items,
+    get_poster_urls,
+    get_raw_lists,
     get_sync_stats,
+    get_synced_items_quality_rows,
     init_database,
     load_list_ids,
     load_sync_interval,
+    normalize_list_id,
+    query_requested_items,
     save_list_id,
     update_list_user_id,
 )
@@ -226,14 +240,10 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
         logging.info(f"Log file not found: {log_path}")
         # Try to get last sync from database as fallback
         try:
-            conn = sqlite3.connect(DB_FILE)
-            cursor = conn.cursor()
-            cursor.execute("SELECT MAX(last_synced) FROM synced_items")
-            result = cursor.fetchone()
-            if result and result[0]:
-                log_info.last_sync_complete = result[0]
-                logging.info(f"Got last sync from database: {result[0]}")
-            conn.close()
+            last_synced = get_last_synced_time()
+            if last_synced:
+                log_info.last_sync_complete = last_synced
+                logging.info(f"Got last sync from database: {last_synced}")
         except Exception as e:
             logging.exception(f"Could not get last sync from database: {e}")
         return log_info
@@ -292,14 +302,10 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
         if not log_info.last_sync_complete:
             logging.info("No sync completion found in logs, checking database...")
             try:
-                conn = sqlite3.connect(DB_FILE)
-                cursor = conn.cursor()
-                cursor.execute("SELECT MAX(last_synced) FROM synced_items")
-                result = cursor.fetchone()
-                if result and result[0]:
-                    log_info.last_sync_complete = result[0]
-                    logging.info(f"Got last sync from database: {result[0]}")
-                conn.close()
+                last_synced = get_last_synced_time()
+                if last_synced:
+                    log_info.last_sync_complete = last_synced
+                    logging.info(f"Got last sync from database: {last_synced}")
             except Exception as e:
                 logging.exception(f"Could not get last sync from database: {e}")
 
@@ -375,98 +381,13 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
     return log_info
 
 
-def normalize_list_id(list_type: str, list_id: str) -> str:
-    """
-    Normalize list_id to match what's stored in item_lists table.
-    Extracts the actual ID from URLs if needed.
-
-    Args:
-        list_type: Type of list (e.g., 'mdblist', 'trakt', 'imdb')
-        list_id: List ID (may be a URL or just an ID)
-
-    Returns:
-        Normalized list_id that matches what's in item_lists table
-    """
-    if not list_id:
-        return list_id
-
-    # If it's already not a URL, return as-is
-    if not list_id.startswith(("http://", "https://")):
-        return list_id
-
-    # Extract ID from URL based on list type
-    list_type_lower = list_type.lower()
-
-    if list_type_lower == "mdblist":
-        # MDBList URLs: https://mdblist.com/lists/username/listname
-        # Extract: username/listname
-        match = re.search(r"mdblist\.com/lists/([^/?]+)", list_id)
-        if match:
-            return match.group(1)
-
-    elif list_type_lower in ("trakt", "trakt_special"):
-        # Trakt URLs can be various formats:
-        # - https://trakt.tv/users/username/lists/list-slug
-        # - https://trakt.tv/lists/123
-        # Extract the list identifier
-        match = re.search(r"trakt\.tv/(?:users/[^/]+/)?lists/([^/?]+)", list_id)
-        if match:
-            return match.group(1)
-        # For special Trakt lists like trending:movies, they might be in the URL path
-        match = re.search(r"trakt\.tv/(?:movies|shows)/([^/?]+)", list_id)
-        if match:
-            return match.group(1)
-
-    elif list_type_lower == "imdb":
-        # IMDb URLs: https://www.imdb.com/list/ls123456789
-        # Extract: ls123456789
-        match = re.search(r"imdb\.com/list/([^/?]+)", list_id)
-        if match:
-            return match.group(1)
-
-    elif list_type_lower == "letterboxd":
-        # Letterboxd URLs: https://letterboxd.com/username/list/listname/
-        # NOTE: Letterboxd stores the full URL in the database, so return as-is
-        return list_id
-
-    elif list_type_lower == "tmdb":
-        # TMDB URLs: https://www.themoviedb.org/list/12345
-        # Extract: 12345
-        match = re.search(r"themoviedb\.org/list/([^/?]+)", list_id)
-        if match:
-            return match.group(1)
-
-    # For other types or if extraction fails, try to get the last meaningful segment
-    # This is a fallback that should work for most cases
-    from urllib.parse import urlparse
-
-    try:
-        parsed = urlparse(list_id.rstrip("/"))
-        path_parts = [p for p in parsed.path.split("/") if p]
-        if path_parts:
-            return path_parts[-1]
-    except Exception as e:
-        logging.debug("Failed to normalize list ID as URL %s: %s", list_id, e)
-
-    # If all else fails, return the original (though this might not match)
-    logging.warning(f"Could not normalize list_id for {list_type}: {list_id}, using as-is")
-    return list_id
-
-
 def get_deduplicated_items():
     """Get unique items with deduplication logic"""
     if not os.path.exists(DB_FILE):
         return []
 
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-
-        # Get all synced items including year and source list info
-        cursor.execute(
-            "SELECT id, title, media_type, year, imdb_id, overseerr_id, status, last_synced, source_list_type, source_list_id FROM synced_items"
-        )
-        items = cursor.fetchall()
+        items = get_all_synced_items()
 
         unique_items = {}
 
@@ -525,8 +446,6 @@ def get_deduplicated_items():
                 if should_replace:
                     unique_items[key] = item
 
-        conn.close()
-
         result = list(unique_items.values())
         logging.debug(f"DEBUG - Deduplication: {len(items)} raw items -> {len(result)} unique items")
 
@@ -550,12 +469,7 @@ def analyze_data_quality():
         return None
 
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-
-        # Get all synced items including year
-        cursor.execute("SELECT title, media_type, year, imdb_id, overseerr_id, status, last_synced FROM synced_items")
-        items = cursor.fetchall()
+        items = get_synced_items_quality_rows()
 
         # Analyze duplicates
         title_counts = Counter()
@@ -596,7 +510,6 @@ def analyze_data_quality():
             "most_duplicated": title_counts.most_common(5),
         }
 
-        conn.close()
         return analysis
 
     except Exception as e:
@@ -1903,9 +1816,7 @@ async def get_system_status():
             database_status["last_modified"] = datetime.fromtimestamp(stat.st_mtime).isoformat()
 
             # Test connection
-            conn = sqlite3.connect(DB_FILE)
-            conn.execute("SELECT 1")
-            conn.close()
+            check_database_connection()
             database_status["connected"] = True
         except Exception as e:
             database_status["error"] = str(e)
@@ -1962,9 +1873,7 @@ async def get_log_info():
 async def test_database():
     """Test database connectivity"""
     try:
-        conn = sqlite3.connect(DB_FILE)
-        conn.execute("SELECT 1")
-        conn.close()
+        check_database_connection()
         return {"connected": True}
     except Exception as e:
         return {"connected": False, "error": str(e)}
@@ -3422,14 +3331,7 @@ async def get_lists_debug():
     try:
         lists = load_list_ids()
         # Also get raw database data for debugging
-        import sqlite3
-
-        from list_sync.database import DB_FILE
-
-        with sqlite3.connect(DB_FILE) as conn:
-            cursor = conn.cursor()
-            cursor.execute("SELECT list_type, list_id, list_url, item_count, last_synced FROM lists")
-            raw_data = cursor.fetchall()
+        raw_data = get_raw_lists()
 
         return {
             "lists": lists,
@@ -3578,10 +3480,6 @@ async def add_list(list_add: ListAdd):
 async def get_list_items_endpoint(list_type: str, list_id: str, limit: int = Query(20, ge=1, le=100)):
     """Get items from a specific list with enriched metadata"""
     try:
-        import sqlite3
-
-        from list_sync.database import DB_FILE, get_list_items
-
         items = get_list_items(list_type, list_id)
 
         # Get poster URLs from database
@@ -3590,12 +3488,7 @@ async def get_list_items_endpoint(list_type: str, list_id: str, limit: int = Que
 
         if item_ids:
             try:
-                with sqlite3.connect(DB_FILE) as conn:
-                    cursor = conn.cursor()
-                    placeholders = ",".join("?" * len(item_ids))
-                    cursor.execute(f"SELECT id, poster_url FROM synced_items WHERE id IN ({placeholders})", item_ids)
-                    for row in cursor.fetchall():
-                        poster_url_map[row[0]] = row[1]
+                poster_url_map = get_poster_urls(item_ids)
             except Exception as e:
                 logging.warning(f"Failed to fetch poster URLs: {e}")
 
@@ -3746,16 +3639,12 @@ async def get_enriched_items(
     try:
         import time
 
-        from list_sync.database import DB_FILE
         from list_sync.providers.trakt import get_trakt_metadata
 
         # Debug: Check item_lists table
         try:
-            with sqlite3.connect(DB_FILE) as conn:
-                cursor = conn.cursor()
-                cursor.execute("SELECT COUNT(*) FROM item_lists")
-                item_lists_count = cursor.fetchone()[0]
-                logging.info(f"📊 item_lists table has {item_lists_count} entries")
+            item_lists_count = count_item_lists()
+            logging.info(f"📊 item_lists table has {item_lists_count} entries")
         except Exception as e:
             logging.warning(f"Could not check item_lists table: {e}")
 
@@ -3817,74 +3706,25 @@ async def get_enriched_items(
         item_lists_map = {}  # Map item_id to list of lists it belongs to
 
         try:
-            with sqlite3.connect(DB_FILE) as conn:
-                cursor = conn.cursor()
-                placeholders = ",".join("?" * len(item_ids))
+            tmdb_id_map, poster_url_map = get_item_tmdb_and_posters(item_ids)
+            # Convert tmdb_id values to int (DAL returns raw values)
+            for _k, _v in list(tmdb_id_map.items()):
+                if _v is not None:
+                    try:
+                        tmdb_id_map[_k] = int(_v) if isinstance(_v, str) else _v
+                    except (ValueError, TypeError):
+                        logging.warning(f"Invalid tmdb_id format for item {_k}: {_v}")
+            item_lists_map = get_item_lists_for_items(item_ids)
 
-                # Fetch tmdb_ids and poster URLs
-                cursor.execute(
-                    f"SELECT id, tmdb_id, poster_url FROM synced_items WHERE id IN ({placeholders})", item_ids
-                )
-                for row in cursor.fetchall():
-                    item_db_id, tmdb_id, poster_url = row
-                    if tmdb_id:
-                        try:
-                            # Handle both string and int tmdb_ids
-                            tmdb_id_map[item_db_id] = int(tmdb_id) if isinstance(tmdb_id, str) else tmdb_id
-                        except (ValueError, TypeError):
-                            logging.warning(f"Invalid tmdb_id format for item {item_db_id}: {tmdb_id}")
-                    poster_url_map[item_db_id] = poster_url
-
-                # Batch fetch list sources for all items
-                # Check if display_name column exists in lists table
-                cursor.execute("PRAGMA table_info(lists)")
-                list_columns = [col[1] for col in cursor.fetchall()]
-                has_display_name = "display_name" in list_columns
-
-                if has_display_name:
-                    cursor.execute(
-                        f"""
-                        SELECT il.item_id, il.list_type, il.list_id, l.display_name
-                        FROM item_lists il
-                        LEFT JOIN lists l ON il.list_type = l.list_type AND il.list_id = l.list_id
-                        WHERE il.item_id IN ({placeholders})
-                        ORDER BY il.synced_at DESC
-                    """,
-                        item_ids,
+            # Debug: Log how many items have list sources
+            items_with_sources = len([k for k, v in item_lists_map.items() if v])
+            logging.info(f"📦 Fetched list_sources for {items_with_sources}/{len(item_ids)} items")
+            if items_with_sources > 0:
+                sample_item = next((k for k, v in item_lists_map.items() if v), None)
+                if sample_item:
+                    logging.info(
+                        f"📋 Sample: Item {sample_item} has {len(item_lists_map[sample_item])} list(s): {item_lists_map[sample_item]}"
                     )
-                else:
-                    # Fallback: Don't join lists table, just get list_type and list_id
-                    cursor.execute(
-                        f"""
-                        SELECT il.item_id, il.list_type, il.list_id, NULL as display_name
-                        FROM item_lists il
-                        WHERE il.item_id IN ({placeholders})
-                        ORDER BY il.synced_at DESC
-                    """,
-                        item_ids,
-                    )
-
-                for row in cursor.fetchall():
-                    item_db_id, list_type, list_id, display_name = row
-                    if item_db_id not in item_lists_map:
-                        item_lists_map[item_db_id] = []
-                    item_lists_map[item_db_id].append(
-                        {
-                            "list_type": list_type,
-                            "list_id": list_id,
-                            "display_name": display_name,
-                        }
-                    )
-
-                # Debug: Log how many items have list sources
-                items_with_sources = len([k for k, v in item_lists_map.items() if v])
-                logging.info(f"📦 Fetched list_sources for {items_with_sources}/{len(item_ids)} items")
-                if items_with_sources > 0:
-                    sample_item = next((k for k, v in item_lists_map.items() if v), None)
-                    if sample_item:
-                        logging.info(
-                            f"📋 Sample: Item {sample_item} has {len(item_lists_map[sample_item])} list(s): {item_lists_map[sample_item]}"
-                        )
         except Exception as e:
             logging.warning(f"Failed to batch fetch tmdb_ids, poster URLs, and list sources: {e}")
 
@@ -4960,50 +4800,7 @@ async def get_processed_items(
 
         if item_ids:
             try:
-                with sqlite3.connect(DB_FILE) as conn:
-                    cursor = conn.cursor()
-                    placeholders = ",".join("?" * len(item_ids))
-
-                    # Batch fetch list sources for all items
-                    # Check if display_name column exists in lists table
-                    cursor.execute("PRAGMA table_info(lists)")
-                    list_columns = [col[1] for col in cursor.fetchall()]
-                    has_display_name = "display_name" in list_columns
-
-                    if has_display_name:
-                        cursor.execute(
-                            f"""
-                            SELECT il.item_id, il.list_type, il.list_id, l.display_name
-                            FROM item_lists il
-                            LEFT JOIN lists l ON il.list_type = l.list_type AND il.list_id = l.list_id
-                            WHERE il.item_id IN ({placeholders})
-                            ORDER BY il.synced_at DESC
-                        """,
-                            item_ids,
-                        )
-                    else:
-                        # Fallback: Don't join lists table, just get list_type and list_id
-                        cursor.execute(
-                            f"""
-                            SELECT il.item_id, il.list_type, il.list_id, NULL as display_name
-                            FROM item_lists il
-                            WHERE il.item_id IN ({placeholders})
-                            ORDER BY il.synced_at DESC
-                        """,
-                            item_ids,
-                        )
-
-                    for row in cursor.fetchall():
-                        item_db_id, list_type, list_id, display_name = row
-                        if item_db_id not in item_lists_map:
-                            item_lists_map[item_db_id] = []
-                        item_lists_map[item_db_id].append(
-                            {
-                                "list_type": list_type,
-                                "list_id": list_id,
-                                "display_name": display_name,
-                            }
-                        )
+                item_lists_map = get_item_lists_for_items(item_ids)
             except Exception as e:
                 logging.warning(f"Failed to batch fetch list sources: {e}")
 
@@ -5224,54 +5021,12 @@ async def get_requested_items(
                 },
             }
 
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-
-        # Build WHERE clause for filters - ONLY include 'requested' status, not 'already_requested'
-        where_conditions = ["status = 'requested'"]
-        params = []
-
-        if search.strip():
-            where_conditions.append("LOWER(title) LIKE ?")
-            params.append(f"%{search.strip().lower()}%")
-
-        if status_filter.strip():
-            where_conditions.append("status = ?")
-            params.append(status_filter)
-
-        if media_type_filter.strip():
-            where_conditions.append("media_type = ?")
-            params.append(media_type_filter)
-
-        where_clause = " AND ".join(where_conditions)
-
-        # Get total count with filters
-        cursor.execute(f"SELECT COUNT(*) FROM synced_items WHERE {where_clause}", params)
-        total_items = cursor.fetchone()[0]
-
-        # Calculate pagination
-        total_pages = (total_items + limit - 1) // limit if total_items > 0 else 0
         offset = (page - 1) * limit
-
-        # Get paginated items with filters
-        cursor.execute(
-            f"""
-            SELECT id, title, media_type, imdb_id, overseerr_id, status, last_synced 
-            FROM synced_items 
-            WHERE {where_clause}
-            ORDER BY last_synced DESC
-            LIMIT ? OFFSET ?
-        """,
-            params + [limit, offset],
-        )
-
-        items = cursor.fetchall()
-
-        # Get total count without filters for reference - ONLY 'requested' items
-        cursor.execute("SELECT COUNT(*) FROM synced_items WHERE status = 'requested'")
-        total_count_unfiltered = cursor.fetchone()[0]
-
-        conn.close()
+        result = query_requested_items(search, status_filter, media_type_filter, limit, offset)
+        items = result["items"]
+        total_items = result["total_items"]
+        total_count_unfiltered = result["total_count"]
+        total_pages = (total_items + limit - 1) // limit if total_items > 0 else 0
 
         # Get Seerr base URL for generating item links
         try:
@@ -7443,7 +7198,7 @@ async def update_settings(settings: dict):
             try:
                 interval = int(settings["sync_interval"])
                 configure_sync_interval(interval)
-            except (ValueError, TypeError, sqlite3.Error) as e:
+            except (ValueError, TypeError, DatabaseError) as e:
                 logging.debug("Failed to configure sync interval: %s", e)
 
         logging.info(f"Settings update complete: {len(settings)} fields processed")
@@ -7655,37 +7410,7 @@ def enrich_historic_data_with_database(historic_items):
         return historic_items
 
     try:
-        conn = sqlite3.connect(DB_FILE)
-        cursor = conn.cursor()
-
-        # Get all database items with their IDs, year, and source list info
-        try:
-            cursor.execute(
-                "SELECT title, media_type, imdb_id, overseerr_id, status, year, source_list_type, source_list_id FROM synced_items"
-            )
-            db_items = cursor.fetchall()
-        except sqlite3.OperationalError as e:
-            # If year or source list columns don't exist, try without them
-            logging.exception(f"Warning: Could not fetch all columns from database: {e}")
-            try:
-                cursor.execute("SELECT title, media_type, imdb_id, overseerr_id, status, year FROM synced_items")
-                db_items_without_source = cursor.fetchall()
-                # Convert to format with source_list_type and source_list_id as None
-                db_items = [
-                    (title, media_type, imdb_id, overseerr_id, status, year, None, None)
-                    for title, media_type, imdb_id, overseerr_id, status, year in db_items_without_source
-                ]
-            except sqlite3.OperationalError:
-                # If year column also doesn't exist
-                cursor.execute("SELECT title, media_type, imdb_id, overseerr_id, status FROM synced_items")
-                db_items_minimal = cursor.fetchall()
-                # Convert to format with year, source_list_type and source_list_id as None
-                db_items = [
-                    (title, media_type, imdb_id, overseerr_id, status, None, None, None)
-                    for title, media_type, imdb_id, overseerr_id, status in db_items_minimal
-                ]
-
-        conn.close()
+        db_items = get_historic_enrichment_rows()
 
         # Create lookup dictionaries for database items
         # Try both possible media types since log parsing might be wrong
@@ -9131,23 +8856,7 @@ async def cleanup_image_cache(hours: int = Query(24, description="Remove images 
 async def list_cached_images(limit: int = Query(50, ge=1, le=1000)):
     """List cached images for debugging."""
     try:
-        import sqlite3
-
-        from list_sync.database import DB_FILE
-
-        with sqlite3.connect(DB_FILE) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT id, image_url, mime_type, file_size, cached_at, last_accessed, source
-                FROM cached_images
-                ORDER BY last_accessed DESC
-                LIMIT ?
-            """,
-                (limit,),
-            )
-            images = [dict(row) for row in cursor.fetchall()]
+        images = fetch_cached_images(limit)
 
         return {"images": images, "total": len(images)}
     except Exception as e:

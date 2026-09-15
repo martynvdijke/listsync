@@ -87,23 +87,16 @@ jobs:
         with:
           python-version: "3.11"
 
-      # Version matches .pre-commit-config.yaml so local and CI agree.
+      # Version matches pyproject.toml and .pre-commit-config.yaml so local and
+      # CI evaluate the same rules.
       - name: Install ruff
         run: pip install ruff==0.6.7
 
-      # The tree carries thousands of pre-existing findings under the config in
-      # pyproject.toml, so this reports instead of gating - turning it on as a
-      # gate today would just fail every pull request. --output-format=github
-      # annotates the diff, which puts findings on the lines a reviewer is
-      # already looking at, without blocking the merge.
-      - name: Report findings
-        run: ruff check --output-format=github --exit-zero .
+      # Enforcing. Pre-existing findings are baselined explicitly in
+      # pyproject.toml ([tool.ruff.lint.per-file-ignores]); only new findings
+      # fail the build.
+      - name: Lint
+        run: ruff check .
 
-      - name: Summarise
-        if: always()
-        run: |
-          total=$(ruff check --output-format=concise --exit-zero . | wc -l)
-          echo "### Ruff: $total findings" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Reported, not gated - the tree has pre-existing findings." >> "$GITHUB_STEP_SUMMARY"
-          echo "Findings on changed lines appear as annotations on the diff." >> "$GITHUB_STEP_SUMMARY"
+      - name: Check formatting
+        run: ruff format --check .

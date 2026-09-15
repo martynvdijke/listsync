@@ -184,6 +184,7 @@ def fetch_collection(franchise_name: str) -> list[dict[str, Any]]:
                 # Extract year from YYYY-MM-DD format
                 year = int(release_date.split("-")[0])
             except (ValueError, AttributeError):
+                # best-effort: optional field parsing, default kept
                 pass
 
         # Extract IMDB ID if available (enables fast IMDB → Trakt → TMDB lookup path)

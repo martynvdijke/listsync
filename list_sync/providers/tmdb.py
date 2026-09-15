@@ -498,16 +498,16 @@ def _extract_title(item) -> str:
             for elem in elements:
                 if elem.text.strip():
                     return elem.text.strip()
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug(f"Best-effort operation failed: {e}")
 
     # Fallback: get first non-empty text
     try:
         text = item.text.strip()
         if text:
             return text.split("\n")[0]
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug(f"Best-effort operation failed: {e}")
 
     return ""
 
@@ -529,8 +529,8 @@ def _extract_year(item) -> int:
                 year = _extract_year_from_text(text)
                 if year:
                     return year
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug(f"Best-effort operation failed: {e}")
 
     # Fallback: search in all text
     try:
@@ -538,8 +538,8 @@ def _extract_year(item) -> int:
         year = _extract_year_from_text(text)
         if year:
             return year
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug(f"Best-effort operation failed: {e}")
 
     return None
 
@@ -595,8 +595,8 @@ def _extract_unique_id(item) -> str:
                     id_match = re.search(r"/tv/(\d+)(?:-[^/]+)?", href)
                     if id_match:
                         return id_match.group(1)
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug(f"Best-effort operation failed: {e}")
 
     return None
 
@@ -611,7 +611,7 @@ def _determine_media_type(item, title: str) -> str:
         text = item.text.lower()
         if any(keyword in text for keyword in ["tv", "series", "season", "episode", "show"]):
             media_type = "tv"
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug(f"Best-effort operation failed: {e}")
 
     return media_type

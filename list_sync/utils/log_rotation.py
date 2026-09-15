@@ -178,20 +178,21 @@ if __name__ == "__main__":
     # Test the log rotator
     rotator = LogRotator("data/list_sync.log")
 
-    print("Log Rotation Test")
-    print("=" * 50)
+    self_logger = logging.getLogger(__name__)
+    self_logger.info("Log Rotation Test")
+    self_logger.info("=" * 50)
 
     info = rotator.get_log_file_info()
-    print(f"Main file: {info['main_file']}")
-    print(f"Main file exists: {info['main_exists']}")
-    print(f"Main file size: {info['main_size_mb']:.2f} MB")
-    print(f"Should rotate: {info['should_rotate']}")
-    print(f"Backup files: {len(info['backup_files'])}")
-    print(f"Total size: {info['total_size_mb']:.2f} MB")
+    self_logger.info(f"Main file: {info['main_file']}")
+    self_logger.info(f"Main file exists: {info['main_exists']}")
+    self_logger.info(f"Main file size: {info['main_size_mb']:.2f} MB")
+    self_logger.info(f"Should rotate: {info['should_rotate']}")
+    self_logger.info(f"Backup files: {len(info['backup_files'])}")
+    self_logger.info(f"Total size: {info['total_size_mb']:.2f} MB")
 
     if info["should_rotate"]:
-        print("\nPerforming log rotation...")
+        self_logger.info("Performing log rotation...")
         success = rotator.rotate_log()
-        print(f"Rotation successful: {success}")
+        self_logger.info(f"Rotation successful: {success}")
     else:
-        print("\nNo rotation needed")
+        self_logger.info("No rotation needed")

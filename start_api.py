@@ -7,6 +7,11 @@ import os
 import sys
 from pathlib import Path
 
+from list_sync.utils.logger import get_console_logger
+
+# User-facing launcher output (the console is this script's interface).
+console = get_console_logger()
+
 # Fix Unicode encoding for Windows console
 if sys.platform == "win32":
     import io
@@ -22,13 +27,13 @@ def check_dependencies():
         import psutil
         import uvicorn
 
-        print("✅ All dependencies are installed")
+        console.info("✅ All dependencies are installed")
         return True
     except ImportError as e:
-        print(f"❌ Missing dependency: {e}")
+        console.info(f"❌ Missing dependency: {e}")
         # pyproject.toml is the single dependency manifest; the API server's
         # dependencies live in the `api` group (see [tool.poetry.group.api]).
-        print("📦 Install them with: poetry install --only main,api")
+        console.info("📦 Install them with: poetry install --only main,api")
         return False
 
 
@@ -38,14 +43,14 @@ def check_listsync_data():
     db_file = data_dir / "list_sync.db"
 
     if not data_dir.exists():
-        print("❌ Data directory not found. Please run ListSync first to create the database.")
+        console.info("❌ Data directory not found. Please run ListSync first to create the database.")
         return False
 
     if not db_file.exists():
-        print("❌ ListSync database not found. Please run ListSync first to create the database.")
+        console.info("❌ ListSync database not found. Please run ListSync first to create the database.")
         return False
 
-    print(f"✅ Found ListSync database: {db_file} ({db_file.stat().st_size} bytes)")
+    console.info(f"✅ Found ListSync database: {db_file} ({db_file.stat().st_size} bytes)")
     return True
 
 
@@ -60,21 +65,22 @@ def check_listsync_process():
                     cmdline_str = " ".join(proc.info["cmdline"]).lower()
                     if ("list_sync" in cmdline_str or "listsync" in cmdline_str) and "python" in cmdline_str:
                         if "api_server.py" not in cmdline_str:
-                            print(f"✅ Found ListSync process: PID {proc.info['pid']}")
+                            console.info(f"✅ Found ListSync process: PID {proc.info['pid']}")
                             return True
             except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
+                # Process exited or is not ours to inspect; skip it and keep looking.
+                continue
 
-        print("⚠️  ListSync process not found. The API will work but sync status may be inaccurate.")
+        console.info("⚠️  ListSync process not found. The API will work but sync status may be inaccurate.")
         return True  # Don't block API startup
     except Exception as e:
-        print(f"❌ Error checking processes: {e}")
+        console.info(f"❌ Error checking processes: {e}")
         return True  # Don't block API startup
 
 
 def main():
-    print("🚀 Starting ListSync Web UI API Server...")
-    print("=" * 50)
+    console.info("🚀 Starting ListSync Web UI API Server...")
+    console.info("=" * 50)
 
     # Check dependencies
     if not check_dependencies():
@@ -87,12 +93,12 @@ def main():
     # Check ListSync process (warning only)
     check_listsync_process()
 
-    print("\n📊 Starting API server...")
-    print("🔗 API documentation: http://localhost:4222/docs")
-    print("🔗 Health check: http://localhost:4222/api/system/health")
-    print("🔗 Dashboard: http://localhost:3222 (when Next.js is running)")
-    print("\n💡 Press Ctrl+C to stop the server")
-    print("=" * 50)
+    console.info("\n📊 Starting API server...")
+    console.info("🔗 API documentation: http://localhost:4222/docs")
+    console.info("🔗 Health check: http://localhost:4222/api/system/health")
+    console.info("🔗 Dashboard: http://localhost:3222 (when Next.js is running)")
+    console.info("\n💡 Press Ctrl+C to stop the server")
+    console.info("=" * 50)
 
     # Start the API server
     try:
@@ -108,9 +114,9 @@ def main():
             log_level="info",
         )
     except KeyboardInterrupt:
-        print("\n👋 API server stopped")
+        console.info("\n👋 API server stopped")
     except Exception as e:
-        print(f"❌ Error starting API server: {e}")
+        console.info(f"❌ Error starting API server: {e}")
         sys.exit(1)
 
 

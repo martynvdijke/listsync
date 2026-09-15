@@ -73,3 +73,22 @@ def setup_logging():
     urllib3_logger.propagate = False
 
     return added_logger
+
+
+def get_console_logger():
+    """Message-only stdout logger for user-facing CLI output.
+
+    Separate from setup_logging()'s diagnostic file logger: that one blocks the
+    console on purpose. This one writes the message verbatim (ANSI colours and
+    all) so the CLI looks exactly as it did when it wrote straight to stdout.
+    """
+    import sys
+
+    logger = logging.getLogger("cli_console")
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+        logger.propagate = False
+    return logger

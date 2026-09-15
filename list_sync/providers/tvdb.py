@@ -368,8 +368,8 @@ def _process_tvdb_list(sb, url) -> list[dict[str, Any]]:
                         year = _extract_year_from_text(year_text)
                         if year:
                             break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Best-effort operation failed: {e}")
 
                 # Extract description if available
                 description = ""
@@ -377,8 +377,8 @@ def _process_tvdb_list(sb, url) -> list[dict[str, Any]]:
                     desc_p = item.find_elements("css selector", "p")
                     if desc_p:
                         description = desc_p[0].text.strip()
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Best-effort operation failed: {e}")
 
                 media_items.append(
                     {

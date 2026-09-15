@@ -5,6 +5,7 @@ Configuration management for ListSync.
 import base64
 import getpass
 import json
+import logging
 import os
 
 import requests
@@ -14,6 +15,8 @@ from halo import Halo
 
 from .utils.helpers import color_gradient, custom_input
 from .utils.logger import DATA_DIR
+
+logger = logging.getLogger(__name__)
 
 # Define paths for config and database
 CONFIG_FILE = os.path.join(DATA_DIR, "config.enc")
@@ -180,12 +183,12 @@ def save_config(seerr_url, api_key, requester_user_id):
         requester_user_id (str): Requester user ID
     """
     config = {"overseerr_url": seerr_url, "api_key": api_key, "requester_user_id": requester_user_id}
-    print(color_gradient("🔐  Enter a password to encrypt your API details: ", "#ff0000", "#aa0000"), end="")
+    logger.info("Prompting for encryption password")
     password = getpass.getpass("")
     encrypted_config = encrypt_config(config, password)
     with open(CONFIG_FILE, "wb") as f:
         f.write(encrypted_config)
-    print(f'\n{color_gradient("✅  Details encrypted. Remember your password!", "#00ff00", "#00aa00")}\n')
+    logger.info("Details encrypted")
 
 
 def load_config() -> tuple[str | None, str | None, str | None]:
@@ -203,26 +206,21 @@ def load_config() -> tuple[str | None, str | None, str | None]:
         current_attempt = 0
 
         while current_attempt < max_attempts:
-            print()  # Ensure password prompt is on a new line
+            logger.info("Prompting for password")
             password = getpass.getpass(color_gradient("🔑  Enter your password: ", "#ff0000", "#aa0000"))
             try:
                 config = decrypt_config(encrypted_config, password)
-                print()  # Add a newline after successful password entry
+                logger.info("Password accepted")
                 return config["overseerr_url"], config["api_key"], config["requester_user_id"]
             except Exception:
                 current_attempt += 1
                 if current_attempt < max_attempts:
-                    print(color_gradient("\n❌  Incorrect password. Please try again.", "#ff0000", "#aa0000"))
+                    logger.warning("Incorrect password, please try again")
                 else:
-                    print(color_gradient("\n❌  Maximum password attempts reached.", "#ff0000", "#aa0000"))
+                    logger.warning("Maximum password attempts reached")
                     if custom_input("\n🗑️  Delete this config and start over? (y/n): ").lower() == "y":
                         os.remove(CONFIG_FILE)
-                        print(
-                            color_gradient(
-                                "\n🔄  Config deleted. Rerun the script to set it up again.", "#ffaa00", "#ff5500"
-                            )
-                            + "\n"
-                        )
+                        logger.warning("Config deleted, rerun to set up again")
                     return None, None, None
     return None, None, None
 
@@ -258,21 +256,15 @@ def set_requester_user(seerr_url, api_key):
         response.raise_for_status()
         jsonResult = response.json()
         if jsonResult["pageInfo"]["results"] > 1:
-            print(
-                color_gradient(
-                    "\n📋 Multiple users detected, you can choose which user will make the requests on ListSync behalf.\n",
-                    "#00aaff",
-                    "#00ffaa",
-                )
-            )
+            logger.info("Multiple users detected - choose which user will make the requests")
             for result in jsonResult["results"]:
-                print(color_gradient(f"{result['id']}. {result['displayName']}", "#ffaa00", "#ff5500"))
+                logger.info(f"{result['id']}. {result['displayName']}")
             requester_user_id = custom_input(
                 color_gradient("\nEnter the number of the list to use as requester user: ", "#ffaa00", "#ff5500")
             )
             if not next((x for x in jsonResult["results"] if str(x["id"]) == requester_user_id), None):
                 requester_user_id = "1"
-                print(color_gradient("\n❌  Invalid option, using admin as requester user.", "#ff0000", "#aa0000"))
+                logger.warning("Invalid option, using admin as requester user")
 
         import logging
 
@@ -378,7 +370,8 @@ def load_env_config() -> tuple[str | None, str | None, str | None, float, bool, 
         sync_interval_val = config_manager.get_setting("sync_interval", "12")
         try:
             sync_interval = float(sync_interval_val)
-        except:
+        except (ValueError, TypeError) as e:
+            logger.debug(f"Failed to parse sync_interval '{sync_interval_val}': {e}")
             sync_interval = 12.0
 
         automated_mode_val = config_manager.get_setting("auto_sync", "true")
@@ -408,7 +401,7 @@ def load_env_config() -> tuple[str | None, str | None, str | None, float, bool, 
                 return url, api_key, user_id, sync_interval, automated_mode, is_4k
             except Exception as e:
                 logging.exception(f"Error testing Seerr API with database config: {e}")
-                print(color_gradient(f"\n❌  Error testing Seerr API: {e}", "#ff0000", "#aa0000"))
+                logger.warning(f"Error testing Seerr API: {e}")
 
         return None, None, None, 0.0, False, False
 
@@ -441,7 +434,7 @@ def load_env_config() -> tuple[str | None, str | None, str | None, float, bool, 
                 return url, api_key, user_id, float(sync_interval), automated_mode, is_4k
             except Exception as e:
                 logging.exception(f"Error testing Seerr API with environment variables: {e}")
-                print(color_gradient(f"\n❌  Error testing Seerr API: {e}", "#ff0000", "#aa0000"))
+                logger.warning(f"Error testing Seerr API: {e}")
 
         return None, None, None, 0.0, False, False
 
@@ -503,8 +496,9 @@ def load_env_lists() -> bool:
         try:
             config_manager = ConfigManager()
             get_list_setting = lambda key: config_manager.get_setting(key, "")
-        except:
+        except Exception as e:
             # Fallback to environment if ConfigManager fails
+            logger.debug(f"ConfigManager init failed, falling back to env: {e}")
             get_list_setting = lambda key: os.getenv(key.upper(), "")
 
         # Get existing lists from database to avoid duplicates
@@ -530,7 +524,7 @@ def load_env_lists() -> bool:
                 lists_added = True
                 as_user = f" (requests as user {requester})" if requester else ""
                 logging.info(f"Added new {list_type.upper()} list: {list_id}{as_user}")
-                print(f"✅ Added new {list_type.upper()} list: {list_id}{as_user}")
+                logger.info(f"Added new {list_type.upper()} list: {list_id}{as_user}")
             elif user_id:
                 # The entry names a user explicitly, so keep the stored list in
                 # step with the configuration file it came from.
@@ -539,7 +533,7 @@ def load_env_lists() -> bool:
                 current = get_list_user_id(list_type, list_id)
                 if current != str(user_id):
                     update_list_user_id(list_type, list_id, user_id)
-                    print(f"🔄 {list_type.upper()} list {list_id} now requests as user {user_id}")
+                    logger.info(f"{list_type.upper()} list {list_id} now requests as user {user_id}")
             else:
                 logging.info(f"Skipping existing {list_type.upper()} list: {list_id}")
 
@@ -625,17 +619,17 @@ def load_env_lists() -> bool:
             logging.info(
                 f"Environment sync complete: {len([l for l in existing_lists])} existing + {sum(1 for _ in [True for _ in range(len(load_list_ids()) - len(existing_lists))])} new lists"
             )
-            print(f"📊 Environment sync complete: preserved {len(existing_lists)} existing lists, added new lists")
+            logger.info(f"Environment sync complete: preserved {len(existing_lists)} existing lists, added new lists")
         else:
             logging.info("No new lists found in environment variables (all existing lists preserved)")
-            print("📊 No new lists to add from environment (all existing lists preserved)")
+            logger.info("No new lists to add from environment")
 
         return lists_added
     except Exception as e:
         import logging
 
         logging.exception(f"Error loading lists from environment: {e!s}")
-        print(color_gradient(f"\n❌  Error loading lists: {e!s}", "#ff0000", "#aa0000"))
+        logger.warning(f"Error loading lists: {e!s}")
         return False
 
 
@@ -730,12 +724,14 @@ class ConfigManager:
             elif setting_type == "integer":
                 try:
                     value = int(value)
-                except:
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Failed to parse integer setting '{key}': {e}")
                     value = 0
             elif setting_type == "float":
                 try:
                     value = float(value)
-                except:
+                except (ValueError, TypeError) as e:
+                    logger.debug(f"Failed to parse float setting '{key}': {e}")
                     value = 0.0
 
             self._cache[key] = value

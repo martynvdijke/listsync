@@ -12,6 +12,8 @@ import requests
 
 from . import register_provider
 
+logger = logging.getLogger(__name__)
+
 # SIMKL API configuration
 SIMKL_API_BASE = "https://api.simkl.com"
 SIMKL_CLIENT_ID = os.getenv("SIMKL_CLIENT_ID")
@@ -123,10 +125,8 @@ def fetch_simkl_list(list_id: str) -> list[dict[str, Any]]:
     logging.warning("   Custom public lists are not supported by SIMKL API.")
     logging.warning("   Use Trakt, IMDB, or MDBList for public list syncing.")
 
-    print("⚠️  SIMKL provider is temporarily disabled.")
-    print("   SIMKL API currently only supports authenticated user watchlists.")
-    print("   Custom public lists are not supported by SIMKL API.")
-    print("   Use Trakt, IMDB, or MDBList for public list syncing.")
+    logger.warning("SIMKL provider is temporarily disabled - only authenticated user watchlists supported")
+    logger.info("Custom public lists are not supported by SIMKL API. Use Trakt, IMDB, or MDBList.")
 
     return []
 

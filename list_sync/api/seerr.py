@@ -141,6 +141,7 @@ class SeerrClient:
                 if message:
                     return str(message)
         except (ValueError, AttributeError):
+            # best-effort: response may not be JSON, fall back to text
             pass
         text = getattr(response, "text", "") or ""
         return text.strip()[:200] or "no detail returned"
@@ -249,21 +250,15 @@ class SeerrClient:
             jsonResult = response.json()
 
             if jsonResult["pageInfo"]["results"] > 1:
-                print(
-                    color_gradient(
-                        "\n📋 Multiple users detected, you can choose which user will make the requests on ListSync behalf.\n",
-                        "#00aaff",
-                        "#00ffaa",
-                    )
-                )
+                logging.info("Multiple users detected - choose which user will make the requests")
                 for result in jsonResult["results"]:
-                    print(color_gradient(f"{result['id']}. {result['displayName']}", "#ffaa00", "#ff5500"))
+                    logging.info(f"{result['id']}. {result['displayName']}")
                 requester_user_id = custom_input(
                     color_gradient("\nEnter the number of the user to use as requester: ", "#ffaa00", "#ff5500")
                 )
                 if not next((x for x in jsonResult["results"] if str(x["id"]) == requester_user_id), None):
                     requester_user_id = "1"
-                    print(color_gradient("\n❌  Invalid option, using admin as requester user.", "#ff0000", "#aa0000"))
+                    logging.warning("Invalid option, using admin as requester user")
 
             logging.info("Requester user set!")
             return requester_user_id
@@ -315,6 +310,7 @@ class SeerrClient:
                 elif media_type == "tv" and "firstAirDate" in media_data:
                     media_year = media_data["firstAirDate"][:4]
             except (ValueError, TypeError):
+                # best-effort: date parsing, year stays None on failure
                 pass
 
             logging.info(f"✅ Seerr API: Found '{media_title}' ({media_year}) via TMDB ID {tmdb_id}")
@@ -405,6 +401,7 @@ class SeerrClient:
                         elif media_type == "tv" and "firstAirDate" in result:
                             result_year = int(result["firstAirDate"][:4])
                     except (ValueError, TypeError):
+                        # best-effort: date parsing, year stays None
                         pass
 
                     # Calculate title similarity
@@ -461,6 +458,7 @@ class SeerrClient:
                 elif media_type == "tv" and "firstAirDate" in best_match:
                     result_year = best_match["firstAirDate"][:4]
             except (ValueError, TypeError):
+                # best-effort: date parsing for final match logging
                 pass
 
             logging.info(

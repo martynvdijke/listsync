@@ -82,6 +82,7 @@ def get_trakt_special_items_limit() -> int:
             try:
                 return int(limit)
             except (ValueError, TypeError):
+                # best-effort: config parsing, use default on failure
                 pass
 
     # Fallback to environment variable

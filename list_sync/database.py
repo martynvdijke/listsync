@@ -318,12 +318,14 @@ def init_database():
             cursor.execute("ALTER TABLE synced_items ADD COLUMN poster_url TEXT")
             logging.info("Added poster_url column to synced_items table")
         except sqlite3.OperationalError:
+            # best-effort: column/table may already exist
             pass
 
         try:
             cursor.execute("ALTER TABLE synced_items ADD COLUMN poster_cached_at TIMESTAMP")
             logging.info("Added poster_cached_at column to synced_items table")
         except sqlite3.OperationalError:
+            # best-effort: column/table may already exist
             pass
 
         # Add source list columns to synced_items for easier filtering
@@ -331,12 +333,14 @@ def init_database():
             cursor.execute("ALTER TABLE synced_items ADD COLUMN source_list_type TEXT")
             logging.info("Added source_list_type column to synced_items table")
         except sqlite3.OperationalError:
+            # best-effort: column/table may already exist
             pass
 
         try:
             cursor.execute("ALTER TABLE synced_items ADD COLUMN source_list_id TEXT")
             logging.info("Added source_list_id column to synced_items table")
         except sqlite3.OperationalError:
+            # best-effort: column/table may already exist
             pass
 
         # Add poster columns to lists if they don't exist
@@ -344,12 +348,14 @@ def init_database():
             cursor.execute("ALTER TABLE lists ADD COLUMN poster_url TEXT")
             logging.info("Added poster_url column to lists table")
         except sqlite3.OperationalError:
+            # best-effort: column/table may already exist
             pass
 
         try:
             cursor.execute("ALTER TABLE lists ADD COLUMN poster_cached_at TIMESTAMP")
             logging.info("Added poster_cached_at column to lists table")
         except sqlite3.OperationalError:
+            # best-effort: column/table may already exist
             pass
 
         # Add user_id column to lists if it doesn't exist (for per-list user assignment)
@@ -357,6 +363,7 @@ def init_database():
             cursor.execute("ALTER TABLE lists ADD COLUMN user_id TEXT DEFAULT '1'")
             logging.info("Added user_id column to lists table")
         except sqlite3.OperationalError:
+            # best-effort: column/table may already exist
             pass
 
         # SIMKL is disabled, so we don't add simkl_id column anymore
@@ -1868,8 +1875,8 @@ def save_cached_image(
                 if temp_path and os.path.exists(temp_path):
                     try:
                         os.remove(temp_path)
-                    except:
-                        pass
+                    except OSError as e:
+                        logging.debug(f"Failed to remove temp file {temp_path}: {e}")
                 raise e
         else:
             logging.debug(f"File already exists, skipping write: {local_path}")

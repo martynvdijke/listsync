@@ -334,12 +334,12 @@ def _is_waf_challenge_page(sb, timeout: int = 2) -> bool:
         cur_url = ""
         try:
             cur_url = sb.get_current_url() or ""
-        except Exception:
-            pass
+        except Exception as e:
+            logging.debug(f"Best-effort operation failed: {e}")
         if "waf" in cur_url.lower():
             return True
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug(f"Best-effort operation failed: {e}")
     return False
 
 
@@ -360,8 +360,8 @@ def _wait_for_waf_challenge(sb, max_wait: int = 30) -> None:
         if i == 5:
             try:
                 sb.execute_script("window.scrollTo(0, 100);")
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"Best-effort operation failed: {e}")
     logging.warning("WAF challenge still present after %ds - proceeding anyway, selectors will likely fail", max_wait)
 
 
@@ -634,8 +634,8 @@ def _process_imdb_chart(sb) -> list[dict[str, Any]]:
                         logging.debug(f"Found a ul with {len(items)} items, likely our chart")
                         chart_found = True
                         break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Best-effort operation failed: {e}")
         except Exception as e:
             logging.exception(f"Could not find any ul elements after scrolling: {e!s}")
 
@@ -720,8 +720,8 @@ def _process_imdb_chart(sb) -> list[dict[str, Any]]:
                                 break
                         if full_title:
                             break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Best-effort operation failed: {e}")
 
             if not full_title:
                 # Last resort: try to get any text from the item
@@ -733,8 +733,8 @@ def _process_imdb_chart(sb) -> list[dict[str, Any]]:
                             full_title = line
                             logging.warning(f"Using fallback method for title: {full_title}")
                             break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Best-effort operation failed: {e}")
 
             if not full_title:
                 logging.warning("Could not find title for item, skipping")
@@ -768,8 +768,8 @@ def _process_imdb_chart(sb) -> list[dict[str, Any]]:
                                 break
                         if year:
                             break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Best-effort operation failed: {e}")
 
             if not year and metadata_text:
                 # Try to extract year from concatenated metadata
@@ -784,8 +784,8 @@ def _process_imdb_chart(sb) -> list[dict[str, Any]]:
                     year_match = re.search(r"(\d{4})", item_text)
                     if year_match:
                         year = int(year_match.group(1))
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Best-effort operation failed: {e}")
 
             # Get IMDB ID from the title link - try different approaches
             imdb_id = None
@@ -810,8 +810,8 @@ def _process_imdb_chart(sb) -> list[dict[str, Any]]:
                                 break
                     if imdb_id:
                         break
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Best-effort operation failed: {e}")
 
             if not imdb_id:
                 try:
@@ -820,8 +820,8 @@ def _process_imdb_chart(sb) -> list[dict[str, Any]]:
                     if m:
                         imdb_id = m.group(1)
                         logging.info("Found IMDb ID via outerHTML regex fallback (chart)")
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.debug(f"Best-effort operation failed: {e}")
 
             if not imdb_id:
                 logging.warning(f"Could not find IMDb ID for {title}, skipping")
@@ -950,8 +950,8 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
                             logging.info(f"Found a ul with {len(items)} items, likely our list content")
                             content_found = True
                             break
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logging.debug(f"Best-effort operation failed: {e}")
 
                 if not content_found:
                     raise ValueError("Could not find list content on IMDb page after multiple attempts")
@@ -1121,8 +1121,8 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
                             full_title = title_element.text
                             logging.info(f"Found title using selector: {selector}")
                             break
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logging.debug(f"Best-effort operation failed: {e}")
 
                 if not full_title:
                     # Last resort: try to get any text from the item
@@ -1150,8 +1150,8 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
                             metadata_text = metadata.text
                             logging.info(f"Found metadata using selector: {selector}")
                             break
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logging.debug(f"Best-effort operation failed: {e}")
 
                 # Extract year if we found metadata text
                 if metadata_text:
@@ -1196,8 +1196,8 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
                                     imdb_id = href.split("/")[4]
                                 logging.info(f"Found IMDb ID using selector: {selector}")
                                 break
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logging.debug(f"Best-effort operation failed: {e}")
 
                 if not imdb_id:
                     # Try to extract it from any href in the item
@@ -1213,8 +1213,8 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
                                     imdb_id = href.split("/")[4]
                                 logging.info("Found IMDb ID from generic link")
                                 break
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logging.debug(f"Best-effort operation failed: {e}")
 
                 if not imdb_id:
                     # Final fallback: regex on the item's HTML (covers shadow/overlay cases)
@@ -1224,8 +1224,8 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
                         if m:
                             imdb_id = m.group(1)
                             logging.info("Found IMDb ID via outerHTML regex fallback")
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        logging.debug(f"Best-effort operation failed: {e}")
 
                 if not imdb_id:
                     logging.warning(f"Could not find IMDb ID for {title}, skipping")

@@ -42,7 +42,7 @@ from .ui.display import (
 )
 from .utils.helpers import color_gradient, construct_list_url, custom_input, init_selenium_driver
 from .utils.log_rotation import check_and_rotate_logs
-from .utils.logger import ensure_data_directory_exists, setup_logging
+from .utils.logger import ensure_data_directory_exists, get_console_logger, setup_logging
 from .utils.sync_status import (
     clear_cancel_request,
     clear_pause_until,
@@ -52,6 +52,8 @@ from .utils.sync_status import (
     set_cancel_request,
     start_sync_heartbeat,
 )
+
+console = get_console_logger()
 
 # Removed in-memory sync tracker - now using database-based tracking
 
@@ -77,8 +79,8 @@ def _handle_termination_signal(signum, frame):
         if session_id:
             try:
                 set_cancel_request(session_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to persist cancel request for {session_id}: {e}")
 
         # Update database to mark sync as cancelled. This has to clear
         # in_progress as well, or the dashboard keeps reporting the cancelled
@@ -94,8 +96,8 @@ def _handle_termination_signal(signum, frame):
         if session_id:
             try:
                 clear_cancel_request(session_id)
-            except Exception:
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to clear cancel request for {session_id}: {e}")
 
     except Exception as e:
         logging.exception(f"Error in termination signal handler: {e}")
@@ -291,7 +293,7 @@ def get_credentials() -> tuple:
         sys.exit(1)
 
     # If no credentials found, prompt user for input
-    print("\n🔑 No saved credentials found. Let's set up your Seerr connection.")
+    console.info("\n🔑 No saved credentials found. Let's set up your Seerr connection.")
     url = custom_input("Enter Seerr URL (e.g. http://localhost:5055): ")
     api_key = custom_input("Enter Seerr API key: ")
 
@@ -337,7 +339,7 @@ def fetch_media_from_lists(
 
         try:
             # Display progress message to user
-            print(
+            console.info(
                 color_gradient(
                     f"\n🔍  Fetching items from {list_type.upper()} list: {list_id}... (check backend logs for details - this can take some time)",
                     "#ffaa00",
@@ -372,7 +374,7 @@ def fetch_media_from_lists(
                         logging.warning(f"Skipping item with empty title from {list_type.upper()} list: {list_id}")
 
                 # Display success message to user
-                print(
+                console.info(
                     color_gradient(
                         f"✅  Found {len(valid_items)} items in {list_type.upper()} list: {list_id}",
                         "#00ff00",
@@ -394,7 +396,7 @@ def fetch_media_from_lists(
                 )
             else:
                 # Display warning message to user
-                print(
+                console.info(
                     color_gradient(f"⚠️   No items found in {list_type.upper()} list: {list_id}", "#ffaa00", "#ff5500")
                 )
                 logging.warning(f"No items found in {list_type.upper()} list: {list_id}")
@@ -412,11 +414,13 @@ def fetch_media_from_lists(
         except SyncCancelledException:
             # Cancellation was requested - return what we have so far
             logging.warning(f"⚠️ Sync cancelled during fetch of {list_type.upper()} list: {list_id}")
-            print(color_gradient("⚠️  Sync cancelled - stopping list fetch", "#ffaa00", "#ff5500"))
+            console.info(color_gradient("⚠️  Sync cancelled - stopping list fetch", "#ffaa00", "#ff5500"))
             return all_media, synced_lists
         except Exception as e:
             # Display error message to user
-            print(color_gradient(f"❌  Error fetching {list_type.upper()} list {list_id}: {e!s}", "#ff0000", "#aa0000"))
+            console.info(
+                color_gradient(f"❌  Error fetching {list_type.upper()} list {list_id}: {e!s}", "#ff0000", "#aa0000")
+            )
             logging.exception(f"Error fetching {list_type.upper()} list {list_id}: {e!s}")
 
             # Track failed lists too
@@ -500,16 +504,18 @@ def fetch_media_from_lists(
                 existing_item["_source_lists"].append(list_info)
 
     if len(all_media) != len(unique_media):
-        print(
+        console.info(
             color_gradient(f"\n🔄  Removed {len(all_media) - len(unique_media)} duplicate items", "#ffaa00", "#ff5500")
         )
 
     # Use different log message for single list syncs to avoid false FULL sync detection
     if is_single_list:
-        print(color_gradient(f"\n📋  Found {len(unique_media)} unique media items from list", "#00aaff", "#00ffaa"))
+        console.info(
+            color_gradient(f"\n📋  Found {len(unique_media)} unique media items from list", "#00aaff", "#00ffaa")
+        )
         logging.info(f"Fetched {len(unique_media)} unique media items from single list")
     else:
-        print(
+        console.info(
             color_gradient(f"\n📊  Total unique media items ready for sync: {len(unique_media)}", "#00aaff", "#00ffaa")
         )
         logging.info(f"Fetched {len(unique_media)} unique media items from all lists")
@@ -975,7 +981,7 @@ def verify_list_requesters(synced_lists: list[dict[str, Any]], seerr_client: See
             logging.info(f"🙋 {reason} — for {lists_desc}")
         else:
             logging.error(f"❌ {reason} Affected list(s): {lists_desc}")
-            print(color_gradient(f"\n❌  {reason}\n    Affected list(s): {lists_desc}", "#ff0000", "#aa0000"))
+            console.info(color_gradient(f"\n❌  {reason}\n    Affected list(s): {lists_desc}", "#ff0000", "#aa0000"))
 
 
 def sync_media_to_overseerr(
@@ -1010,7 +1016,7 @@ def sync_media_to_overseerr(
     if not dry_run:
         verify_list_requesters(sync_results.synced_lists, seerr_client)
 
-    print(f"\n🎬  Processing {sync_results.total_items} media items...")
+    console.info(f"\n🎬  Processing {sync_results.total_items} media items...")
 
     # Intelligent batching for optimal performance with readable logs
     batch_size = int(os.getenv("LISTSYNC_BATCH_SIZE", "3") or "3")  # Default batch size of 3
@@ -1018,7 +1024,7 @@ def sync_media_to_overseerr(
 
     if sequential_mode:
         logging.info("🔄 Sequential processing mode enabled (LISTSYNC_SEQUENTIAL_MODE=true)")
-        print("🔄 Sequential processing mode enabled")
+        console.info("🔄 Sequential processing mode enabled")
 
         # Process items sequentially to avoid race conditions
         for i, item in enumerate(media_items, 1):
@@ -1042,15 +1048,15 @@ def sync_media_to_overseerr(
                 year_str = f" ({year})" if year else ""
 
                 if status == "requested":
-                    print(f"✅ {title}{year_str}: Successfully Requested ({i}/{sync_results.total_items})")
+                    console.info(f"✅ {title}{year_str}: Successfully Requested ({i}/{sync_results.total_items})")
                 elif status == "already_available":
-                    print(f"☑️ {title}{year_str}: Already Available ({i}/{sync_results.total_items})")
+                    console.info(f"☑️ {title}{year_str}: Already Available ({i}/{sync_results.total_items})")
                 elif status == "already_requested":
-                    print(f"📌 {title}{year_str}: Already Requested ({i}/{sync_results.total_items})")
+                    console.info(f"📌 {title}{year_str}: Already Requested ({i}/{sync_results.total_items})")
                 elif status == "skipped":
-                    print(f"⏭️  {title}{year_str}: Skipped ({i}/{sync_results.total_items})")
+                    console.info(f"⏭️  {title}{year_str}: Skipped ({i}/{sync_results.total_items})")
                 else:
-                    print(f"❓ {title}{year_str}: {status} ({i}/{sync_results.total_items})")
+                    console.info(f"❓ {title}{year_str}: {status} ({i}/{sync_results.total_items})")
 
                 current_item += 1
 
@@ -1060,7 +1066,7 @@ def sync_media_to_overseerr(
                 current_item += 1
     else:
         logging.info(f"⚡ Intelligent batching mode enabled (batch size: {batch_size})")
-        print(f"⚡ Intelligent batching mode enabled - processing {batch_size} items at a time")
+        console.info(f"⚡ Intelligent batching mode enabled - processing {batch_size} items at a time")
 
         # Process items in batches for optimal performance with clean logging
         total_batches = (len(media_items) + batch_size - 1) // batch_size
@@ -1105,15 +1111,17 @@ def sync_media_to_overseerr(
                     index = start_idx + i + 1
 
                     if status == "requested":
-                        print(f"✅ {title}{year_str}: Successfully Requested ({index}/{sync_results.total_items})")
+                        console.info(
+                            f"✅ {title}{year_str}: Successfully Requested ({index}/{sync_results.total_items})"
+                        )
                     elif status == "already_available":
-                        print(f"☑️ {title}{year_str}: Already Available ({index}/{sync_results.total_items})")
+                        console.info(f"☑️ {title}{year_str}: Already Available ({index}/{sync_results.total_items})")
                     elif status == "already_requested":
-                        print(f"📌 {title}{year_str}: Already Requested ({index}/{sync_results.total_items})")
+                        console.info(f"📌 {title}{year_str}: Already Requested ({index}/{sync_results.total_items})")
                     elif status == "skipped":
-                        print(f"⏭️ {title}{year_str}: Skipped ({index}/{sync_results.total_items})")
+                        console.info(f"⏭️ {title}{year_str}: Skipped ({index}/{sync_results.total_items})")
                     else:
-                        print(f"❓ {title}{year_str}: {status} ({index}/{sync_results.total_items})")
+                        console.info(f"❓ {title}{year_str}: {status} ({index}/{sync_results.total_items})")
 
                     current_item += 1
 
@@ -1298,8 +1306,8 @@ def automated_sync(
                             # Remove corrupted file
                             try:
                                 os.remove(request_file)
-                            except:
-                                pass
+                            except OSError as e:
+                                logging.debug(f"Failed to remove corrupted sync request file {request_file}: {e}")
 
                 # Also check legacy single file for backwards compatibility
                 single_list_request_file = "data/single_list_sync_request.json"
@@ -1502,8 +1510,8 @@ def automated_sync(
             try:
                 sync_tracker = get_sync_tracker()
                 sync_tracker.end_sync()
-            except:
-                pass
+            except Exception as e:
+                logging.debug(f"Failed to end sync tracker: {e}")
             return False
 
     # Set up signal handlers
@@ -1643,14 +1651,14 @@ def run_sync(
         # Log sync start with clear marker
         sync_start_marker = f"========== SYNC START [FULL] - Session: {session_id} =========="
         logging.info(sync_start_marker)
-        print(color_gradient(f"\n{sync_start_marker}", "#00aaff", "#00ffaa"))
+        console.info(color_gradient(f"\n{sync_start_marker}", "#00aaff", "#00ffaa"))
 
         # Load lists
         list_ids = load_list_ids()
 
         if not list_ids:
             logging.warning("No lists configured")
-            print("\n⚠️  No lists configured. Please add lists first.")
+            console.info("\n⚠️  No lists configured. Please add lists first.")
             # Log sync end marker even for early exit
             sync_end_marker = f"========== SYNC COMPLETE [FULL] - Session: {session_id} - Status: NO_LISTS =========="
             logging.info(sync_end_marker)
@@ -1663,7 +1671,7 @@ def run_sync(
 
         if not media_items:
             logging.warning("No media items found in configured lists")
-            print("\n⚠️  No media items found in configured lists.")
+            console.info("\n⚠️  No media items found in configured lists.")
             # Log sync end marker for early exit
             sync_end_marker = f"========== SYNC COMPLETE [FULL] - Session: {session_id} - Status: NO_ITEMS =========="
             logging.info(sync_end_marker)
@@ -1715,7 +1723,7 @@ def run_sync(
         # Log sync complete with clear marker
         sync_end_marker = f"========== SYNC COMPLETE [FULL] - Session: {session_id} - Status: {'CANCELLED' if cancelled else 'SUCCESS'} =========="
         logging.info(sync_end_marker)
-        print(color_gradient(f"\n{sync_end_marker}", "#00ff00", "#00aa00"))
+        console.info(color_gradient(f"\n{sync_end_marker}", "#00ff00", "#00aa00"))
 
         # Mark sync as ended in database
         end_sync_in_db(
@@ -1812,8 +1820,8 @@ def sync_single_list(
                 f"========== SYNC START [SINGLE] - Session: {session_id} - List: {list_type}:{list_id} =========="
             )
             logging.info(sync_start_marker)
-            print(color_gradient(f"\n{sync_start_marker}", "#00aaff", "#00ffaa"))
-            print(color_gradient(f"🎯  Single List Sync: {list_type.upper()}:{list_id}", "#00aaff", "#00ffaa"))
+            console.info(color_gradient(f"\n{sync_start_marker}", "#00aaff", "#00ffaa"))
+            console.info(color_gradient(f"🎯  Single List Sync: {list_type.upper()}:{list_id}", "#00aaff", "#00ffaa"))
 
             # Get user_id from database if not provided. The lookup tolerates
             # ID/URL form differences - an IMDb list stored as a full URL must
@@ -1841,7 +1849,7 @@ def sync_single_list(
                 logging.info(f"🙋 {reason}")
             else:
                 logging.error(f"❌ {reason}")
-                print(color_gradient(f"\n❌  {reason}", "#ff0000", "#aa0000"))
+                console.info(color_gradient(f"\n❌  {reason}", "#ff0000", "#aa0000"))
 
             # Create a single list info dictionary (carry user_id so requests use correct requester)
             single_list_info = [{"type": list_type, "id": list_id, "user_id": user_id}]
@@ -1896,7 +1904,7 @@ def sync_single_list(
             }
 
             logging.info(f"Single list sync completed successfully: {result}")
-            print(
+            console.info(
                 color_gradient(
                     f"✅  Single list sync completed: {sync_results.results['requested']} requested, {sync_results.results['error']} errors",
                     "#00ff00",
@@ -1913,7 +1921,7 @@ def sync_single_list(
             # Log sync complete with clear marker
             sync_end_marker = f"========== SYNC COMPLETE [SINGLE] - Session: {session_id} - List: {list_type}:{list_id} - Status: SUCCESS =========="
             logging.info(sync_end_marker)
-            print(color_gradient(f"\n{sync_end_marker}", "#00ff00", "#00aa00"))
+            console.info(color_gradient(f"\n{sync_end_marker}", "#00ff00", "#00aa00"))
 
             # Mark sync as ended in database
             end_sync_in_db(
@@ -1936,7 +1944,7 @@ def sync_single_list(
     except Exception as e:
         error_message = f"Error in single list sync for {list_type}:{list_id}: {e!s}"
         logging.exception(error_message)
-        print(color_gradient(f"❌  {error_message}", "#ff0000", "#aa0000"))
+        console.info(color_gradient(f"❌  {error_message}", "#ff0000", "#aa0000"))
 
         # Mark sync as ended in database (even on error), otherwise the record
         # stays in_progress and the dashboard reports a sync that is not running
@@ -1984,9 +1992,9 @@ def main():
             # If still not complete after 5 seconds, show waiting message
             if not config_manager.is_setup_complete():
                 logging.info("Setup not complete. Waiting for configuration...")
-                print("\n⏳ ListSync is waiting for initial configuration.")
-                print("   Please complete the setup wizard at the web interface.")
-                print("   Checking every 30 seconds...\n")
+                console.info("\n⏳ ListSync is waiting for initial configuration.")
+                console.info("   Please complete the setup wizard at the web interface.")
+                console.info("   Checking every 30 seconds...\n")
 
                 # Wait loop - check every 30 seconds for setup completion
                 while not config_manager.is_setup_complete():
@@ -1994,11 +2002,11 @@ def main():
                     config_manager.reload()  # Reload config from database
 
                 logging.info("Setup completed! Starting sync service...")
-                print("✅ Configuration detected! Starting sync service...\n")
+                console.info("✅ Configuration detected! Starting sync service...\n")
             else:
                 # Setup completed during the 5 second wait
                 logging.info("Setup completed during initialization wait! Starting sync service...")
-                print("✅ Configuration detected! Starting sync service...\n")
+                console.info("✅ Configuration detected! Starting sync service...\n")
 
         # Initialize sync interval (environment -> database if needed)
         sync_interval = initialize_sync_interval()
@@ -2041,11 +2049,11 @@ def main():
             seerr_client.test_connection()
         except Exception as e:
             logging.exception(f"Failed to connect to Seerr: {e!s}")
-            print(f"\n❌ Failed to connect to Seerr: {e!s}")
+            console.info(f"\n❌ Failed to connect to Seerr: {e!s}")
             if os.path.exists(CONFIG_FILE):
                 if custom_input("\n🗑️  Delete the current config and start over? (y/n): ").lower() == "y":
                     os.remove(CONFIG_FILE)
-                    print("\n🔄  Config deleted. Please restart the script.")
+                    console.info("\n🔄  Config deleted. Please restart the script.")
             sys.exit(1)
 
         # Main menu loop
@@ -2054,7 +2062,7 @@ def main():
             choice = custom_input("Enter your choice (1-7): ")
 
             if choice == "7":
-                print("\n👋 Exiting. Goodbye!")
+                console.info("\n👋 Exiting. Goodbye!")
                 sys.exit(0)
 
             handle_menu_choice(
@@ -2067,11 +2075,11 @@ def main():
             )
 
     except KeyboardInterrupt:
-        print("\n\n👋 Exiting. Goodbye!")
+        console.info("\n\n👋 Exiting. Goodbye!")
         sys.exit(0)
     except Exception as e:
         logging.exception(f"Unhandled exception: {e!s}")
-        print(f"\n❌ An error occurred: {e!s}")
+        console.info(f"\n❌ An error occurred: {e!s}")
         sys.exit(1)
 
 

@@ -133,7 +133,8 @@ def fetch_letterboxd_list(list_id: str) -> list[dict[str, Any]]:
                 if is_watchlist:
                     try:
                         sb.wait_for_element_present("ul.poster-list", timeout=20)
-                    except:
+                    except Exception as e:
+                        logging.debug(f"Could not find ul.poster-list: {e}")
                         logging.warning("Could not find ul.poster-list, attempting to continue")
                 else:
                     sb.wait_for_element_present("div.list-detailed-entries-list", timeout=20)
@@ -184,7 +185,8 @@ def fetch_letterboxd_list(list_id: str) -> list[dict[str, Any]]:
                             # For watchlists, find the react-component div within the grid item
                             try:
                                 react_div = figure.find_element("css selector", "div.react-component")
-                            except:
+                            except Exception as e:
+                                logging.debug(f"Could not find react-component div: {e}")
                                 react_div = figure
 
                             item_name = react_div.get_attribute("data-item-name")

@@ -7,6 +7,8 @@ import os
 import zoneinfo
 from datetime import datetime
 
+logger = logging.getLogger(__name__)
+
 # Comprehensive mapping of common timezone abbreviations to their full timezone names
 TIMEZONE_ABBREVIATIONS: dict[str, str] = {
     # UTC and GMT
@@ -302,8 +304,8 @@ def normalize_timezone_input(tz_input: str, region_hint: str | None = None) -> s
     try:
         zoneinfo.ZoneInfo(original_input)
         return original_input
-    except:
-        pass
+    except Exception as e:
+        logger.debug(f"ZoneInfo check failed for '{original_input}': {e}")
 
     # Handle UTC/GMT offset formats (e.g., "UTC+1", "GMT-5", "UTC+5:30")
     # Note: Etc/GMT has REVERSED signs! GMT+1 (ahead) = Etc/GMT-1
@@ -332,8 +334,8 @@ def normalize_timezone_input(tz_input: str, region_hint: str | None = None) -> s
                 zoneinfo.ZoneInfo(etc_tz)
                 logging.info(f"Converted '{original_input}' to '{etc_tz}'")
                 return etc_tz
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"ZoneInfo check failed for '{etc_tz}': {e}")
 
         # For offsets with minutes or if Etc/GMT fails, create a fixed offset
         # Note: Python's timezone offsets use positive for east of UTC
@@ -378,7 +380,8 @@ def normalize_timezone_input(tz_input: str, region_hint: str | None = None) -> s
             zoneinfo.ZoneInfo(variation)
             logging.info(f"Resolved '{original_input}' to '{variation}'")
             return variation
-        except:
+        except Exception as e:
+            logger.debug(f"ZoneInfo check failed for variation '{variation}': {e}")
             continue
 
     # If nothing works, raise an error with helpful suggestions

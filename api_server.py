@@ -24,7 +24,7 @@ import requests
 import uvicorn
 from fastapi import FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from list_sync.config import load_env_config
@@ -66,17 +66,20 @@ async def startup_event():
     """Set the server start time when the FastAPI app starts"""
     global SERVER_START_TIME
 
+    if not logging.getLogger().handlers:
+        logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
     # Ensure database schema is up to date (creates new tables/columns if missing)
     try:
         init_database()
         logging.info("Database initialized / schema verified successfully at startup")
     except Exception as e:
         logging.exception(f"Failed to initialize database on startup: {e}")
-        # Don't stop startup, but raise HTTPException later if DB is unusable
+        raise
 
     SERVER_START_TIME = time.time()
-    print(f"🚀 API Server started at: {datetime.fromtimestamp(SERVER_START_TIME).isoformat()}")
-    print("📊 Dashboard available at: http://localhost:3222")
+    logging.info(f"🚀 API Server started at: {datetime.fromtimestamp(SERVER_START_TIME).isoformat()}")
+    logging.info("📊 Dashboard available at: http://localhost:3222")
 
 
 # Add CORS middleware
@@ -119,6 +122,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logging.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 
 
 # Pydantic models for request/response
@@ -202,9 +211,9 @@ def find_listsync_processes() -> list[ProcessInfo]:
                                 )
                             )
             except (psutil.NoSuchProcess, psutil.AccessDenied):
-                pass
+                logging.debug("Skipping vanished/inaccessible process")  # best-effort: process gone, safe to skip
     except Exception as e:
-        print(f"Error finding processes: {e}")
+        logging.exception(f"Error finding processes: {e}")
 
     return processes
 
@@ -214,7 +223,7 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
     log_info = LogInfo()
 
     if not os.path.exists(log_path):
-        print(f"Log file not found: {log_path}")
+        logging.info(f"Log file not found: {log_path}")
         # Try to get last sync from database as fallback
         try:
             conn = sqlite3.connect(DB_FILE)
@@ -223,10 +232,10 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
             result = cursor.fetchone()
             if result and result[0]:
                 log_info.last_sync_complete = result[0]
-                print(f"Got last sync from database: {result[0]}")
+                logging.info(f"Got last sync from database: {result[0]}")
             conn.close()
         except Exception as e:
-            print(f"Could not get last sync from database: {e}")
+            logging.exception(f"Could not get last sync from database: {e}")
         return log_info
 
     try:
@@ -256,7 +265,7 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
             r"automated sync mode.*sleeping",
         ]
 
-        print(f"Parsing {len(recent_lines)} lines from log file...")
+        logging.info(f"Parsing {len(recent_lines)} lines from log file...")
 
         for line in reversed(recent_lines):  # Start from most recent
             line_lower = line.lower()
@@ -267,7 +276,9 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
                     timestamp_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
                     if timestamp_match and not log_info.last_sync_complete:
                         log_info.last_sync_complete = timestamp_match.group(1)
-                        print(f"Found sync completion pattern '{pattern}' with timestamp: {timestamp_match.group(1)}")
+                        logging.info(
+                            f"Found sync completion pattern '{pattern}' with timestamp: {timestamp_match.group(1)}"
+                        )
                         break
 
             # Look for sync start
@@ -275,11 +286,11 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
                 timestamp_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
                 if timestamp_match and not log_info.last_sync_start:
                     log_info.last_sync_start = timestamp_match.group(1)
-                    print(f"Found sync start: {timestamp_match.group(1)}")
+                    logging.info(f"Found sync start: {timestamp_match.group(1)}")
 
         # If no sync completion found in logs, try database fallback
         if not log_info.last_sync_complete:
-            print("No sync completion found in logs, checking database...")
+            logging.info("No sync completion found in logs, checking database...")
             try:
                 conn = sqlite3.connect(DB_FILE)
                 cursor = conn.cursor()
@@ -287,10 +298,10 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
                 result = cursor.fetchone()
                 if result and result[0]:
                     log_info.last_sync_complete = result[0]
-                    print(f"Got last sync from database: {result[0]}")
+                    logging.info(f"Got last sync from database: {result[0]}")
                 conn.close()
             except Exception as e:
-                print(f"Could not get last sync from database: {e}")
+                logging.exception(f"Could not get last sync from database: {e}")
 
         # Look for sync interval in any line
         for line in recent_lines:
@@ -299,13 +310,13 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
                 hours_match = re.search(r"sleeping for (\d+\.?\d*) hours", line.lower())
                 if hours_match:
                     log_info.sync_interval_hours = float(hours_match.group(1))
-                    print(f"Found sync interval in logs: {hours_match.group(1)} hours")
+                    logging.info(f"Found sync interval in logs: {hours_match.group(1)} hours")
                     break
             elif "sync interval" in line.lower():
                 hours_match = re.search(r"(\d+\.?\d*) hours?", line.lower())
                 if hours_match:
                     log_info.sync_interval_hours = float(hours_match.group(1))
-                    print(f"Found sync interval in logs: {hours_match.group(1)} hours")
+                    logging.info(f"Found sync interval in logs: {hours_match.group(1)} hours")
                     break
 
         # Get sync interval from database if not found in logs
@@ -314,9 +325,9 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
                 db_interval = load_sync_interval()
                 if db_interval > 0:
                     log_info.sync_interval_hours = db_interval
-                    print(f"Got sync interval from database: {db_interval} hours")
-            except:
-                pass
+                    logging.info(f"Got sync interval from database: {db_interval} hours")
+            except Exception as e:
+                logging.debug("Failed to load sync interval from database: %s", e)
 
         # Calculate next sync time and status
         if log_info.last_sync_complete and log_info.sync_interval_hours:
@@ -325,7 +336,7 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
                 next_sync = last_sync + timedelta(hours=log_info.sync_interval_hours)
                 log_info.next_sync_time = next_sync.isoformat()
 
-                print(f"Calculated next sync: {next_sync.isoformat()}")
+                logging.info(f"Calculated next sync: {next_sync.isoformat()}")
 
                 # Determine if sync is overdue (with 10 minute grace period)
                 now = datetime.now()
@@ -337,13 +348,13 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
                 else:
                     log_info.sync_status = "scheduled"
 
-                print(f"Sync status: {log_info.sync_status}")
+                logging.info(f"Sync status: {log_info.sync_status}")
             except Exception as e:
-                print(f"Error calculating next sync: {e}")
+                logging.exception(f"Error calculating next sync: {e}")
                 log_info.sync_status = "unknown"
         else:
             log_info.sync_status = "unknown"
-            print(
+            logging.info(
                 f"Cannot calculate next sync - last_sync: {log_info.last_sync_complete}, interval: {log_info.sync_interval_hours}"
             )
 
@@ -359,7 +370,7 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
         log_info.recent_errors = log_info.recent_errors[-5:]
 
     except Exception as e:
-        print(f"Error parsing log: {e}")
+        logging.exception(f"Error parsing log: {e}")
 
     return log_info
 
@@ -434,8 +445,8 @@ def normalize_list_id(list_type: str, list_id: str) -> str:
         path_parts = [p for p in parsed.path.split("/") if p]
         if path_parts:
             return path_parts[-1]
-    except Exception:
-        pass
+    except Exception as e:
+        logging.debug("Failed to normalize list ID as URL %s: %s", list_id, e)
 
     # If all else fails, return the original (though this might not match)
     logging.warning(f"Could not normalize list_id for {list_type}: {list_id}, using as-is")
@@ -517,19 +528,19 @@ def get_deduplicated_items():
         conn.close()
 
         result = list(unique_items.values())
-        print(f"DEBUG - Deduplication: {len(items)} raw items -> {len(result)} unique items")
+        logging.debug(f"DEBUG - Deduplication: {len(items)} raw items -> {len(result)} unique items")
 
         # Debug: Show status breakdown of unique items
         status_counts = {}
         for item in result:
             status = item[6]  # Status is now at index 6
             status_counts[status] = status_counts.get(status, 0) + 1
-        print(f"DEBUG - Unique item statuses: {status_counts}")
+        logging.debug(f"DEBUG - Unique item statuses: {status_counts}")
 
         return result
 
     except Exception as e:
-        print(f"Error getting deduplicated items: {e}")
+        logging.exception(f"Error getting deduplicated items: {e}")
         return []
 
 
@@ -589,7 +600,7 @@ def analyze_data_quality():
         return analysis
 
     except Exception as e:
-        print(f"Error analyzing data quality: {e}")
+        logging.exception(f"Error analyzing data quality: {e}")
         return None
 
 
@@ -617,14 +628,14 @@ def parse_docker_logs_for_activity(limit: int = 10) -> list[dict[str, Any]]:
                         log_file_used = log_path
                         break
             except Exception as e:
-                print(f"Could not read log file {log_path}: {e}")
+                logging.exception(f"Could not read log file {log_path}: {e}")
                 continue
 
         if not logs_output:
-            print("Could not retrieve ListSync logs from any source")
+            logging.exception("Could not retrieve ListSync logs from any source")
             return []
 
-        print(f"Successfully retrieved logs from: {log_file_used}")
+        logging.info(f"Successfully retrieved logs from: {log_file_used}")
 
         # Parse logs for sync activity
         activities = []
@@ -728,7 +739,7 @@ def parse_docker_logs_for_activity(limit: int = 10) -> list[dict[str, Any]]:
                             dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
                             local_timestamp = dt.isoformat()
                     except Exception as e:
-                        print(f"Error converting timestamp {timestamp_str}: {e}")
+                        logging.exception(f"Error converting timestamp {timestamp_str}: {e}")
                         # Fallback to current time
                         local_timestamp = datetime.now().isoformat()
 
@@ -749,21 +760,21 @@ def parse_docker_logs_for_activity(limit: int = 10) -> list[dict[str, Any]]:
         # Sort by item number (most recent processing first - highest numbers first)
         activities.sort(key=lambda x: x.get("item_number", 0), reverse=True)
 
-        print(f"DEBUG: Found {len(activities)} total activities")
+        logging.debug(f"DEBUG: Found {len(activities)} total activities")
         if activities:
-            print("DEBUG: First 10 activities (sorted by item number):")
+            logging.debug("DEBUG: First 10 activities (sorted by item number):")
             for i, activity in enumerate(activities[:10]):
-                print(
+                logging.info(
                     f"  {i+1}. #{activity['item_number']}: {activity['title']} - {activity['action']} - {activity['last_synced']}"
                 )
 
         # No deduplication - return raw stream of recent activity
-        print(f"Returning {len(activities[:limit])} raw activities from logs")
+        logging.info(f"Returning {len(activities[:limit])} raw activities from logs")
 
         return activities[:limit]
 
     except Exception as e:
-        print(f"Error parsing logs: {e}")
+        logging.exception(f"Error parsing logs: {e}")
         import traceback
 
         traceback.print_exc()
@@ -796,7 +807,7 @@ def parse_failures_from_logs():
                     failures_data["log_file_exists"] = True
                     break
         except Exception as e:
-            print(f"Could not read log file {log_path}: {e}")
+            logging.exception(f"Could not read log file {log_path}: {e}")
             continue
 
     if not log_content:
@@ -931,8 +942,8 @@ def parse_failures_from_logs():
         if item.get("timestamp"):
             try:
                 return datetime.fromisoformat(item["timestamp"]).timestamp()
-            except:
-                return 0
+            except (ValueError, TypeError):
+                return 0  # best-effort timestamp parsing; invalid format ignored
         return 0
 
     failures_data["not_found"].sort(key=sort_key, reverse=True)
@@ -970,7 +981,7 @@ def parse_historic_items_from_logs():
                     historic_data["log_file_exists"] = True
                     break
         except Exception as e:
-            print(f"Could not read log file {log_path}: {e}")
+            logging.exception(f"Could not read log file {log_path}: {e}")
             continue
 
     if not log_content:
@@ -1087,8 +1098,8 @@ def parse_historic_items_from_logs():
                         iso_timestamp = dt.isoformat()
                     else:
                         iso_timestamp = datetime.now().isoformat()
-                except:
-                    iso_timestamp = datetime.now().isoformat()
+                except (ValueError, TypeError):
+                    iso_timestamp = datetime.now().isoformat()  # best-effort fallback; unparsable timestamp ignored
 
                 item_data = {
                     "id": f"historic-{item_num}-{timestamp_str or 'unknown'}",
@@ -1151,11 +1162,11 @@ def parse_historic_items_from_logs():
     for key in ["total_processed", "successful_items", "requested_items"]:
         historic_data[key].sort(key=lambda x: x["timestamp"], reverse=True)
 
-    print("DEBUG - Historic parsing complete:")
-    print(f"  Total unique processed: {historic_data['total_unique_processed']}")
-    print(f"  Total unique successful: {historic_data['total_unique_successful']}")
-    print(f"  Total unique requested: {historic_data['total_unique_requested']}")
-    print(f"  Sync sessions found: {len(historic_data['sync_sessions'])}")
+    logging.debug("DEBUG - Historic parsing complete:")
+    logging.info(f"  Total unique processed: {historic_data['total_unique_processed']}")
+    logging.info(f"  Total unique successful: {historic_data['total_unique_successful']}")
+    logging.info(f"  Total unique requested: {historic_data['total_unique_requested']}")
+    logging.info(f"  Sync sessions found: {len(historic_data['sync_sessions'])}")
 
     return historic_data
 
@@ -1188,7 +1199,7 @@ def get_duplicates_from_current_sync():
                         break
 
                 if sync_start_index == -1:
-                    print("DEBUG - No sync start marker found")
+                    logging.debug("DEBUG - No sync start marker found")
                     return 0
 
                 # Find the sync end marker (summary section)
@@ -1201,7 +1212,7 @@ def get_duplicates_from_current_sync():
                 if sync_end_index == -1:
                     sync_end_index = len(lines)
 
-                print(f"DEBUG - Analyzing sync session from line {sync_start_index} to {sync_end_index}")
+                logging.debug(f"DEBUG - Analyzing sync session from line {sync_start_index} to {sync_end_index}")
 
                 # Parse all items processed in this sync session
                 item_names = []
@@ -1233,26 +1244,26 @@ def get_duplicates_from_current_sync():
                 name_counts = Counter(item_names)
                 duplicates_count = sum(count - 1 for count in name_counts.values() if count > 1)
 
-                print(f"DEBUG - Found {len(item_names)} total items processed in sync session")
-                print(
+                logging.debug(f"DEBUG - Found {len(item_names)} total items processed in sync session")
+                logging.debug(
                     f"DEBUG - Found {len([count for count in name_counts.values() if count > 1])} items with duplicates"
                 )
-                print(f"DEBUG - Total duplicate occurrences: {duplicates_count}")
+                logging.debug(f"DEBUG - Total duplicate occurrences: {duplicates_count}")
 
                 # Debug: Show some duplicate examples
                 duplicates = {name: count for name, count in name_counts.items() if count > 1}
                 if duplicates:
-                    print("DEBUG - Examples of duplicated items:")
+                    logging.debug("DEBUG - Examples of duplicated items:")
                     for name, count in list(duplicates.items())[:5]:  # Show first 5 examples
-                        print(f"  '{name}' appeared {count} times")
+                        logging.info(f"  '{name}' appeared {count} times")
 
                 return duplicates_count
 
         except Exception as e:
-            print(f"Error reading log file {log_path}: {e}")
+            logging.exception(f"Error reading log file {log_path}: {e}")
             continue
 
-    print("DEBUG - No sync session found in logs")
+    logging.debug("DEBUG - No sync session found in logs")
     return 0
 
 
@@ -1709,8 +1720,8 @@ def parse_log_line(line: str, line_number: int) -> LogEntry | None:
     try:
         dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
         iso_timestamp = dt.isoformat()
-    except:
-        iso_timestamp = timestamp_str
+    except (ValueError, TypeError):
+        iso_timestamp = timestamp_str  # best-effort; keep original if unparsable
 
     category = categorize_log_entry(message, level)
     media_info = extract_media_info(message)
@@ -1801,7 +1812,7 @@ def get_log_entries(
         )
 
     except Exception as e:
-        print(f"Error reading log file: {e}")
+        logging.exception(f"Error reading log file: {e}")
         return LogStreamResponse(entries=[], total_count=0, has_more=False, last_position=0)
 
 
@@ -2185,7 +2196,8 @@ async def test_overseerr_connection(data: dict):
             try:
                 status_response = requests.get(f"{seerr_url}/api/v1/status", headers=headers, timeout=5)
                 status_data = status_response.json() if status_response.status_code == 200 else {}
-            except:
+            except (requests.RequestException, ValueError) as e:
+                logging.debug("Failed to fetch Seerr status: %s", e)
                 status_data = {}
 
             logging.info(
@@ -2428,8 +2440,8 @@ async def test_trakt_client_id(data: dict):
                             "valid": False,
                             "error": "Invalid Trakt Client ID. Please verify your Client ID is correct.",
                         }
-                except:
-                    pass
+                except (ValueError, TypeError, AttributeError) as e:
+                    logging.debug("Failed to parse Trakt 401 error response: %s", e)
                 # Default to invalid if we get 401
                 return {
                     "valid": False,
@@ -2692,7 +2704,8 @@ async def save_step2_configuration(data: dict):
                                     "Invalid Trakt Client ID. The API returned unauthorized. Please check your Client ID."
                                 )
                                 logging.error("Trakt Client ID validation failed: Unauthorized")
-                        except:
+                        except (ValueError, TypeError, requests.RequestException) as e:
+                            logging.debug("Failed to parse Trakt error response: %s", e)
                             # Can't parse error, assume invalid Client ID
                             errors["trakt_client_id"] = (
                                 "Invalid Trakt Client ID. The API returned unauthorized. Please check your Client ID."
@@ -2884,8 +2897,8 @@ async def save_step3_content_sources(data: dict):
         trakt_limit = data.get("trakt_special_items_limit", 20)
         try:
             trakt_limit = int(trakt_limit)
-        except:
-            trakt_limit = 20
+        except (ValueError, TypeError):
+            trakt_limit = 20  # best-effort; invalid limit ignored, use default
         config.save_setting("trakt_special_items_limit", trakt_limit)
 
         logging.info(f"Step 3 (Content Sources) saved: {', '.join(validated_sources)}")
@@ -2954,8 +2967,8 @@ async def get_sync_interval():
                     "last_updated": None,
                     "message": "Environment interval saved to database",
                 }
-        except:
-            pass
+        except Exception as e:
+            logging.debug("Failed to initialize sync interval from environment: %s", e)
 
         # Default
         return {
@@ -3033,9 +3046,9 @@ async def get_sync_stats():
         try:
             failures = parse_failures_from_logs()
             log_based_errors = failures["total_failures"]
-            print(f"DEBUG - Found {log_based_errors} failures from logs (same as /failures page)")
+            logging.debug(f"DEBUG - Found {log_based_errors} failures from logs (same as /failures page)")
         except Exception as e:
-            print(f"DEBUG - Could not parse failures from logs: {e}")
+            logging.debug(f"DEBUG - Could not parse failures from logs: {e}")
             log_based_errors = error_count
 
         # Calculate simplified metrics
@@ -3050,16 +3063,16 @@ async def get_sync_stats():
         success_rate = (successful_items / total_processed * 100) if total_processed > 0 else 0
 
         # Debug: Print status breakdown
-        print("DEBUG - Simplified Stats:")
-        print(f"  Total Processed: {total_processed}")
-        print(
+        logging.debug("DEBUG - Simplified Stats:")
+        logging.info(f"  Total Processed: {total_processed}")
+        logging.info(
             f"  Successful: {successful_items} (newly requested: {newly_requested_count}, already requested: {already_requested_count}, available: {available_count}, skipped: {skipped_count})"
         )
-        print(f"  Total Requested (NEW): {total_requested}")
-        print(f"  Already Requested: {already_requested_count}")
-        print(f"  Errors: {total_errors} (from logs, same as /failures page)")
-        print(f"  Success Rate: {success_rate:.1f}%")
-        print(f"  Duplicates in current sync: {duplicates_in_current_sync}")
+        logging.info(f"  Total Requested (NEW): {total_requested}")
+        logging.info(f"  Already Requested: {already_requested_count}")
+        logging.warning(f"  Errors: {total_errors} (from logs, same as /failures page)")
+        logging.info(f"  Success Rate: {success_rate:.1f}%")
+        logging.info(f"  Duplicates in current sync: {duplicates_in_current_sync}")
 
         # Get actual last sync time from logs
         log_info = parse_log_for_sync_info()
@@ -3083,7 +3096,7 @@ async def get_sync_stats():
             },
         }
     except Exception as e:
-        print(f"ERROR in get_sync_stats: {e}")
+        logging.exception(f"ERROR in get_sync_stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -3156,7 +3169,7 @@ async def get_recent_activity(
                         log_file_used = log_path
                         break
             except Exception as e:
-                print(f"Could not read log file {log_path}: {e}")
+                logging.exception(f"Could not read log file {log_path}: {e}")
                 continue
 
         if not log_content:
@@ -3171,7 +3184,7 @@ async def get_recent_activity(
                 "error": "No log file found in any of the expected locations",
             }
 
-        print(f"Successfully reading recent activity from: {log_file_used}")
+        logging.info(f"Successfully reading recent activity from: {log_file_used}")
 
         recent_items = []
         lines = log_content.strip().split("\n")
@@ -3379,7 +3392,7 @@ async def get_lists():
                     # Return as ISO string with timezone info
                     last_synced = local_dt.isoformat()
                 except Exception as e:
-                    print(f"Error converting timestamp {last_synced}: {e}")
+                    logging.exception(f"Error converting timestamp {last_synced}: {e}")
                     # Keep original timestamp as fallback
 
             formatted_lists.append(
@@ -4144,7 +4157,7 @@ async def trigger_manual_sync(sync_request: dict = None):
                     "list_id": sync_request["list_id"],
                 }
                 sync_type = "single"
-                print(f"DEBUG - Detected single list sync request: {target_list}")
+                logging.debug(f"DEBUG - Detected single list sync request: {target_list}")
             else:
                 # Check for explicit type field or nested list object
                 sync_type = sync_request.get("type", "all")  # "all", "single"
@@ -4156,14 +4169,18 @@ async def trigger_manual_sync(sync_request: dict = None):
                         # Already in correct format
                         pass
                     else:
-                        print(f"WARNING - Single sync type specified but target_list format is invalid: {target_list}")
+                        logging.warning(
+                            f"WARNING - Single sync type specified but target_list format is invalid: {target_list}"
+                        )
 
         # Validation: If we have target_list but sync_type is not "single", correct it
         if target_list and sync_type != "single":
-            print(f"WARNING - target_list detected but sync_type is '{sync_type}', correcting to 'single'")
+            logging.warning(f"WARNING - target_list detected but sync_type is '{sync_type}', correcting to 'single'")
             sync_type = "single"
 
-        print(f"DEBUG - Sync request parsed: type={sync_type}, target={target_list}, raw_request={sync_request}")
+        logging.debug(
+            f"DEBUG - Sync request parsed: type={sync_type}, target={target_list}, raw_request={sync_request}"
+        )
 
         # Find ListSync processes
         processes = find_listsync_processes()
@@ -4180,7 +4197,7 @@ async def trigger_manual_sync(sync_request: dict = None):
             import os
             import uuid
 
-            print(f"DEBUG - Creating single list sync request file for: {target_list}")
+            logging.debug(f"DEBUG - Creating single list sync request file for: {target_list}")
 
             # Create the request data
             request_data = {
@@ -4201,7 +4218,7 @@ async def trigger_manual_sync(sync_request: dict = None):
             with open(request_file, "w") as f:
                 json.dump(request_data, f, indent=2)
 
-            print(f"DEBUG - Single list sync request file created: {request_file}")
+            logging.debug(f"DEBUG - Single list sync request file created: {request_file}")
 
             # Also maintain the legacy single file for backwards compatibility
             legacy_file = "data/single_list_sync_request.json"
@@ -4213,7 +4230,7 @@ async def trigger_manual_sync(sync_request: dict = None):
             os.environ["SINGLE_LIST_TYPE"] = target_list["list_type"]
             os.environ["SINGLE_LIST_ID"] = target_list["list_id"]
 
-            print(
+            logging.debug(
                 f"DEBUG - Environment variables set as fallback: SINGLE_LIST_SYNC=true, SINGLE_LIST_TYPE={target_list['list_type']}, SINGLE_LIST_ID={target_list['list_id']}"
             )
         else:
@@ -4223,19 +4240,19 @@ async def trigger_manual_sync(sync_request: dict = None):
             request_file = "data/single_list_sync_request.json"
             if os.path.exists(request_file):
                 os.remove(request_file)
-                print("DEBUG - Removed existing single list sync request file")
+                logging.debug("DEBUG - Removed existing single list sync request file")
 
             # Clear single list environment variables for full sync
             os.environ.pop("SINGLE_LIST_SYNC", None)
             os.environ.pop("SINGLE_LIST_TYPE", None)
             os.environ.pop("SINGLE_LIST_ID", None)
-            print("DEBUG - Cleared single list environment variables for full sync")
+            logging.debug("DEBUG - Cleared single list environment variables for full sync")
 
         # Clear any pause (e.g., set after cancellation) so manual trigger runs immediately
         try:
             clear_pause_until()
         except Exception as e:
-            print(f"WARNING - Could not clear pause before manual sync: {e}")
+            logging.exception(f"WARNING - Could not clear pause before manual sync: {e}")
 
         # Send SIGUSR1 signal to trigger sync (works for both single and full)
         signals_sent = []
@@ -4252,7 +4269,7 @@ async def trigger_manual_sync(sync_request: dict = None):
                         "status": "signal_sent",
                     }
                 )
-                print(f"Sent SIGUSR1 signal to ListSync process PID {process.pid}")
+                logging.info(f"Sent SIGUSR1 signal to ListSync process PID {process.pid}")
 
             except ProcessLookupError:
                 errors.append(
@@ -4298,7 +4315,7 @@ async def trigger_manual_sync(sync_request: dict = None):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error triggering manual sync: {e}")
+        logging.exception(f"Error triggering manual sync: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -4385,7 +4402,7 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
                 detail="Both list_type and list_id are required for single list sync",
             )
 
-        print(f"DEBUG - Starting single list sync for {list_type}:{list_id}")
+        logging.debug(f"DEBUG - Starting single list sync for {list_type}:{list_id}")
 
         # Create a temporary configuration for single list sync
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as temp_file:
@@ -4401,19 +4418,19 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
             temp_file_path = temp_file.name
 
         try:
-            print("DEBUG - Attempting to import sync functions...")
+            logging.debug("DEBUG - Attempting to import sync functions...")
 
             # Import the config loader
             from list_sync.config import load_env_config
             from list_sync.utils.sync_status import get_sync_tracker
 
-            print("DEBUG - Import successful, loading environment config...")
+            logging.debug("DEBUG - Import successful, loading environment config...")
 
             # Load environment configuration
             seerr_url, seerr_api_key, _, sync_interval, automated_mode, is_4k = load_env_config()
 
-            print(f"DEBUG - Environment loaded. URL: {seerr_url[:20] if seerr_url else 'None'}...")
-            print("DEBUG - Starting sync in subprocess for immediate termination support...")
+            logging.debug(f"DEBUG - Environment loaded. URL: {seerr_url[:20] if seerr_url else 'None'}...")
+            logging.debug("DEBUG - Starting sync in subprocess for immediate termination support...")
 
             # Create a queue to receive results from subprocess
             result_queue = multiprocessing.Queue()
@@ -4426,7 +4443,7 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
             sync_process.start()
             subprocess_pid = sync_process.pid
 
-            print(f"DEBUG - Sync subprocess started with PID {subprocess_pid}")
+            logging.debug(f"DEBUG - Sync subprocess started with PID {subprocess_pid}")
 
             # Register the subprocess PID in the tracker for immediate cancellation
             sync_tracker = get_sync_tracker()
@@ -4443,7 +4460,7 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
 
                 # Check if cancellation was requested
                 if sync_tracker.is_cancellation_requested():
-                    print(f"DEBUG - Cancellation requested, terminating subprocess {subprocess_pid}")
+                    logging.debug(f"DEBUG - Cancellation requested, terminating subprocess {subprocess_pid}")
                     sync_process.terminate()
                     sync_process.join(timeout=2)
                     if sync_process.is_alive():
@@ -4465,7 +4482,7 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
 
             # Check if process timed out
             if sync_process.is_alive():
-                print(f"ERROR - Sync timed out after {timeout_seconds} seconds, terminating...")
+                logging.warning(f"ERROR - Sync timed out after {timeout_seconds} seconds, terminating...")
                 sync_process.terminate()
                 sync_process.join(timeout=2)
                 if sync_process.is_alive():
@@ -4490,7 +4507,7 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
             try:
                 result_data = result_queue.get_nowait()
                 if result_data.get("success"):
-                    print(f"DEBUG - Sync completed successfully: {result_data.get('result')}")
+                    logging.debug(f"DEBUG - Sync completed successfully: {result_data.get('result')}")
                     return {
                         "success": True,
                         "sync_type": "single",
@@ -4499,7 +4516,7 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
                         "result": result_data.get("result"),
                         "timestamp": datetime.now().isoformat(),
                     }
-                print(f"ERROR - Sync failed: {result_data.get('error')}")
+                logging.warning(f"ERROR - Sync failed: {result_data.get('error')}")
                 return {
                     "success": False,
                     "sync_type": "single",
@@ -4509,7 +4526,7 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
                     "timestamp": datetime.now().isoformat(),
                 }
             except Exception as queue_error:
-                print(f"ERROR - Could not get result from queue: {queue_error}")
+                logging.exception(f"ERROR - Could not get result from queue: {queue_error}")
                 # Process exited but no result - check exit code
                 exit_code = sync_process.exitcode
                 if exit_code == 0:
@@ -4530,15 +4547,15 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
                 }
 
         except ImportError as e:
-            print(f"ERROR - Import failed: {e}")
+            logging.exception(f"ERROR - Import failed: {e}")
             # Fallback: If direct import fails, use signal with temp file approach
-            print("Direct sync import failed, falling back to signal method")
+            logging.info("Direct sync import failed, falling back to signal method")
 
             # Try to trigger full sync instead
             try:
                 for process in processes:
                     os.kill(process.pid, signal.SIGUSR1)
-                    print(f"Sent SIGUSR1 signal to process {process.pid} as fallback")
+                    logging.info(f"Sent SIGUSR1 signal to process {process.pid} as fallback")
 
                 return {
                     "success": True,
@@ -4550,7 +4567,7 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
                     "timestamp": datetime.now().isoformat(),
                 }
             except Exception as signal_error:
-                print(f"ERROR - Signal fallback also failed: {signal_error}")
+                logging.exception(f"ERROR - Signal fallback also failed: {signal_error}")
                 return {
                     "success": False,
                     "sync_type": "single",
@@ -4562,7 +4579,7 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
                 }
 
         except Exception as sync_error:
-            print(f"ERROR - Sync execution failed: {sync_error}")
+            logging.exception(f"ERROR - Sync execution failed: {sync_error}")
             import traceback
 
             traceback.print_exc()
@@ -4580,11 +4597,11 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
             # Clean up temp file
             try:
                 os.unlink(temp_file_path)
-            except:
-                pass
+            except OSError as e:
+                logging.debug("Failed to clean up temp file %s: %s", temp_file_path, e)
 
     except Exception as e:
-        print(f"CRITICAL ERROR in single list sync: {e}")
+        logging.exception(f"CRITICAL ERROR in single list sync: {e}")
         import traceback
 
         traceback.print_exc()
@@ -4642,7 +4659,7 @@ async def get_sync_status():
         }
 
     except Exception as e:
-        print(f"Error getting sync status: {e}")
+        logging.exception(f"Error getting sync status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -4862,8 +4879,8 @@ async def get_failures(
                 if item.get("timestamp"):
                     return datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00")).timestamp()
                 return 0
-            except:
-                return 0
+            except (ValueError, TypeError):
+                return 0  # best-effort timestamp parsing; invalid format ignored
 
         filtered_failures.sort(key=sort_key, reverse=True)
 
@@ -4908,7 +4925,7 @@ async def get_failures(
             },
         }
     except Exception as e:
-        print(f"Error parsing failures: {e}")
+        logging.exception(f"Error parsing failures: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -4933,7 +4950,8 @@ async def get_processed_items(
         try:
             seerr_base_url, _, _, _, _, _ = load_env_config()
             seerr_base_url = seerr_base_url.rstrip("/") if seerr_base_url else None
-        except:
+        except Exception as e:
+            logging.debug("Failed to load Seerr base URL: %s", e)
             seerr_base_url = None
 
         # Batch fetch list sources for all items (before filtering)
@@ -5084,7 +5102,7 @@ async def get_processed_items(
             },
         }
     except Exception as e:
-        print(f"Error parsing processed items: {e}")
+        logging.exception(f"Error parsing processed items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -5108,7 +5126,8 @@ async def get_successful_items(
         try:
             seerr_base_url, _, _, _, _, _ = load_env_config()
             seerr_base_url = seerr_base_url.rstrip("/") if seerr_base_url else None
-        except:
+        except Exception as e:
+            logging.debug("Failed to load Seerr base URL: %s", e)
             seerr_base_url = None
 
         # Add seerr_url to items
@@ -5170,7 +5189,7 @@ async def get_successful_items(
             },
         }
     except Exception as e:
-        print(f"Error parsing successful items: {e}")
+        logging.exception(f"Error parsing successful items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -5258,7 +5277,8 @@ async def get_requested_items(
         try:
             seerr_base_url, _, _, _, _, _ = load_env_config()
             seerr_base_url = seerr_base_url.rstrip("/") if seerr_base_url else None
-        except:
+        except Exception as e:
+            logging.debug("Failed to load Seerr base URL: %s", e)
             seerr_base_url = None
 
         formatted_items = []
@@ -5305,7 +5325,7 @@ async def get_requested_items(
         }
 
     except Exception as e:
-        print(f"Error getting requested items: {e}")
+        logging.exception(f"Error getting requested items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -6175,12 +6195,11 @@ async def get_log_stats():
                             entry_time = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
                             if entry_time >= one_hour_ago:
                                 recent_activity += 1
-                        except:
-                            # If timestamp parsing fails, skip this entry for recent activity count
-                            pass
+                        except (ValueError, TypeError) as e:
+                            logging.debug("Skipping unparsable timestamp for recent activity: %s", e)
 
         except Exception as e:
-            print(f"Error reading log file for stats: {e}")
+            logging.exception(f"Error reading log file for stats: {e}")
             # Fallback to using get_log_entries with reasonable limit
             response = get_log_entries(limit=1000)
             total_entries = response.total_count
@@ -6194,8 +6213,8 @@ async def get_log_stats():
                         entry_time = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
                         if entry_time >= one_hour_ago:
                             recent_activity += 1
-                    except:
-                        pass
+                    except (ValueError, TypeError) as e:
+                        logging.debug("Skipping unparsable timestamp for stats: %s", e)
 
         return {
             "total_entries": total_entries,
@@ -6343,7 +6362,7 @@ def process_analytics_data(time_range: str = "24h", category: str = "all") -> An
                 entry_time = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
                 if entry_time >= start_time:
                     filtered_entries.append(entry)
-            except:
+            except (ValueError, TypeError):
                 # If timestamp parsing fails, include the entry
                 filtered_entries.append(entry)
 
@@ -6375,7 +6394,7 @@ def process_analytics_data(time_range: str = "24h", category: str = "all") -> An
         )
 
     except Exception as e:
-        print(f"Error processing analytics data: {e}")
+        logging.exception(f"Error processing analytics data: {e}")
         # Return empty analytics data on error
         return AnalyticsResponse(
             overview=AnalyticsOverview(
@@ -6878,7 +6897,7 @@ def parse_recent_activity_from_structured_log(limit: int = 50) -> list[dict[str,
         log_path = "data/list_sync.log"
 
         if not os.path.exists(log_path):
-            print(f"Structured log file not found: {log_path}")
+            logging.info(f"Structured log file not found: {log_path}")
             return []
 
         # Get recent log entries using the existing function
@@ -7029,7 +7048,7 @@ def parse_recent_activity_from_structured_log(limit: int = 50) -> list[dict[str,
         return recent_items[:limit]
 
     except Exception as e:
-        print(f"Error parsing recent activity from structured log: {e}")
+        logging.exception(f"Error parsing recent activity from structured log: {e}")
         import traceback
 
         traceback.print_exc()
@@ -7188,7 +7207,7 @@ async def get_live_sync_status():
         }
 
     except Exception as e:
-        print(f"Error getting live sync status: {e}")
+        logging.exception(f"Error getting live sync status: {e}")
         import traceback
 
         traceback.print_exc()
@@ -7258,8 +7277,8 @@ async def get_settings():
         sync_interval = get_setting_safe("sync_interval", 24)
         try:
             sync_interval = int(sync_interval)
-        except:
-            sync_interval = 24
+        except (ValueError, TypeError):
+            sync_interval = 24  # best-effort; invalid value ignored
 
         automated_mode = get_setting_safe("auto_sync", True)
         if isinstance(automated_mode, str):
@@ -7289,8 +7308,8 @@ async def get_settings():
         trakt_special_items_limit = get_setting_safe("trakt_special_items_limit", 20)
         try:
             trakt_special_items_limit = int(trakt_special_items_limit)
-        except:
-            trakt_special_items_limit = 20
+        except (ValueError, TypeError):
+            trakt_special_items_limit = 20  # best-effort; invalid value ignored
 
         letterboxd_lists = get_setting_safe("letterboxd_lists", "")
         anilist_lists = get_setting_safe("anilist_lists", "")
@@ -7424,8 +7443,8 @@ async def update_settings(settings: dict):
             try:
                 interval = int(settings["sync_interval"])
                 configure_sync_interval(interval)
-            except:
-                pass
+            except (ValueError, TypeError, sqlite3.Error) as e:
+                logging.debug("Failed to configure sync interval: %s", e)
 
         logging.info(f"Settings update complete: {len(settings)} fields processed")
 
@@ -7647,7 +7666,7 @@ def enrich_historic_data_with_database(historic_items):
             db_items = cursor.fetchall()
         except sqlite3.OperationalError as e:
             # If year or source list columns don't exist, try without them
-            print(f"Warning: Could not fetch all columns from database: {e}")
+            logging.exception(f"Warning: Could not fetch all columns from database: {e}")
             try:
                 cursor.execute("SELECT title, media_type, imdb_id, overseerr_id, status, year FROM synced_items")
                 db_items_without_source = cursor.fetchall()
@@ -7700,7 +7719,7 @@ def enrich_historic_data_with_database(historic_items):
                     "source_list_id": source_list_id,
                 }
 
-        print(
+        logging.debug(
             f"DEBUG: Loaded {len(db_lookup)} items from database, sample years: {[v['year'] for v in list(db_lookup.values())[:5]]}"
         )
 
@@ -7717,7 +7736,7 @@ def enrich_historic_data_with_database(historic_items):
             # Fallback to title-only match (media_type might be wrong from log parsing)
             elif title_only_key in db_lookup_by_title:
                 db_data = db_lookup_by_title[title_only_key]
-                print(
+                logging.debug(
                     f"DEBUG: Using title-only match for '{item['title']}': log={item['media_type']}, db={db_data['media_type']}"
                 )
 
@@ -7743,7 +7762,7 @@ def enrich_historic_data_with_database(historic_items):
         return historic_items
 
     except Exception as e:
-        print(f"Error enriching historic data with database: {e}")
+        logging.exception(f"Error enriching historic data with database: {e}")
         import traceback
 
         traceback.print_exc()
@@ -7922,8 +7941,8 @@ class SyncLogParser:
                     # Format: YYYY-MM-DD HH:MM:SS
                     dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
                 return dt.isoformat()
-            except:
-                return None
+            except (ValueError, TypeError):
+                return None  # best-effort; unparsable timestamp ignored
         return None
 
     def detect_session_start(self, line: str) -> tuple | None:
@@ -8070,7 +8089,7 @@ class SyncLogParser:
             with open(log_path, encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
         except Exception as e:
-            print(f"Error reading log file: {e}")
+            logging.exception(f"Error reading log file: {e}")
             return []
 
         sessions = []
@@ -8108,8 +8127,10 @@ class SyncLogParser:
                             start = datetime.fromisoformat(current_session.start_timestamp)
                             end = datetime.fromisoformat(current_session.end_timestamp)
                             current_session.duration = (end - start).total_seconds()
-                        except:
-                            pass
+                        except (ValueError, TypeError):
+                            logging.debug(
+                                "Skipping unparsable duration timestamp"
+                            )  # best-effort duration calc; invalid timestamp ignored
 
                     current_session.status = "completed"
                     current_session.processed_items = len(current_session.items)
@@ -8146,7 +8167,7 @@ class SyncLogParser:
             if processing_match and current_session.type == SyncType.SINGLE:
                 total_items = int(processing_match.group(1))
                 current_session.total_items = total_items
-                print(f"DEBUG - Single sync total items: {total_items}")
+                logging.debug(f"DEBUG - Single sync total items: {total_items}")
 
             # Parse list fetching
             list_info = self.parse_list_fetch(line_content)
@@ -8248,8 +8269,8 @@ class SyncLogParser:
                         current_session.status = "completed"
                     else:
                         current_session.status = "in_progress"
-                except:
-                    current_session.status = "in_progress"
+                except (ValueError, TypeError):
+                    current_session.status = "in_progress"  # best-effort; invalid timestamp, treat as in-progress
             elif len(current_session.items) > 0 and current_session.start_timestamp:
                 try:
                     start = datetime.fromisoformat(current_session.start_timestamp)
@@ -8269,8 +8290,8 @@ class SyncLogParser:
                         current_session.status = "completed"
                     else:
                         current_session.status = "in_progress"
-                except:
-                    current_session.status = "in_progress"
+                except (ValueError, TypeError):
+                    current_session.status = "in_progress"  # best-effort; invalid timestamp, treat as in-progress
             else:
                 current_session.status = "in_progress"
 
@@ -8335,15 +8356,15 @@ async def get_sync_history(
         try:
             start_dt = datetime.fromisoformat(start_date)
             sessions = [s for s in sessions if datetime.fromisoformat(s.start_timestamp) >= start_dt]
-        except:
-            pass
+        except (ValueError, TypeError) as e:
+            logging.debug("Invalid start_date filter %s: %s", start_date, e)
 
     if end_date:
         try:
             end_dt = datetime.fromisoformat(end_date)
             sessions = [s for s in sessions if datetime.fromisoformat(s.start_timestamp) <= end_dt]
-        except:
-            pass
+        except (ValueError, TypeError) as e:
+            logging.debug("Invalid end_date filter %s: %s", end_date, e)
 
     # Don't filter out sessions - show all syncs even if lists weren't parsed correctly
     # The stats endpoint counts all sessions, so we should too for consistency
@@ -8464,8 +8485,8 @@ async def get_sync_history_stats():
                 start = datetime.fromisoformat(session.start_timestamp)
                 end = datetime.fromisoformat(session.end_timestamp)
                 session.duration = (end - start).total_seconds()
-            except:
-                pass
+            except (ValueError, TypeError) as e:
+                logging.debug("Skipping unparsable duration timestamp: %s", e)
 
     # Filter valid durations
     durations = [s.duration for s in sessions if s.duration is not None and s.duration > 0]
@@ -8540,7 +8561,7 @@ async def get_live_logs(
                     log_file_used = log_path
                     break
                 except Exception as e:
-                    print(f"Error reading log file {log_path}: {e}")
+                    logging.exception(f"Error reading log file {log_path}: {e}")
                     continue
 
         if not log_content:
@@ -8880,7 +8901,8 @@ async def proxy_image(url: str = Query(..., description="Image URL to proxy/cach
                     mtime = os.path.getmtime(local_path)
                     etag = f'W/"{int(mtime)}"'
                     last_modified = datetime.fromtimestamp(mtime).strftime("%a, %d %b %Y %H:%M:%S GMT")
-                except:
+                except OSError as e:
+                    logging.debug("Failed to get file mtime for %s: %s", local_path, e)
                     etag = None
                     last_modified = None
 
@@ -8994,7 +9016,8 @@ async def proxy_image(url: str = Query(..., description="Image URL to proxy/cach
                 mtime = os.path.getmtime(local_path)
                 etag = f'W/"{int(mtime)}"'
                 last_modified = datetime.fromtimestamp(mtime).strftime("%a, %d %b %Y %H:%M:%S GMT")
-            except:
+            except OSError as e:
+                logging.debug("Failed to get file mtime for %s: %s", local_path, e)
                 etag = None
                 last_modified = None
 
@@ -9133,9 +9156,9 @@ async def list_cached_images(limit: int = Query(50, ge=1, le=1000)):
 
 
 if __name__ == "__main__":
-    print("🚀 Starting ListSync Web UI API Server...")
-    print("📊 Dashboard will be available at: http://localhost:3222")
-    print("🔗 API documentation at: http://localhost:4222/docs")
+    logging.info("🚀 Starting ListSync Web UI API Server...")
+    logging.info("📊 Dashboard will be available at: http://localhost:3222")
+    logging.info("🔗 API documentation at: http://localhost:4222/docs")
 
     uvicorn.run(
         "api_server:app",

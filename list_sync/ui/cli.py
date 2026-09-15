@@ -8,7 +8,10 @@ from collections.abc import Callable
 from ..database import configure_sync_interval, delete_list, load_list_ids, save_list_id
 from ..providers import get_provider
 from ..utils.helpers import color_gradient, custom_input
+from ..utils.logger import get_console_logger
 from .display import display_lists
+
+console = get_console_logger()
 
 
 def validate_provider(list_type: str, list_id: str) -> bool:
@@ -27,19 +30,23 @@ def validate_provider(list_type: str, list_id: str) -> bool:
         provider_func = get_provider(list_type)
 
         # Test the provider with a small sample (limit to 5 items for testing)
-        print(color_gradient(f"🔍  Testing {list_type.upper()} provider with list: {list_id}", "#ffaa00", "#ff5500"))
+        console.info(
+            color_gradient(f"🔍  Testing {list_type.upper()} provider with list: {list_id}", "#ffaa00", "#ff5500")
+        )
 
         # Import the provider function and test it
         items = provider_func(list_id)
 
         if items and len(items) > 0:
-            print(color_gradient(f"✅  Provider validation successful! Found {len(items)} items", "#00ff00", "#00aa00"))
+            console.info(
+                color_gradient(f"✅  Provider validation successful! Found {len(items)} items", "#00ff00", "#00aa00")
+            )
             return True
-        print(color_gradient("❌  Provider validation failed: No items found", "#ff0000", "#aa0000"))
+        console.info(color_gradient("❌  Provider validation failed: No items found", "#ff0000", "#aa0000"))
         return False
 
     except Exception as e:
-        print(color_gradient(f"❌  Provider validation failed: {e!s}", "#ff0000", "#aa0000"))
+        console.info(color_gradient(f"❌  Provider validation failed: {e!s}", "#ff0000", "#aa0000"))
         return False
 
 
@@ -81,7 +88,7 @@ def handle_menu_choice(
         # Run dry sync
         run_sync_func(seerr_client, dry_run=True)
     else:
-        print(color_gradient("\n❌ Invalid choice. Please try again.", "#ff0000", "#aa0000"))
+        console.info(color_gradient("\n❌ Invalid choice. Please try again.", "#ff0000", "#aa0000"))
 
 
 def add_new_lists():
@@ -93,22 +100,24 @@ def add_list_to_sync():
     """
     Add new lists to sync. Handles multiple lists separated by commas.
     """
-    print(color_gradient("\n📋  Supported Providers:", "#00aaff", "#00ffaa"))
-    print(color_gradient("   • IMDb: ls123456, ur123456, or https://imdb.com/list/ls123456", "#ffaa00", "#ff5500"))
-    print(color_gradient("   • Trakt: 123456 or https://trakt.tv/lists/123456", "#ffaa00", "#ff5500"))
-    print(
+    console.info(color_gradient("\n📋  Supported Providers:", "#00aaff", "#00ffaa"))
+    console.info(
+        color_gradient("   • IMDb: ls123456, ur123456, or https://imdb.com/list/ls123456", "#ffaa00", "#ff5500")
+    )
+    console.info(color_gradient("   • Trakt: 123456 or https://trakt.tv/lists/123456", "#ffaa00", "#ff5500"))
+    console.info(
         color_gradient(
             "   • Letterboxd: username/listname or https://letterboxd.com/username/listname", "#ffaa00", "#ff5500"
         )
     )
-    print(
+    console.info(
         color_gradient(
             "   • MDBList: username/listname or https://mdblist.com/lists/username/listname", "#ffaa00", "#ff5500"
         )
     )
-    print(color_gradient("   • Steven Lu: stevenlu or https://movies.stevenlu.com", "#ffaa00", "#ff5500"))
-    print(color_gradient("   • TMDB: 123456 or https://themoviedb.org/list/123456", "#ffaa00", "#ff5500"))
-    print(color_gradient("   • Simkl: 123456 or https://simkl.com/5/list/123456", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("   • Steven Lu: stevenlu or https://movies.stevenlu.com", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("   • TMDB: 123456 or https://themoviedb.org/list/123456", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("   • Simkl: 123456 or https://simkl.com/5/list/123456", "#ffaa00", "#ff5500"))
 
     list_ids = custom_input(
         color_gradient("\n🎬  Enter List ID(s) or URL(s) (comma-separated for multiple): ", "#ffaa00", "#ff5500")
@@ -167,7 +176,7 @@ def add_list_to_sync():
                 elif "simkl.com" in list_id and "/list/" in list_id:
                     list_type = "simkl"
                 else:
-                    print(
+                    console.info(
                         color_gradient(
                             f"\n❌  Invalid URL format for '{list_id}'. Must be IMDb, Trakt, Letterboxd, MDBList, Steven Lu, TMDB, or Simkl URL.",
                             "#ff0000",
@@ -185,14 +194,14 @@ def add_list_to_sync():
                     if media_type.lower() in ["movies", "movie", "shows", "show", "tv"]:
                         list_type = "trakt_special"
                     else:
-                        print(
+                        console.info(
                             color_gradient(
                                 f"\n❌  Invalid media type in special list format: {list_id}", "#ff0000", "#aa0000"
                             )
                         )
                         continue
                 else:
-                    print(color_gradient(f"\n❌  Invalid special list format: {list_id}", "#ff0000", "#aa0000"))
+                    console.info(color_gradient(f"\n❌  Invalid special list format: {list_id}", "#ff0000", "#aa0000"))
                     continue
             # Handle TMDB list IDs (numeric, typically 4+ digits)
             elif list_id.isdigit() and len(list_id) >= 4:
@@ -211,17 +220,19 @@ def add_list_to_sync():
                 list_type = "stevenlu"
                 list_id = "stevenlu"  # Standardize the ID
             else:
-                print(color_gradient(f"\n❌  Invalid list ID format for '{list_id}'.", "#ff0000", "#aa0000"))
+                console.info(color_gradient(f"\n❌  Invalid list ID format for '{list_id}'.", "#ff0000", "#aa0000"))
                 continue
 
             # Ensure we have a valid list_type before proceeding
             if list_type is None:
-                print(color_gradient(f"\n❌  Could not determine list type for '{list_id}'.", "#ff0000", "#aa0000"))
+                console.info(
+                    color_gradient(f"\n❌  Could not determine list type for '{list_id}'.", "#ff0000", "#aa0000")
+                )
                 continue
 
             # Validate provider before saving
             if not validate_provider(list_type, list_id):
-                print(
+                console.info(
                     color_gradient(
                         f"\n❌  Skipping {list_type.upper()} list: {list_id} (validation failed)", "#ff0000", "#aa0000"
                     )
@@ -231,13 +242,13 @@ def add_list_to_sync():
             # Save list and show confirmation
             try:
                 save_list_id(list_id, list_type)
-                print(color_gradient(f"\n✅  Added {list_type.upper()} list: {list_id}", "#00ff00", "#00aa00"))
+                console.info(color_gradient(f"\n✅  Added {list_type.upper()} list: {list_id}", "#00ff00", "#00aa00"))
             except Exception as save_error:
-                print(color_gradient(f"\n❌  Error saving list {list_id}: {save_error!s}", "#ff0000", "#aa0000"))
+                console.info(color_gradient(f"\n❌  Error saving list {list_id}: {save_error!s}", "#ff0000", "#aa0000"))
                 continue
 
         except Exception as e:
-            print(color_gradient(f"\n❌  Error processing list '{list_id}': {e!s}", "#ff0000", "#aa0000"))
+            console.info(color_gradient(f"\n❌  Error processing list '{list_id}': {e!s}", "#ff0000", "#aa0000"))
             import traceback
 
             traceback.print_exc()  # This will help debug any hidden issues
@@ -252,22 +263,24 @@ def one_time_list_sync(seerr_client, run_sync_func):
         seerr_client: Seerr API client
         run_sync_func: Function to run sync
     """
-    print(color_gradient("\n📋  Supported Providers:", "#00aaff", "#00ffaa"))
-    print(color_gradient("   • IMDb: ls123456, ur123456, or https://imdb.com/list/ls123456", "#ffaa00", "#ff5500"))
-    print(color_gradient("   • Trakt: 123456 or https://trakt.tv/lists/123456", "#ffaa00", "#ff5500"))
-    print(
+    console.info(color_gradient("\n📋  Supported Providers:", "#00aaff", "#00ffaa"))
+    console.info(
+        color_gradient("   • IMDb: ls123456, ur123456, or https://imdb.com/list/ls123456", "#ffaa00", "#ff5500")
+    )
+    console.info(color_gradient("   • Trakt: 123456 or https://trakt.tv/lists/123456", "#ffaa00", "#ff5500"))
+    console.info(
         color_gradient(
             "   • Letterboxd: username/listname or https://letterboxd.com/username/listname", "#ffaa00", "#ff5500"
         )
     )
-    print(
+    console.info(
         color_gradient(
             "   • MDBList: username/listname or https://mdblist.com/lists/username/listname", "#ffaa00", "#ff5500"
         )
     )
-    print(color_gradient("   • Steven Lu: stevenlu or https://movies.stevenlu.com", "#ffaa00", "#ff5500"))
-    print(color_gradient("   • TMDB: 123456 or https://themoviedb.org/list/123456", "#ffaa00", "#ff5500"))
-    print(color_gradient("   • Simkl: 123456 or https://simkl.com/5/list/123456", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("   • Steven Lu: stevenlu or https://movies.stevenlu.com", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("   • TMDB: 123456 or https://themoviedb.org/list/123456", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("   • Simkl: 123456 or https://simkl.com/5/list/123456", "#ffaa00", "#ff5500"))
 
     list_ids = custom_input(
         color_gradient(
@@ -324,7 +337,7 @@ def one_time_list_sync(seerr_client, run_sync_func):
                 elif "simkl.com" in list_id and "/list/" in list_id:
                     list_type = "simkl"
                 else:
-                    print(
+                    console.info(
                         color_gradient(
                             "\n❌  Invalid URL format. Must be IMDb, Trakt, Letterboxd, MDBList, Steven Lu, TMDB, or Simkl URL.",
                             "#ff0000",
@@ -343,14 +356,14 @@ def one_time_list_sync(seerr_client, run_sync_func):
                     if media_type.lower() in ["movies", "movie"] or media_type.lower() in ["shows", "show", "tv"]:
                         list_type = "trakt_special"
                     else:
-                        print(
+                        console.info(
                             color_gradient(
                                 f"\n❌  Invalid media type in special list format: {list_id}", "#ff0000", "#aa0000"
                             )
                         )
                         continue
                 else:
-                    print(color_gradient(f"\n❌  Invalid special list format: {list_id}", "#ff0000", "#aa0000"))
+                    console.info(color_gradient(f"\n❌  Invalid special list format: {list_id}", "#ff0000", "#aa0000"))
                     continue
             # Handle TMDB list IDs (numeric, typically 4+ digits)
             elif list_id.isdigit() and len(list_id) >= 4:
@@ -369,7 +382,7 @@ def one_time_list_sync(seerr_client, run_sync_func):
                 list_type = "stevenlu"
                 list_id = "stevenlu"
             else:
-                print(
+                console.info(
                     color_gradient(
                         f"\n❌  Invalid list ID format for '{list_id}'. Skipping this ID.", "#ff0000", "#aa0000"
                     )
@@ -378,7 +391,7 @@ def one_time_list_sync(seerr_client, run_sync_func):
 
             # Validate provider before saving
             if not validate_provider(list_type, list_id):
-                print(
+                console.info(
                     color_gradient(
                         f"\n❌  Skipping {list_type.upper()} list: {list_id} (validation failed)", "#ff0000", "#aa0000"
                     )
@@ -388,10 +401,10 @@ def one_time_list_sync(seerr_client, run_sync_func):
             # Save the list temporarily
             save_list_id(list_id, list_type)
             temp_lists.append((list_type, list_id))
-            print(color_gradient(f"\n✅  Added {list_type.upper()} list: {list_id}", "#00ff00", "#00aa00"))
+            console.info(color_gradient(f"\n✅  Added {list_type.upper()} list: {list_id}", "#00ff00", "#00aa00"))
 
         except Exception as e:
-            print(color_gradient(f"\n❌  Error processing list {list_id}: {e}", "#ff0000", "#aa0000") + "\n")
+            console.info(color_gradient(f"\n❌  Error processing list {list_id}: {e}", "#ff0000", "#aa0000") + "\n")
             logging.exception(f"Error processing list {list_id}: {e}")
             continue
 
@@ -400,7 +413,7 @@ def one_time_list_sync(seerr_client, run_sync_func):
         try:
             run_sync_func(seerr_client)
         except Exception as e:
-            print(color_gradient(f"\n❌  Error during sync: {e}", "#ff0000", "#aa0000"))
+            console.info(color_gradient(f"\n❌  Error during sync: {e}", "#ff0000", "#aa0000"))
             logging.exception(f"Error during sync: {e}")
 
         # Ask if user wants to keep the lists for future use
@@ -415,22 +428,22 @@ def one_time_list_sync(seerr_client, run_sync_func):
             # Remove temporary lists
             for list_type, list_id in temp_lists:
                 delete_list(list_type, list_id)
-            print(color_gradient("\n🗑️  Temporary lists removed.", "#ffaa00", "#ff5500"))
+            console.info(color_gradient("\n🗑️  Temporary lists removed.", "#ffaa00", "#ff5500"))
         else:
-            print(color_gradient("\n✅  Lists saved for future syncs.", "#00ff00", "#00aa00"))
+            console.info(color_gradient("\n✅  Lists saved for future syncs.", "#00ff00", "#00aa00"))
     else:
-        print(color_gradient("\n❌  No valid lists were processed.", "#ff0000", "#aa0000"))
+        console.info(color_gradient("\n❌  No valid lists were processed.", "#ff0000", "#aa0000"))
 
 
 def manage_lists():
     """Manage lists menu."""
     while True:
-        print(color_gradient("\n📋 Manage Lists:", "#00aaff", "#00ffaa"))
-        print(color_gradient("1. View Lists", "#ffaa00", "#ff5500"))
-        print(color_gradient("2. Add New List", "#ffaa00", "#ff5500"))
-        print(color_gradient("3. Delete a List", "#ffaa00", "#ff5500"))
-        print(color_gradient("4. Edit Lists", "#ffaa00", "#ff5500"))
-        print(color_gradient("5. Return to Previous Menu", "#ffaa00", "#ff5500"))
+        console.info(color_gradient("\n📋 Manage Lists:", "#00aaff", "#00ffaa"))
+        console.info(color_gradient("1. View Lists", "#ffaa00", "#ff5500"))
+        console.info(color_gradient("2. Add New List", "#ffaa00", "#ff5500"))
+        console.info(color_gradient("3. Delete a List", "#ffaa00", "#ff5500"))
+        console.info(color_gradient("4. Edit Lists", "#ffaa00", "#ff5500"))
+        console.info(color_gradient("5. Return to Previous Menu", "#ffaa00", "#ff5500"))
 
         choice = custom_input(color_gradient("\nEnter your choice: ", "#ffaa00", "#ff5500"))
 
@@ -446,14 +459,14 @@ def manage_lists():
         elif choice == "5":
             break
         else:
-            print(color_gradient("\n❌ Invalid choice. Please try again.", "#ff0000", "#aa0000"))
+            console.info(color_gradient("\n❌ Invalid choice. Please try again.", "#ff0000", "#aa0000"))
 
 
 def delete_list_menu():
     """Delete a list from the database."""
     lists = load_list_ids()
     if not lists:
-        print(color_gradient("\n❌ No lists found.", "#ff0000", "#aa0000"))
+        console.info(color_gradient("\n❌ No lists found.", "#ff0000", "#aa0000"))
         return
 
     display_lists(lists)
@@ -468,7 +481,7 @@ def delete_list_menu():
             list_to_delete = lists[idx]
             success = delete_list(list_to_delete["type"], list_to_delete["id"])
             if success:
-                print(
+                console.info(
                     color_gradient(
                         f"\n✅ List {list_to_delete['type'].upper()}: {list_to_delete['id']} deleted.",
                         "#00ff00",
@@ -476,22 +489,22 @@ def delete_list_menu():
                     )
                 )
             else:
-                print(color_gradient("\n❌ Failed to delete list.", "#ff0000", "#aa0000"))
+                console.info(color_gradient("\n❌ Failed to delete list.", "#ff0000", "#aa0000"))
         else:
-            print(color_gradient("\n❌ Invalid list number.", "#ff0000", "#aa0000"))
+            console.info(color_gradient("\n❌ Invalid list number.", "#ff0000", "#aa0000"))
     except ValueError:
-        print(color_gradient("\n❌ Invalid input. Please enter a number.", "#ff0000", "#aa0000"))
+        console.info(color_gradient("\n❌ Invalid input. Please enter a number.", "#ff0000", "#aa0000"))
 
 
 def edit_lists():
     """Edit existing lists."""
     lists = load_list_ids()
     if not lists:
-        print(color_gradient("\n❌ No lists found to edit.", "#ff0000", "#aa0000"))
+        console.info(color_gradient("\n❌ No lists found to edit.", "#ff0000", "#aa0000"))
         return
 
     display_lists(lists)
-    print(color_gradient("\nEnter new list IDs (or press Enter to keep the current ID):", "#00aaff", "#00ffaa"))
+    console.info(color_gradient("\nEnter new list IDs (or press Enter to keep the current ID):", "#00aaff", "#00ffaa"))
     updated_lists = []
     for list_info in lists:
         new_id = custom_input(
@@ -517,12 +530,12 @@ def edit_lists():
             [(list_info["type"], list_info["id"]) for list_info in updated_lists],
         )
         conn.commit()
-    print(color_gradient("\n✅ Lists updated successfully.", "#00ff00", "#00aa00"))
+    console.info(color_gradient("\n✅ Lists updated successfully.", "#00ff00", "#00aa00"))
 
 
 def configure_sync_interval_menu():
     """Configure the sync interval."""
-    print(
+    console.info(
         color_gradient(
             "\n💡  Recommendation: Minimum 1 hour interval (you can use 0.5 for 30 minutes)", "#ffaa00", "#ff5500"
         )
@@ -535,7 +548,7 @@ def configure_sync_interval_menu():
     try:
         interval_hours = float(interval)
         if interval_hours < 0.5:
-            print(
+            console.info(
                 color_gradient(
                     "\n⚠️  Warning: Intervals less than 0.5 hours (30 minutes) are not recommended.",
                     "#ffaa00",
@@ -546,7 +559,7 @@ def configure_sync_interval_menu():
             if confirm != "y":
                 return
         elif interval_hours < 1:
-            print(
+            console.info(
                 color_gradient(
                     "\n⚠️  Warning: Intervals less than 1 hour may cause excessive API calls.", "#ffaa00", "#ff5500"
                 )
@@ -562,6 +575,8 @@ def configure_sync_interval_menu():
                 display_interval = f"{int(minutes)} minutes"
             else:
                 display_interval = f"{interval_hours} hours"
-        print(f'\n{color_gradient(f"✅  Sync interval configured to {display_interval}.", "#00ff00", "#00aa00")}\n')
+        console.info(
+            f'\n{color_gradient(f"✅  Sync interval configured to {display_interval}.", "#00ff00", "#00aa00")}\n'
+        )
     except ValueError:
-        print(color_gradient("\n❌ Please enter a valid number (e.g., 1, 0.5, 2.5).", "#ff0000", "#aa0000"))
+        console.info(color_gradient("\n❌ Please enter a valid number (e.g., 1, 0.5, 2.5).", "#ff0000", "#aa0000"))

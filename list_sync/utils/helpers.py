@@ -190,7 +190,7 @@ def sleep_with_countdown(seconds, seerr_client, setup_logging_func):
             remaining = end_time - time.time()
             hours = int(remaining // 3600)
             minutes = int((remaining % 3600) // 60)
-            print(f"Next sync in: {hours}h {minutes}m", flush=True)
+            logging.info(f"Next sync in: {hours}h {minutes}m")
 
             # Check for interrupt.txt
             if os.path.exists(f"{DATA_DIR}/interrupt.txt"):
@@ -200,7 +200,7 @@ def sleep_with_countdown(seconds, seerr_client, setup_logging_func):
             time.sleep(60)  # Sleep for 1 minute between updates
 
     except KeyboardInterrupt:
-        print("\nExiting automated sync mode...")
+        logging.info("Exiting automated sync mode...")
         raise
 
 

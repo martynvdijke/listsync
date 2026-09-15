@@ -7,6 +7,9 @@ import time
 from colorama import Style, init
 
 from ..utils.helpers import color_gradient
+from ..utils.logger import get_console_logger
+
+console = get_console_logger()
 
 # Initialize colorama for cross-platform colored terminal output
 init(autoreset=True)
@@ -107,9 +110,9 @@ def display_ascii_art():
     """
     art_lines = ascii_art.split("\n")
     for line in art_lines:
-        print(color_gradient(line, "#00aaff", "#00ffaa"))
+        console.info(color_gradient(line, "#00aaff", "#00ffaa"))
         time.sleep(0.1)
-    print(Style.RESET_ALL)
+    console.info(Style.RESET_ALL)
 
 
 def display_banner():
@@ -119,7 +122,7 @@ def display_banner():
 Soluify - {servarr-tools_list-sync_v0.6.7}
 ==============================================================
 """
-    print(color_gradient(banner, "#00aaff", "#00ffaa"))
+    console.info(color_gradient(banner, "#00aaff", "#00ffaa"))
 
 
 def display_menu():
@@ -137,34 +140,34 @@ def display_menu():
 7. ❌ Exit ❌
 ==============================================================
 """
-    print(color_gradient(menu, "#00aaff", "#00ffaa") + Style.RESET_ALL)
+    console.info(color_gradient(menu, "#00aaff", "#00ffaa") + Style.RESET_ALL)
 
 
 def display_lists(lists: list[dict[str, str]]):
     """Display a list of saved lists."""
     if not lists:
-        print(color_gradient("\n❌ No lists found.", "#ff0000", "#aa0000"))
+        console.info(color_gradient("\n❌ No lists found.", "#ff0000", "#aa0000"))
         return
 
-    print(color_gradient("\nSaved Lists:", "#00aaff", "#00ffaa"))
+    console.info(color_gradient("\nSaved Lists:", "#00aaff", "#00ffaa"))
     for idx, list_info in enumerate(lists, 1):
-        print(color_gradient(f"{idx}. {list_info['type'].upper()}: {list_info['id']}", "#ffaa00", "#ff5500"))
+        console.info(color_gradient(f"{idx}. {list_info['type'].upper()}: {list_info['id']}", "#ffaa00", "#ff5500"))
 
 
 def display_manage_lists_menu():
     """Display the manage lists submenu."""
-    print(color_gradient("\n📋 Manage Lists:", "#00aaff", "#00ffaa"))
-    print(color_gradient("1. View Lists", "#ffaa00", "#ff5500"))
-    print(color_gradient("2. Add New List", "#ffaa00", "#ff5500"))
-    print(color_gradient("3. Delete a List", "#ffaa00", "#ff5500"))
-    print(color_gradient("4. Edit Lists", "#ffaa00", "#ff5500"))
-    print(color_gradient("5. Return to Previous Menu", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("\n📋 Manage Lists:", "#00aaff", "#00ffaa"))
+    console.info(color_gradient("1. View Lists", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("2. Add New List", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("3. Delete a List", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("4. Edit Lists", "#ffaa00", "#ff5500"))
+    console.info(color_gradient("5. Return to Previous Menu", "#ffaa00", "#ff5500"))
 
 
 def display_item_status(result: dict, current_item: int, total_items: int, dry_run: bool = False):
     """Display the status of a processed item."""
     if dry_run:
-        print(
+        console.info(
             color_gradient(
                 f"🔍 {result['title']}: Would be synced ({current_item}/{total_items})", "#ffaa00", "#ff5500"
             )
@@ -182,7 +185,7 @@ def display_item_status(result: dict, current_item: int, total_items: int, dry_r
 
         emoji, status_text, start_color, end_color = status_info
         message = f"{result['title']}: {status_text} ({current_item}/{total_items})"
-        print(f"{emoji} {color_gradient(message, start_color, end_color)}")
+        console.info(f"{emoji} {color_gradient(message, start_color, end_color)}")
 
         # If there's an error message, log it too for the failures page to pick up
         if result.get("status") in ["error", "not_found"] and result.get("error_message"):
@@ -251,22 +254,22 @@ def display_summary(sync_results: SyncResults):
         for item_line in all_failed_items:
             summary += f"{item_line}\n"
 
-    print(color_gradient(summary, "#9400D3", "#00FF00") + Style.RESET_ALL)
+    console.info(color_gradient(summary, "#9400D3", "#00FF00") + Style.RESET_ALL)
 
 
 def display_welcome_message():
     """Display the welcome message."""
-    print(color_gradient("👋  Welcome to the List to Seerr Sync Tool!", "#00aaff", "#00ffaa") + "\n")
+    console.info(color_gradient("👋  Welcome to the List to Seerr Sync Tool!", "#00aaff", "#00ffaa") + "\n")
 
 
 def display_config_message(source: str):
     """Display configuration source message."""
     if source == "env":
-        print(color_gradient("📝 Using configuration from environment variables", "#00aaff", "#00ffaa"))
+        console.info(color_gradient("📝 Using configuration from environment variables", "#00aaff", "#00ffaa"))
     elif source == "dotenv":
-        print(color_gradient("📝 Using configuration from .env file", "#00aaff", "#00ffaa"))
+        console.info(color_gradient("📝 Using configuration from .env file", "#00aaff", "#00ffaa"))
     elif source == "setup":
-        print(color_gradient("\n🔧 First-time setup required", "#ffaa00", "#ff5500"))
+        console.info(color_gradient("\n🔧 First-time setup required", "#ffaa00", "#ff5500"))
 
 
 def display_automated_mode_message(sync_interval: float):
@@ -281,29 +284,31 @@ def display_automated_mode_message(sync_interval: float):
         else:
             interval_text = f"{sync_interval} hours"
 
-    print(color_gradient(f"\n⚙️  Starting automated sync mode (interval: {interval_text})...", "#00aaff", "#00ffaa"))
+    console.info(
+        color_gradient(f"\n⚙️  Starting automated sync mode (interval: {interval_text})...", "#00aaff", "#00ffaa")
+    )
 
 
 def display_lists_loaded_message():
     """Display message when lists are loaded from environment."""
-    print(color_gradient("📋 Lists loaded from environment variables", "#00aaff", "#00ffaa"))
+    console.info(color_gradient("📋 Lists loaded from environment variables", "#00aaff", "#00ffaa"))
 
 
 def display_exit_message():
     """Display exit message."""
-    print("\n👋 Exiting. Goodbye!")
+    console.info("\n👋 Exiting. Goodbye!")
 
 
 def display_error_message(message: str):
     """Display an error message."""
-    print(color_gradient(f"\n❌ {message}", "#ff0000", "#aa0000"))
+    console.info(color_gradient(f"\n❌ {message}", "#ff0000", "#aa0000"))
 
 
 def display_success_message(message: str):
     """Display a success message."""
-    print(color_gradient(f"\n✅ {message}", "#00ff00", "#00aa00"))
+    console.info(color_gradient(f"\n✅ {message}", "#00ff00", "#00aa00"))
 
 
 def display_warning_message(message: str):
     """Display a warning message."""
-    print(color_gradient(f"\n⚠️ {message}", "#ffaa00", "#ff5500"))
+    console.info(color_gradient(f"\n⚠️ {message}", "#ffaa00", "#ff5500"))

@@ -142,7 +142,9 @@ if table_exists:
         print("\n   Sample relationships:")
         for rel in relationships:
             if "display_name" in rel.keys():
-                print(f"     - Item #{rel['item_id']} ({rel['title']}) ← {rel['list_type']}:{rel['list_id']} ({rel['display_name'] or 'No name'})")
+                print(
+                    f"     - Item #{rel['item_id']} ({rel['title']}) ← {rel['list_type']}:{rel['list_id']} ({rel['display_name'] or 'No name'})"
+                )
             else:
                 print(f"     - Item #{rel['item_id']} ({rel['title']}) ← {rel['list_type']}:{rel['list_id']}")
 
@@ -220,4 +222,3 @@ print()
 print("=" * 80)
 
 conn.close()
-

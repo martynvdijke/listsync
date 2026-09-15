@@ -27,6 +27,7 @@ class ItemStatus(Enum):
 @dataclass
 class SyncList:
     """Represents a list that was synced."""
+
     type: str
     id: str
     url: str | None = None
@@ -36,6 +37,7 @@ class SyncList:
 @dataclass
 class SyncItem:
     """Represents an individual item processed during sync."""
+
     title: str
     status: str
     progress_number: int
@@ -49,6 +51,7 @@ class SyncItem:
 @dataclass
 class SyncResults:
     """Results summary for a sync session."""
+
     requested: int = 0
     already_available: int = 0
     already_requested: int = 0
@@ -60,6 +63,7 @@ class SyncResults:
 @dataclass
 class SyncSession:
     """Complete sync session data."""
+
     id: str
     type: SyncType
     start_timestamp: str
@@ -161,8 +165,7 @@ class SyncLogParser:
     def detect_session_end(self, line: str, session_type: SyncType) -> bool:
         """Detect if line marks end of a sync session."""
         if session_type == SyncType.FULL:
-            return bool(re.search(self.SYNC_SUMMARY_START, line) or
-                       re.search(self.SYNC_SUMMARY_DASHES, line))
+            return bool(re.search(self.SYNC_SUMMARY_START, line) or re.search(self.SYNC_SUMMARY_DASHES, line))
         # SINGLE
         return bool(re.search(self.SINGLE_SYNC_COMPLETE, line))
 
@@ -300,10 +303,10 @@ class SyncLogParser:
     def parse_log_file(self, log_path: str) -> list[SyncSession]:
         """
         Parse entire log file and extract all sync sessions.
-        
+
         Args:
             log_path: Path to log file
-            
+
         Returns:
             List of parsed sync sessions
         """
@@ -416,11 +419,13 @@ class SyncLogParser:
                     current_session.results.not_found += 1
                 elif item.status == ItemStatus.ERROR.value:
                     current_session.results.error += 1
-                    current_session.errors.append({
-                        "title": item.title,
-                        "error": item.error_details or "Unknown error",
-                        "timestamp": item.timestamp,
-                    })
+                    current_session.errors.append(
+                        {
+                            "title": item.title,
+                            "error": item.error_details or "Unknown error",
+                            "timestamp": item.timestamp,
+                        }
+                    )
 
             # Detect summary section start
             if re.search(self.SYNC_SUMMARY_START, line) or re.search(self.SYNC_SUMMARY_DASHES, line):
@@ -514,4 +519,3 @@ if __name__ == "__main__":
             print("\nPerformance:")
             print(f"  Avg Time: {session.average_time_ms:.1f}ms/item")
             print(f"  Total Time: {session.total_time_seconds}s" if session.total_time_seconds else "")
-

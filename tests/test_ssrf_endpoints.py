@@ -1,4 +1,5 @@
 """End-to-end: the SSRF guards must actually reject at the HTTP layer."""
+
 import os
 import socket
 import sys
@@ -6,15 +7,27 @@ import tempfile
 import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 def stub(n, a=()):
     m = types.ModuleType(n)
-    for x in a: setattr(m, x, type(x, (), {}))
-    sys.modules[n] = m; return m
+    for x in a:
+        setattr(m, x, type(x, (), {}))
+    sys.modules[n] = m
+    return m
+
+
 for n in ("seleniumbase", "bs4", "halo"):
-    try: __import__(n)
-    except ImportError: stub(n, ("SB", "BeautifulSoup", "Halo"))
-c = stub("cryptography"); f = stub("cryptography.fernet", ("Fernet", "InvalidToken")); c.fernet = f
-d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a, **k: None
+    try:
+        __import__(n)
+    except ImportError:
+        stub(n, ("SB", "BeautifulSoup", "Halo"))
+c = stub("cryptography")
+f = stub("cryptography.fernet", ("Fernet", "InvalidToken"))
+c.fernet = f
+d = stub("dotenv")
+d.load_dotenv = lambda *a, **k: None
+d.set_key = lambda *a, **k: None
 
 tmp = tempfile.mkdtemp()
 import list_sync.utils.logger as lg
@@ -35,6 +48,8 @@ import requests
 
 def forbidden(*a, **k):
     raise AssertionError(f"OUTBOUND REQUEST ESCAPED THE GUARD: {a} {k}")
+
+
 requests.get = forbidden
 requests.post = forbidden
 
@@ -43,10 +58,14 @@ from fastapi.testclient import TestClient
 client = TestClient(api_server.app)
 
 fail = []
+
+
 def check(label, got, want):
     ok = got == want
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
-    if not ok: fail.append(label)
+    if not ok:
+        fail.append(label)
+
 
 print("=== image proxy: the read-SSRF primitive ===")
 for target, name in [
@@ -89,9 +108,14 @@ for target, name in [
     ("gopher://127.0.0.1:11211/", "gopher"),
     ("http://metadata.google.internal/", "gcp metadata"),
 ]:
-    r = client.post(SEERR_TEST, json={
-        "overseerr_url": target, "overseerr_api_key": "k", "overseerr_user_id": "1",
-    })
+    r = client.post(
+        SEERR_TEST,
+        json={
+            "overseerr_url": target,
+            "overseerr_api_key": "k",
+            "overseerr_user_id": "1",
+        },
+    )
     # endpoint answers 200 with valid:false rather than an HTTP error
     body = r.json() if r.status_code == 200 else {}
     blocked = r.status_code >= 400 or body.get("valid") is False
@@ -107,14 +131,18 @@ from list_sync.utils import url_safety as us
 from list_sync.utils.url_safety import validate_outbound_url
 
 us.socket.getaddrinfo = lambda host, *a, **k: (
-    [(None, None, None, "", ("172.18.0.5", 0))] if host == "seerr"
+    [(None, None, None, "", ("172.18.0.5", 0))]
+    if host == "seerr"
     else (_ for _ in ()).throw(socket.gaierror(-2, "Name or service not known"))
 )
 ok, reason = validate_outbound_url("http://seerr:5055", allow_private=True)
 check("seerr:5055 still allowed", ok, True)
 print(f"      reason: {reason}")
-check("but seerr blocked when private is not permitted",
-      validate_outbound_url("http://seerr:5055", allow_private=False)[0], False)
+check(
+    "but seerr blocked when private is not permitted",
+    validate_outbound_url("http://seerr:5055", allow_private=False)[0],
+    False,
+)
 
 print()
 print("FAILED:", fail if fail else "none")

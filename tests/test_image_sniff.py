@@ -1,19 +1,32 @@
 """sniff_image_type must match what imghdr.what() returned, without imghdr."""
+
 import os
 import sys
 import tempfile
 import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 def stub(n, a=()):
     m = types.ModuleType(n)
-    for x in a: setattr(m, x, type(x, (), {}))
-    sys.modules[n] = m; return m
+    for x in a:
+        setattr(m, x, type(x, (), {}))
+    sys.modules[n] = m
+    return m
+
+
 for n in ("seleniumbase", "bs4", "halo"):
-    try: __import__(n)
-    except ImportError: stub(n, ("SB", "BeautifulSoup", "Halo"))
-c = stub("cryptography"); f = stub("cryptography.fernet", ("Fernet", "InvalidToken")); c.fernet = f
-d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a, **k: None
+    try:
+        __import__(n)
+    except ImportError:
+        stub(n, ("SB", "BeautifulSoup", "Halo"))
+c = stub("cryptography")
+f = stub("cryptography.fernet", ("Fernet", "InvalidToken"))
+c.fernet = f
+d = stub("dotenv")
+d.load_dotenv = lambda *a, **k: None
+d.set_key = lambda *a, **k: None
 
 tmp = tempfile.mkdtemp()
 import list_sync.utils.logger as lg
@@ -26,10 +39,14 @@ db.DB_FILE = os.path.join(tmp, "list_sync.db")
 from api_server import sniff_image_type
 
 fail = []
+
+
 def check(label, got, want):
     ok = got == want
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
-    if not ok: fail.append(label)
+    if not ok:
+        fail.append(label)
+
 
 # Real headers, padded so length checks behave as they would on a real file.
 PAD = b"\x00" * 64
@@ -60,8 +77,7 @@ check("riff but not webp", sniff_image_type(b"RIFF\x24\x00\x00\x00WAVEfmt " + PA
 check("truncated riff", sniff_image_type(b"RIFF\x24\x00"), None)
 
 # The signature must be at the start, not merely present.
-check("png magic later in the body",
-      sniff_image_type(b"junk" + b"\x89PNG\r\n\x1a\n" + PAD), None)
+check("png magic later in the body", sniff_image_type(b"junk" + b"\x89PNG\r\n\x1a\n" + PAD), None)
 
 # Cross-check against imghdr itself where it still exists, so the replacement
 # is verified against the thing it replaces rather than against my assumptions.

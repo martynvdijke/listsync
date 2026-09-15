@@ -21,17 +21,17 @@ _cached_key = None
 def get_encryption_key() -> bytes:
     """
     Get or generate encryption key for securing sensitive settings.
-    
+
     Key is automatically generated on first run and saved to a persistent file
     in the data directory. This ensures the same key is used across container
     restarts without requiring manual configuration.
-    
+
     Priority:
     1. Cached key in memory (performance)
     2. Key file in data directory (persistent)
     3. ENCRYPTION_KEY environment variable (override/backup)
     4. Generate new key and save to file (first run)
-    
+
     Returns:
         bytes: Fernet-compatible encryption key
     """
@@ -91,11 +91,11 @@ def get_encryption_key() -> bytes:
 def encrypt_value(value: str, key: bytes = None) -> str:
     """
     Encrypt a string value using Fernet symmetric encryption.
-    
+
     Args:
         value: Plain text value to encrypt
         key: Encryption key (uses default if None)
-    
+
     Returns:
         str: Base64-encoded encrypted value
     """
@@ -117,11 +117,11 @@ def encrypt_value(value: str, key: bytes = None) -> str:
 def decrypt_value(encrypted_value: str, key: bytes = None) -> str:
     """
     Decrypt an encrypted string value.
-    
+
     Args:
         encrypted_value: Base64-encoded encrypted value
         key: Encryption key (uses default if None)
-    
+
     Returns:
         str: Decrypted plain text value
     """
@@ -146,11 +146,11 @@ def decrypt_value(encrypted_value: str, key: bytes = None) -> str:
 def mask_sensitive_value(value: str, show_chars: int = 4) -> str:
     """
     Mask a sensitive value, showing only last N characters.
-    
+
     Args:
         value: Value to mask
         show_chars: Number of characters to show at end
-    
+
     Returns:
         str: Masked value (e.g., "****abc123")
     """
@@ -170,26 +170,25 @@ def mask_sensitive_value(value: str, show_chars: int = 4) -> str:
 # in the database, where anything that can read the data volume can read it.
 SENSITIVE_KEYS = {
     "overseerr_api_key",
-    "seerr_api_key",       # the current name for overseerr_api_key
+    "seerr_api_key",  # the current name for overseerr_api_key
     "trakt_client_id",
-    "discord_webhook",     # the token is part of the webhook URL
+    "discord_webhook",  # the token is part of the webhook URL
     "tmdb_key",
     "tvdb_key",
     "simkl_client_id",
     "simkl_user_token",
-    "gotify_token",      # Gotify app token
+    "gotify_token",  # Gotify app token
 }
 
 
 def should_encrypt(key: str) -> bool:
     """
     Check if a configuration key should be encrypted.
-    
+
     Args:
         key: Configuration key name
-    
+
     Returns:
         bool: True if key should be encrypted
     """
     return key.lower() in SENSITIVE_KEYS
-

@@ -61,8 +61,11 @@ def load_lists(db_path):
             return None, "No 'lists' table in the database"
 
         has_user = "user_id" in columns
-        select = "SELECT list_type, list_id, user_id FROM lists" if has_user \
+        select = (
+            "SELECT list_type, list_id, user_id FROM lists"
+            if has_user
             else "SELECT list_type, list_id, NULL FROM lists"
+        )
         cursor.execute(select)
         rows = cursor.fetchall()
 
@@ -177,8 +180,10 @@ def main():
                 q = quota.get(kind) or {}
                 if q.get("limit"):
                     state = "RESTRICTED - requests will be rejected" if q.get("restricted") else "ok"
-                    print(f"  user {user_id} {kind:<6} {q.get('used', '?')}/{q.get('limit')} "
-                          f"per {q.get('days', '?')}d  {state}")
+                    print(
+                        f"  user {user_id} {kind:<6} {q.get('used', '?')}/{q.get('limit')} "
+                        f"per {q.get('days', '?')}d  {state}"
+                    )
 
     # --- the actual cross-reference ----------------------------------------
     print("\n" + "-" * 72)

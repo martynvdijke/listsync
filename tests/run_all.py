@@ -26,10 +26,7 @@ REPO = os.path.dirname(HERE)
 
 def discover(patterns):
     """Find the suites to run, optionally filtered by substring."""
-    names = sorted(
-        f[:-3] for f in os.listdir(HERE)
-        if f.startswith("test_") and f.endswith(".py")
-    )
+    names = sorted(f[:-3] for f in os.listdir(HERE) if f.startswith("test_") and f.endswith(".py"))
     if patterns:
         names = [n for n in names if any(p in n for p in patterns)]
     return names
@@ -42,7 +39,8 @@ def run(name):
         [sys.executable, os.path.join(HERE, name + ".py")],
         capture_output=True,
         text=True,
-        cwd=REPO, check=False,
+        cwd=REPO,
+        check=False,
     )
     elapsed = time.monotonic() - started
     output = proc.stdout + proc.stderr

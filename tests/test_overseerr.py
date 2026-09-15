@@ -1,4 +1,5 @@
 """Check SeerrClient classifies each Seerr failure mode correctly."""
+
 import os
 import sys
 import types
@@ -18,33 +19,43 @@ import requests
 from list_sync.api.seerr import SeerrClient
 
 fail = []
+
+
 def check(label, got, want):
     ok = got == want
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
     if not ok:
         fail.append(label)
 
+
 class FakeResponse:
     def __init__(self, status, body=None, text=""):
         self.status_code = status
         self._body = body
         self.text = text
+
     def json(self):
         if self._body is None:
             raise ValueError("no json")
         return self._body
+
     def raise_for_status(self):
         if self.status_code >= 400:
             raise requests.exceptions.HTTPError(response=self)
 
+
 captured = {}
+
+
 def make_post(response):
     def _post(url, headers=None, json=None, timeout=None):
         captured["url"] = url
         captured["headers"] = headers
         captured["json"] = json
         return response
+
     return _post
+
 
 client = SeerrClient("https://seerr.example.com/", "KEY", "1")
 
@@ -80,9 +91,12 @@ check("400 real error", client.request_media(603, "movie"), "error")
 requests.post = make_post(FakeResponse(500, None, text="<html>nginx</html>"))
 check("500 html body", client.request_media(603, "movie"), "error")
 
+
 # Network failure.
 def boom(*a, **k):
     raise requests.exceptions.ConnectionError("refused")
+
+
 requests.post = boom
 check("connection error", client.request_media(603, "movie"), "error")
 
@@ -95,14 +109,20 @@ check("specific season", client.request_specific_season(1399, 2, requester_user_
 check("season payload", captured["json"]["seasons"], [2])
 
 # --- validate_requester ---
-USERS = {"results": [
-    {"id": 1, "displayName": "Admin", "permissions": 2},
-    {"id": 7, "displayName": "Jess", "permissions": 32},
-    {"id": 8, "displayName": "NoRequest", "permissions": 64},
-    {"id": 9, "displayName": "MovieOnly", "permissions": 262144},
-]}
+USERS = {
+    "results": [
+        {"id": 1, "displayName": "Admin", "permissions": 2},
+        {"id": 7, "displayName": "Jess", "permissions": 32},
+        {"id": 8, "displayName": "NoRequest", "permissions": 64},
+        {"id": 9, "displayName": "MovieOnly", "permissions": 262144},
+    ]
+}
+
+
 def fake_get(url, headers=None, params=None, timeout=None):
     return FakeResponse(200, USERS)
+
+
 requests.get = fake_get
 
 check("admin valid", client.validate_requester("1")[0], True)
@@ -113,9 +133,12 @@ print("      reason:", client.validate_requester("8")[1])
 check("unknown user", client.validate_requester("42")[0], False)
 print("      reason:", client.validate_requester("42")[1])
 
+
 # A failed user lookup must not block the sync.
 def failing_get(*a, **k):
     raise requests.exceptions.ConnectionError("refused")
+
+
 requests.get = failing_get
 check("lookup failure is non-fatal", client.validate_requester("7")[0], True)
 

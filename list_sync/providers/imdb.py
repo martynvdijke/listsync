@@ -21,8 +21,9 @@ from . import SyncCancelledException, check_and_raise_if_cancelled, register_pro
 # HTML response. Reading that is one HTTP request with no browser, no CSS
 # selectors and no pagination, so it's tried before falling back to Selenium.
 _BROWSER_HEADERS = {
-    "User-Agent": ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                   "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"),
+    "User-Agent": (
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 " "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+    ),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "en-US,en;q=0.9",
 }
@@ -44,7 +45,11 @@ _YEAR_KEYS = ("releaseYear", "year", "startYear")
 
 # IMDb title types that are episodic
 _TV_TITLE_TYPES = {
-    "tvseries", "tvminiseries", "tvepisode", "tvspecial", "tvshort",
+    "tvseries",
+    "tvminiseries",
+    "tvepisode",
+    "tvspecial",
+    "tvshort",
 }
 
 
@@ -82,12 +87,11 @@ def _http_get(url: str, timeout: int = 30) -> bytes | None:
             # AWS WAF now answers with HTTP 202 + x-amzn-waf-action: challenge and an
             # empty (0-byte) body - the old body-regex alone misses it. Check
             # headers/status first so a 202 never leaks through as "success".
-            waf_action = (response.headers.get("x-amzn-waf-action") or
-                          response.headers.get("X-Amzn-Waf-Action") or "").lower()
+            waf_action = (
+                response.headers.get("x-amzn-waf-action") or response.headers.get("X-Amzn-Waf-Action") or ""
+            ).lower()
             is_waf_challenge = (
-                waf_action == "challenge"
-                or response.status == 202
-                or _AWS_WAF_RE.search(raw or b"") is not None
+                waf_action == "challenge" or response.status == 202 or _AWS_WAF_RE.search(raw or b"") is not None
             )
             if response.status != 200 or len(raw) < _INTERSTITIAL_MAX_BYTES or is_waf_challenge:
                 if not _IMDB_ID_ANYWHERE_RE.search(raw or b""):
@@ -281,8 +285,7 @@ def fetch_imdb_list_via_http(url: str) -> list[dict[str, Any]] | None:
     now = time.monotonic()
     if now < _DIRECT_FETCH_BLOCKED_UNTIL:
         logging.debug(
-            f"Skipping IMDb direct fetch - backing off for another "
-            f"{int(_DIRECT_FETCH_BLOCKED_UNTIL - now)}s",
+            f"Skipping IMDb direct fetch - backing off for another " f"{int(_DIRECT_FETCH_BLOCKED_UNTIL - now)}s",
         )
         return None
 
@@ -447,13 +450,13 @@ def _resolve_imdb_url(list_id: str):
 def fetch_imdb_list(list_id: str) -> list[dict[str, Any]]:
     """
     Fetch IMDb list using Selenium with pagination
-    
+
     Args:
         list_id (str): IMDb list ID, chart name, or URL
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
-        
+
     Raises:
         ValueError: If list ID format is invalid
     """
@@ -532,10 +535,10 @@ def fetch_imdb_list(list_id: str) -> list[dict[str, Any]]:
 def _process_imdb_chart(sb) -> list[dict[str, Any]]:
     """
     Process an IMDb chart page.
-    
+
     Args:
         sb: SeleniumBase instance
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
     """
@@ -660,9 +663,9 @@ def _process_imdb_chart(sb) -> list[dict[str, Any]]:
     # Try different selectors for the chart items, starting with the most specific
     item_selectors = [
         "li.ipc-metadata-list-summary-item",  # Most specific for compact view
-        ".ipc-metadata-list-summary-item",    # Alternative for compact view
-        ".cli-parent",                        # From the example
-        ".ipc-metadata-list-item",             # For other views
+        ".ipc-metadata-list-summary-item",  # Alternative for compact view
+        ".cli-parent",  # From the example
+        ".ipc-metadata-list-item",  # For other views
     ]
 
     for selector in item_selectors:
@@ -829,12 +832,14 @@ def _process_imdb_chart(sb) -> list[dict[str, Any]]:
             if metadata_text and ("TV" in metadata_text or "Series" in metadata_text):
                 media_type = "tv"
 
-            media_items.append({
-                "title": title.strip(),
-                "imdb_id": imdb_id,
-                "media_type": media_type,
-                "year": year,
-            })
+            media_items.append(
+                {
+                    "title": title.strip(),
+                    "imdb_id": imdb_id,
+                    "media_type": media_type,
+                    "year": year,
+                }
+            )
             logging.info(f"Added {media_type}: {title} ({year}) (IMDB ID: {imdb_id})")
 
         except Exception as e:
@@ -847,11 +852,11 @@ def _process_imdb_chart(sb) -> list[dict[str, Any]]:
 def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
     """
     Process a regular IMDb list page.
-    
+
     Args:
         sb: SeleniumBase instance
         url: URL of the list
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
     """
@@ -1077,7 +1082,9 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
         if not items:
             logging.warning("No items found on this page, attempting to continue to next page")
             # We might need to try the next page
-            if current_page < min(expected_pages or 2, MAX_PAGES):  # Try at least page 2 if we don't know expected pages
+            if current_page < min(
+                expected_pages or 2, MAX_PAGES
+            ):  # Try at least page 2 if we don't know expected pages
                 # Try to navigate to next page directly
                 next_page = current_page + 1
                 next_url = f"{url}/?page={next_page}"
@@ -1158,7 +1165,12 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
                 media_type = "movie"  # default
                 if metadata_text:
                     # Look for TV Series indicator in metadata text
-                    if "TV Series" in metadata_text or "TV Mini Series" in metadata_text or "eps" in metadata_text.lower() or "episodes" in metadata_text.lower():
+                    if (
+                        "TV Series" in metadata_text
+                        or "TV Mini Series" in metadata_text
+                        or "eps" in metadata_text.lower()
+                        or "episodes" in metadata_text.lower()
+                    ):
                         media_type = "tv"
 
                 # Get IMDB ID from the title link with multiple fallbacks
@@ -1225,12 +1237,14 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
                     continue
 
                 seen_imdb_ids.add(imdb_id)
-                media_items.append({
-                    "title": title.strip(),
-                    "imdb_id": imdb_id,
-                    "media_type": media_type,
-                    "year": year,
-                })
+                media_items.append(
+                    {
+                        "title": title.strip(),
+                        "imdb_id": imdb_id,
+                        "media_type": media_type,
+                        "year": year,
+                    }
+                )
                 logging.info(f"Added {media_type}: {title} ({year}) (IMDB ID: {imdb_id})")
 
             except Exception as e:

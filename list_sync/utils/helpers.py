@@ -14,10 +14,10 @@ from seleniumbase import SB
 def custom_input(prompt):
     """
     Custom input function that supports better readline functionality.
-    
+
     Args:
         prompt (str): The prompt to display to the user
-        
+
     Returns:
         str: The user's input
     """
@@ -31,17 +31,18 @@ def custom_input(prompt):
 def color_gradient(text, start_color, end_color):
     """
     Create a color gradient for the given text.
-    
+
     Args:
         text (str): The text to apply the gradient to
         start_color (str): The starting color in hex format (e.g., "#00aaff")
         end_color (str): The ending color in hex format (e.g., "#00ffaa")
-        
+
     Returns:
         str: The text with ANSI color gradient applied
     """
+
     def hex_to_rgb(hex_code):
-        return tuple(int(hex_code.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        return tuple(int(hex_code.lstrip("#")[i : i + 2], 16) for i in (0, 2, 4))
 
     start_rgb = hex_to_rgb(start_color)
     end_rgb = hex_to_rgb(end_color)
@@ -62,10 +63,10 @@ def color_gradient(text, start_color, end_color):
 def normalize_title(title: str) -> str:
     """
     Normalize a title for comparison by removing special characters and converting to lowercase.
-    
+
     Args:
         title (str): The title to normalize
-        
+
     Returns:
         str: The normalized title
     """
@@ -79,11 +80,11 @@ def normalize_title(title: str) -> str:
 def calculate_title_similarity(title1: str, title2: str) -> float:
     """
     Calculate fuzzy match similarity between two titles using Levenshtein distance.
-    
+
     Args:
         title1 (str): First title
         title2 (str): Second title
-        
+
     Returns:
         float: Similarity score between 0 and 1
     """
@@ -122,10 +123,10 @@ def calculate_title_similarity(title1: str, title2: str) -> float:
 def format_time_remaining(seconds):
     """
     Format seconds into hours, minutes, seconds.
-    
+
     Args:
         seconds (float): Number of seconds
-        
+
     Returns:
         str: Formatted time string (e.g., "2h 30m 15s")
     """
@@ -138,7 +139,7 @@ def format_time_remaining(seconds):
 def init_selenium_driver():
     """
     Initialize Selenium driver to ensure it's working properly.
-    
+
     Raises:
         Exception: If Selenium driver initialization fails
     """
@@ -155,11 +156,7 @@ def init_selenium_driver():
             f"--user-data-dir=/tmp/chrome-data-{os.getpid()}",
         ]
 
-        with SB(uc=True,
-               headless=True,
-               browser="chrome",
-               chromium_arg=" ".join(chrome_options),
-               xvfb=True) as sb:
+        with SB(uc=True, headless=True, browser="chrome", chromium_arg=" ".join(chrome_options), xvfb=True) as sb:
             logging.info("Chrome version: " + sb.execute_script("return navigator.userAgent"))
             sb.get("about:blank")
         logging.info("Successfully initialized Selenium driver")
@@ -173,7 +170,7 @@ def init_selenium_driver():
 def sleep_with_countdown(seconds, seerr_client, setup_logging_func):
     """
     Sleep with countdown and handle keyboard interrupts for exit or sync.
-    
+
     Args:
         seconds (int): Number of seconds to sleep
         seerr_client: Seerr API client (unused but kept for compatibility)
@@ -210,11 +207,11 @@ def sleep_with_countdown(seconds, seerr_client, setup_logging_func):
 def construct_list_url(list_type: str, list_id: str) -> str:
     """
     Construct the full URL for a list based on its type and ID.
-    
+
     Args:
         list_type (str): Type of list (imdb, trakt, trakt_special, letterboxd, anilist, mdblist, stevenlu, tmdb, simkl, tvdb)
         list_id (str): List ID or URL
-        
+
     Returns:
         str: Full URL for the list
     """

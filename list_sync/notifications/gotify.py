@@ -20,6 +20,7 @@ def get_gotify_config() -> tuple[str, str] | None:
     # Database first (dashboard-managed), then the environment fallback.
     try:
         from ..config import ConfigManager
+
         config = ConfigManager()
 
         enabled = config.get_setting("gotify_enabled")
@@ -38,9 +39,15 @@ def get_gotify_config() -> tuple[str, str] | None:
     return None
 
 
-def send_to_gotify(summary_text, sync_results=None, url: str | None = None,
-                   token: str | None = None, automated: bool = False,
-                   is_single_list: bool = False, priority: int = 0) -> None:
+def send_to_gotify(
+    summary_text,
+    sync_results=None,
+    url: str | None = None,
+    token: str | None = None,
+    automated: bool = False,
+    is_single_list: bool = False,
+    priority: int = 0,
+) -> None:
     """Send a sync summary to a Gotify server."""
     if not url or not token:
         config = get_gotify_config()

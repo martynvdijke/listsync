@@ -74,6 +74,7 @@ def get_seerr_env(name: str, default: str | None = None) -> str | None:
 
     return default
 
+
 # Marks a config.enc written with a salt and a key derivation function. Files
 # without it predate that and are read with the old scheme below.
 _CONFIG_MAGIC = b"LSCFG1"
@@ -140,6 +141,7 @@ def encrypt_config(data, password):
     fernet = Fernet(_derive_key(password, salt))
     return _CONFIG_MAGIC + salt + fernet.encrypt(json.dumps(data).encode())
 
+
 def decrypt_config(encrypted_data, password):
     """
     Decrypt configuration data with a password.
@@ -157,8 +159,8 @@ def decrypt_config(encrypted_data, password):
     """
     if encrypted_data.startswith(_CONFIG_MAGIC):
         offset = len(_CONFIG_MAGIC)
-        salt = encrypted_data[offset:offset + _CONFIG_SALT_BYTES]
-        token = encrypted_data[offset + _CONFIG_SALT_BYTES:]
+        salt = encrypted_data[offset : offset + _CONFIG_SALT_BYTES]
+        token = encrypted_data[offset + _CONFIG_SALT_BYTES :]
         key = _derive_key(password, salt)
     else:
         token = encrypted_data
@@ -167,10 +169,11 @@ def decrypt_config(encrypted_data, password):
     fernet = Fernet(key)
     return json.loads(fernet.decrypt(token).decode())
 
+
 def save_config(seerr_url, api_key, requester_user_id):
     """
     Save configuration to encrypted file.
-    
+
     Args:
         seerr_url (str): Seerr URL
         api_key (str): API key
@@ -184,10 +187,11 @@ def save_config(seerr_url, api_key, requester_user_id):
         f.write(encrypted_config)
     print(f'\n{color_gradient("✅  Details encrypted. Remember your password!", "#00ff00", "#00aa00")}\n')
 
+
 def load_config() -> tuple[str | None, str | None, str | None]:
     """
     Load configuration from encrypted file.
-    
+
     Returns:
         Tuple[Optional[str], Optional[str], Optional[str]]: Seerr URL, API key, and requester user ID
     """
@@ -213,9 +217,15 @@ def load_config() -> tuple[str | None, str | None, str | None]:
                     print(color_gradient("\n❌  Maximum password attempts reached.", "#ff0000", "#aa0000"))
                     if custom_input("\n🗑️  Delete this config and start over? (y/n): ").lower() == "y":
                         os.remove(CONFIG_FILE)
-                        print(color_gradient("\n🔄  Config deleted. Rerun the script to set it up again.", "#ffaa00", "#ff5500") + "\n")
+                        print(
+                            color_gradient(
+                                "\n🔄  Config deleted. Rerun the script to set it up again.", "#ffaa00", "#ff5500"
+                            )
+                            + "\n"
+                        )
                     return None, None, None
     return None, None, None
+
 
 def test_overseerr_api(seerr_url, api_key):
     """Test Seerr API connection."""
@@ -228,12 +238,15 @@ def test_overseerr_api(seerr_url, api_key):
         response.raise_for_status()
         spinner.succeed(color_gradient("🎉  API connection successful!", "#00ff00", "#00aa00"))
         import logging
+
         logging.info("Seerr API connection successful!")
     except Exception as e:
         spinner.fail(color_gradient(f"❌  Seerr API connection failed. Error: {e!s}", "#ff0000", "#aa0000"))
         import logging
+
         logging.exception(f"Seerr API connection failed. Error: {e!s}")
         raise
+
 
 def set_requester_user(seerr_url, api_key):
     """Set the requester user for API requests."""
@@ -245,26 +258,37 @@ def set_requester_user(seerr_url, api_key):
         response.raise_for_status()
         jsonResult = response.json()
         if jsonResult["pageInfo"]["results"] > 1:
-            print(color_gradient("\n📋 Multiple users detected, you can choose which user will make the requests on ListSync behalf.\n", "#00aaff", "#00ffaa"))
+            print(
+                color_gradient(
+                    "\n📋 Multiple users detected, you can choose which user will make the requests on ListSync behalf.\n",
+                    "#00aaff",
+                    "#00ffaa",
+                )
+            )
             for result in jsonResult["results"]:
                 print(color_gradient(f"{result['id']}. {result['displayName']}", "#ffaa00", "#ff5500"))
-            requester_user_id = custom_input(color_gradient("\nEnter the number of the list to use as requester user: ", "#ffaa00", "#ff5500"))
+            requester_user_id = custom_input(
+                color_gradient("\nEnter the number of the list to use as requester user: ", "#ffaa00", "#ff5500")
+            )
             if not next((x for x in jsonResult["results"] if str(x["id"]) == requester_user_id), None):
                 requester_user_id = "1"
                 print(color_gradient("\n❌  Invalid option, using admin as requester user.", "#ff0000", "#aa0000"))
 
         import logging
+
         logging.info("Requester user set!")
         return requester_user_id
     except Exception as e:
         import logging
+
         logging.exception(f"Seerr API connection failed. Error: {e!s}")
         return 1
+
 
 def get_trakt_client_id() -> str | None:
     """
     Get Trakt API Client ID from environment variables.
-    
+
     Returns:
         Optional[str]: Trakt Client ID if set, None otherwise
     """
@@ -275,9 +299,11 @@ def get_trakt_client_id() -> str | None:
     client_id = os.getenv("TRAKT_CLIENT_ID")
     if client_id:
         import logging
+
         logging.info("Trakt API Client ID loaded from environment")
     else:
         import logging
+
         logging.warning("TRAKT_CLIENT_ID not set - Trakt integration will not work")
 
     return client_id
@@ -286,7 +312,7 @@ def get_trakt_client_id() -> str | None:
 def get_tmdb_api_key() -> str | None:
     """
     Get TMDB API Key from environment variables.
-    
+
     Returns:
         Optional[str]: TMDB API Key if set, None otherwise
     """
@@ -297,9 +323,11 @@ def get_tmdb_api_key() -> str | None:
     api_key = os.getenv("TMDB_KEY")
     if api_key:
         import logging
+
         logging.info("TMDB API Key loaded from environment")
     else:
         import logging
+
         logging.warning("TMDB_KEY not set - TMDB will use web scraping fallback")
 
     return api_key
@@ -308,7 +336,7 @@ def get_tmdb_api_key() -> str | None:
 def get_tvdb_api_key() -> str | None:
     """
     Get TVDB API Key from environment variables.
-    
+
     Returns:
         Optional[str]: TVDB API Key if set, None otherwise
     """
@@ -319,9 +347,11 @@ def get_tvdb_api_key() -> str | None:
     api_key = os.getenv("TVDB_KEY")
     if api_key:
         import logging
+
         logging.info("TVDB API Key loaded from environment")
     else:
         import logging
+
         logging.warning("TVDB_KEY not set - TVDB will use web scraping fallback")
 
     return api_key
@@ -330,7 +360,7 @@ def get_tvdb_api_key() -> str | None:
 def load_env_config() -> tuple[str | None, str | None, str | None, float, bool, bool]:
     """
     Load configuration from database or environment variables (database preferred).
-    
+
     Returns:
         Tuple: Seerr URL, API key, user ID, sync interval (float), automated mode flag, 4K flag
     """
@@ -415,6 +445,7 @@ def load_env_config() -> tuple[str | None, str | None, str | None, float, bool, 
 
         return None, None, None, 0.0, False, False
 
+
 # Separator between a list ID and the Seerr user it should request as, in
 # the *_LISTS environment variables. Two colons, because a single colon already
 # means something in Trakt special lists ("trending:movies") and appears in URLs.
@@ -481,8 +512,7 @@ def load_env_lists() -> bool:
         # Match on canonical IDs so a list stored as a URL isn't re-added as a
         # bare ID (and vice versa), which would duplicate it under user 1.
         existing_set = {
-            (list_info["type"], normalize_list_id(list_info["type"], list_info["id"]))
-            for list_info in existing_lists
+            (list_info["type"], normalize_list_id(list_info["type"], list_info["id"])) for list_info in existing_lists
         }
 
         # Lists added from the environment request as the globally configured
@@ -505,6 +535,7 @@ def load_env_lists() -> bool:
                 # The entry names a user explicitly, so keep the stored list in
                 # step with the configuration file it came from.
                 from .database import get_list_user_id, update_list_user_id
+
                 current = get_list_user_id(list_type, list_id)
                 if current != str(user_id):
                     update_list_user_id(list_type, list_id, user_id)
@@ -591,7 +622,9 @@ def load_env_lists() -> bool:
             add_lists_from_setting(tvdb_lists, "tvdb")
 
         if lists_added:
-            logging.info(f"Environment sync complete: {len([l for l in existing_lists])} existing + {sum(1 for _ in [True for _ in range(len(load_list_ids()) - len(existing_lists))])} new lists")
+            logging.info(
+                f"Environment sync complete: {len([l for l in existing_lists])} existing + {sum(1 for _ in [True for _ in range(len(load_list_ids()) - len(existing_lists))])} new lists"
+            )
             print(f"📊 Environment sync complete: preserved {len(existing_lists)} existing lists, added new lists")
         else:
             logging.info("No new lists found in environment variables (all existing lists preserved)")
@@ -600,9 +633,11 @@ def load_env_lists() -> bool:
         return lists_added
     except Exception as e:
         import logging
+
         logging.exception(f"Error loading lists from environment: {e!s}")
         print(color_gradient(f"\n❌  Error loading lists: {e!s}", "#ff0000", "#aa0000"))
         return False
+
 
 def format_time_remaining(seconds):
     """Format seconds into hours, minutes, seconds."""
@@ -615,13 +650,13 @@ def format_time_remaining(seconds):
 def is_masked_value(value: str) -> bool:
     """
     Check if a value is a masked placeholder (e.g., '****abc123').
-    
+
     Masked values are used in the UI to hide sensitive information while
     still showing that a value exists. They start with 4+ asterisks.
-    
+
     Args:
         value: Value to check
-        
+
     Returns:
         bool: True if value is a masked placeholder, False otherwise
     """
@@ -634,13 +669,14 @@ def is_masked_value(value: str) -> bool:
 # ConfigManager - Database-Backed Configuration with .env Fallback
 # ============================================================================
 
+
 class ConfigManager:
     """
     Manages application configuration with priority:
     1. Database settings (if setup complete)
     2. Environment variables (.env file)
     3. Defaults
-    
+
     Handles encryption/decryption of sensitive settings.
     """
 
@@ -707,16 +743,16 @@ class ConfigManager:
     def get_setting(self, key: str, default: any = None) -> any:
         """
         Get a configuration setting.
-        
+
         Priority:
         1. Database cache (if loaded)
         2. Environment variable
         3. Default value
-        
+
         Args:
             key: Setting key name
             default: Default value if not found
-        
+
         Returns:
             Setting value or default
         """
@@ -735,7 +771,7 @@ class ConfigManager:
     def save_setting(self, key: str, value: any, encrypt: bool = None):
         """
         Save a configuration setting to the database.
-        
+
         Args:
             key: Setting key name
             value: Setting value
@@ -787,7 +823,7 @@ class ConfigManager:
     def save_settings_batch(self, settings: dict):
         """
         Save multiple settings at once.
-        
+
         Args:
             settings: Dictionary of {key: value}
         """
@@ -805,7 +841,7 @@ class ConfigManager:
     def migrate_env_to_database(self) -> int:
         """
         Migrate all settings from environment variables to database.
-        
+
         Returns:
             int: Number of settings migrated
         """
@@ -819,27 +855,22 @@ class ConfigManager:
             "overseerr_api_key": get_seerr_env("SEERR_API_KEY", ""),
             "overseerr_user_id": get_seerr_env("SEERR_USER_ID", "1"),
             "overseerr_4k": get_seerr_env("SEERR_4K", "false").lower() == "true",
-
             # Trakt
             "trakt_client_id": os.getenv("TRAKT_CLIENT_ID", ""),
-
             # Sync Settings
             "sync_interval": int(os.getenv("SYNC_INTERVAL", "24") or "24"),
             "auto_sync": os.getenv("AUTOMATED_MODE", "true").lower() == "true",
             "timezone": os.getenv("TZ", "UTC"),
-
             # Notifications
             "discord_webhook": os.getenv("DISCORD_WEBHOOK_URL", ""),
             "discord_enabled": bool(os.getenv("DISCORD_WEBHOOK_URL", "")),
             "gotify_url": os.getenv("GOTIFY_URL", ""),
             "gotify_token": os.getenv("GOTIFY_TOKEN", ""),
             "gotify_enabled": bool(os.getenv("GOTIFY_URL") and os.getenv("GOTIFY_TOKEN")),
-
             # Service Endpoints
             "frontend_domain": os.getenv("FRONTEND_DOMAIN", "http://localhost:3222"),
             "backend_domain": os.getenv("BACKEND_DOMAIN", "http://localhost:4222"),
             "nuxt_public_api_url": os.getenv("NUXT_PUBLIC_API_URL", "http://localhost:4222"),
-
             # Content Sources
             "imdb_lists": os.getenv("IMDB_LISTS", ""),
             "trakt_lists": os.getenv("TRAKT_LISTS", ""),

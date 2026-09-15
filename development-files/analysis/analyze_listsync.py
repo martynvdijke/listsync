@@ -16,18 +16,21 @@ def find_listsync_process():
                 if proc.info["cmdline"]:
                     cmdline_str = " ".join(proc.info["cmdline"]).lower()
                     if ("list_sync" in cmdline_str or "listsync" in cmdline_str) and "python" in cmdline_str:
-                        processes.append({
-                            "pid": proc.info["pid"],
-                            "cmdline": proc.info["cmdline"],
-                            "created": datetime.fromtimestamp(proc.info["create_time"]),
-                            "status": proc.status(),
-                        })
+                        processes.append(
+                            {
+                                "pid": proc.info["pid"],
+                                "cmdline": proc.info["cmdline"],
+                                "created": datetime.fromtimestamp(proc.info["create_time"]),
+                                "status": proc.status(),
+                            }
+                        )
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
     except Exception as e:
         print(f"Error finding processes: {e}")
 
     return processes
+
 
 def parse_log_for_sync_info(log_path, max_lines=100):
     """Parse log file for sync timing information"""
@@ -69,7 +72,9 @@ def parse_log_for_sync_info(log_path, max_lines=100):
 
         # Calculate next sync time if we have the info
         if sync_info["last_sync_complete"] and sync_info["sync_interval_hours"]:
-            sync_info["next_sync_time"] = sync_info["last_sync_complete"] + timedelta(hours=sync_info["sync_interval_hours"])
+            sync_info["next_sync_time"] = sync_info["last_sync_complete"] + timedelta(
+                hours=sync_info["sync_interval_hours"]
+            )
 
             # Determine if sync is overdue
             now = datetime.now()
@@ -82,6 +87,7 @@ def parse_log_for_sync_info(log_path, max_lines=100):
         print(f"Error parsing log: {e}")
 
     return sync_info
+
 
 def analyze_synced_items(db_path):
     """Analyze synced items for deduplication and status mapping"""
@@ -110,7 +116,11 @@ def analyze_synced_items(db_path):
 
             # Create unique key (prefer items with overseerr_id and more recent sync)
             key = f"{title}_{media_type}".lower()
-            if key not in unique_items or (overseerr_id and not unique_items[key][3]) or last_synced > unique_items[key][5]:
+            if (
+                key not in unique_items
+                or (overseerr_id and not unique_items[key][3])
+                or last_synced > unique_items[key][5]
+            ):
                 unique_items[key] = item
 
         # Categorize statuses
@@ -140,6 +150,7 @@ def analyze_synced_items(db_path):
         print(f"Error analyzing synced items: {e}")
         return None
 
+
 def check_sync_interval_in_db(db_path):
     """Check if sync interval is stored in database"""
     try:
@@ -154,6 +165,7 @@ def check_sync_interval_in_db(db_path):
     except Exception as e:
         print(f"Error checking sync interval: {e}")
         return []
+
 
 # Run comprehensive analysis
 print("=== LISTSYNC COMPREHENSIVE ANALYSIS ===\n")

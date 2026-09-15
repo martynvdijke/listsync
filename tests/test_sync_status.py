@@ -5,6 +5,7 @@ in_progress = 1 behind, and every dashboard then reports "Sync in Progress"
 forever. Liveness has to come from the heartbeat, because a full sync records
 the PID of the long-lived core process, which outlives the sync it runs.
 """
+
 import datetime
 import os
 import sys
@@ -15,6 +16,7 @@ tmp = tempfile.mkdtemp()
 os.environ["DATA_DIR"] = tmp
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
 # helpers.py imports seleniumbase at module scope and api_server pulls in
 # cryptography; none of the code under test touches a browser or a key, so stub
 # them out rather than installing Chrome and building native extensions.
@@ -24,6 +26,7 @@ def stub(name, attrs=()):
         setattr(mod, attr, type(attr, (), {}))
     sys.modules[name] = mod
     return mod
+
 
 for name in ("seleniumbase", "bs4", "dotenv", "halo"):
     if name not in sys.modules:
@@ -60,6 +63,8 @@ from list_sync.utils.sync_status import (
 )
 
 fail = []
+
+
 def check(label, got, want):
     ok = got == want
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
@@ -112,8 +117,7 @@ abandoned = {
     "start_time": (now - datetime.timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
     "last_heartbeat": (now - datetime.timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
 }
-check("silent record is stale despite live pid",
-      bool(get_sync_staleness_reason(abandoned)), True)
+check("silent record is stale despite live pid", bool(get_sync_staleness_reason(abandoned)), True)
 
 # --- a sync that is still heartbeating is left alone ---
 alive = dict(abandoned, last_heartbeat=sqlite_now)
@@ -122,14 +126,14 @@ check("heartbeating record is not stale", get_sync_staleness_reason(alive), None
 # --- a dead PID is spotted without waiting for the timeout ---
 dead_pid = {
     "session_id": "dead",
-    "pid": 2 ** 22,  # above every pid_max, so it cannot exist
+    "pid": 2**22,  # above every pid_max, so it cannot exist
     "start_time": (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S"),
     "last_heartbeat": (now - datetime.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S"),
 }
 check("dead pid is stale before timeout", bool(get_sync_staleness_reason(dead_pid)), True)
 
 # --- a record that has only just been written is never stale ---
-fresh = {"session_id": "fresh", "pid": 2 ** 22, "start_time": sqlite_now, "last_heartbeat": sqlite_now}
+fresh = {"session_id": "fresh", "pid": 2**22, "start_time": sqlite_now, "last_heartbeat": sqlite_now}
 check("brand new record is not stale", get_sync_staleness_reason(fresh), None)
 
 # --- an abandoned record is cleared out of the live status ---
@@ -203,8 +207,7 @@ with sqlite3.connect(legacy_db) as conn:
     # A full sync from an hour ago, holding the PID of the core process that
     # ran it - still alive, because that process runs for the life of the
     # container. This is the record that left the dashboard stuck.
-    stale_start = (datetime.datetime.now(datetime.UTC)
-                   - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+    stale_start = (datetime.datetime.now(datetime.UTC) - datetime.timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute(
         "INSERT INTO sync_history (session_id, sync_type, in_progress, start_time, pid, status)"
         " VALUES ('legacy_stuck', 'full', 1, ?, ?, 'running')",

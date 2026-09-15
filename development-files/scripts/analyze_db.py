@@ -27,7 +27,9 @@ for table_name in main_tables:
         if columns:
             print(f"{table_name.upper()} table schema:")
             for col in columns:
-                print(f'  {col[1]} ({col[2]}) - {"NOT NULL" if col[3] else "NULL"} - DEFAULT: {col[4] if col[4] else "None"}')
+                print(
+                    f'  {col[1]} ({col[2]}) - {"NOT NULL" if col[3] else "NULL"} - DEFAULT: {col[4] if col[4] else "None"}'
+                )
             print()
     except Exception as e:
         print(f"Error getting schema for {table_name}: {e}")

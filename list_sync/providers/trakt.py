@@ -30,6 +30,7 @@ def _get_config_manager():
     if _config_manager is None:
         try:
             from ..config import ConfigManager
+
             _config_manager = ConfigManager()
         except Exception as e:
             logging.warning(f"Failed to load ConfigManager: {e}")
@@ -40,10 +41,10 @@ def _get_config_manager():
 def get_trakt_client_id() -> str:
     """
     Get Trakt Client ID from database config or environment.
-    
+
     Returns:
         str: Trakt Client ID
-        
+
     Raises:
         ValueError: If TRAKT_CLIENT_ID is not set
     """
@@ -69,7 +70,7 @@ def get_trakt_client_id() -> str:
 def get_trakt_special_items_limit() -> int:
     """
     Get the items limit for special Trakt lists.
-    
+
     Returns:
         int: Items limit (default: 20)
     """
@@ -90,10 +91,10 @@ def get_trakt_special_items_limit() -> int:
 def get_trakt_headers() -> dict[str, str]:
     """
     Get headers for Trakt API requests.
-    
+
     Returns:
         Dict[str, str]: Headers including API key
-        
+
     Raises:
         ValueError: If TRAKT_CLIENT_ID is not set
     """
@@ -114,7 +115,7 @@ def log_trakt_error_details(
 ) -> None:
     """
     Log detailed information about a Trakt API error.
-    
+
     Args:
         error: The HTTPError exception
         request_url: The URL that was requested
@@ -165,13 +166,13 @@ def log_trakt_error_details(
 def parse_trakt_list_url(list_id: str) -> str:
     """
     Parse Trakt list URL to extract API endpoint path.
-    
+
     Args:
         list_id (str): Trakt list ID (numeric), list slug, or full URL
-        
+
     Returns:
         str: API endpoint path (e.g., '/users/username/lists/list-slug/items' or '/users/username/watchlist')
-        
+
     Raises:
         ValueError: If list ID format is invalid
     """
@@ -208,23 +209,22 @@ def parse_trakt_list_url(list_id: str) -> str:
         return f"/lists/{list_id}/items"
 
     raise ValueError(
-        f"Invalid Trakt list ID format: {list_id}. "
-        "Expected a numeric ID, list URL, or full Trakt URL.",
+        f"Invalid Trakt list ID format: {list_id}. " "Expected a numeric ID, list URL, or full Trakt URL.",
     )
 
 
 def extract_media_from_list_item(item: dict[str, Any]) -> dict[str, Any] | None:
     """
     Extract media information from a Trakt list item.
-    
+
     Supports:
     - Movies: Returns movie data
     - Shows: Returns full show data
     - Seasons: Returns show data with season number for specific season requests
-    
+
     Args:
         item (Dict[str, Any]): Trakt API list item
-        
+
     Returns:
         Optional[Dict[str, Any]]: Normalized media item or None if parsing fails
     """
@@ -301,18 +301,18 @@ def extract_media_from_list_item(item: dict[str, Any]) -> dict[str, Any] | None:
 def fetch_trakt_list(list_id: str) -> list[dict[str, Any]]:
     """
     Fetch Trakt list using Trakt API v2.
-    
+
     Supports:
     - User custom lists: https://trakt.tv/users/{username}/lists/{list-slug}
     - User watchlists: https://trakt.tv/users/{username}/watchlist
     - Public lists: https://trakt.tv/lists/{numeric-id}
-    
+
     Args:
         list_id (str): Trakt list ID (numeric) or full URL
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
-        
+
     Raises:
         ValueError: If list ID format is invalid or API credentials not set
         requests.HTTPError: If API request fails
@@ -349,19 +349,27 @@ def fetch_trakt_list(list_id: str) -> list[dict[str, Any]]:
 
             media = extract_media_from_list_item(item)
             if media:
-                media_items.append({
-                    "title": media["title"],
-                    "media_type": media["media_type"],
-                    "year": media.get("year"),
-                    "tmdb_id": media.get("tmdb_id"),
-                    "imdb_id": media.get("imdb_id"),
-                    "season_number": media.get("season_number"),  # Include season number if present
-                })
+                media_items.append(
+                    {
+                        "title": media["title"],
+                        "media_type": media["media_type"],
+                        "year": media.get("year"),
+                        "tmdb_id": media.get("tmdb_id"),
+                        "imdb_id": media.get("imdb_id"),
+                        "season_number": media.get("season_number"),  # Include season number if present
+                    }
+                )
                 # Log every 10th item to reduce log verbosity
                 if len(media_items) % 10 == 0 or len(media_items) <= 5:
-                    ids_info = f"TMDB: {media.get('tmdb_id')}, IMDB: {media.get('imdb_id')}" if media.get("tmdb_id") or media.get("imdb_id") else "No IDs"
+                    ids_info = (
+                        f"TMDB: {media.get('tmdb_id')}, IMDB: {media.get('imdb_id')}"
+                        if media.get("tmdb_id") or media.get("imdb_id")
+                        else "No IDs"
+                    )
                     season_info = f" Season {media.get('season_number')}" if media.get("season_number") else ""
-                    logging.info(f"Added {media['media_type']}: {media['title']} ({media.get('year', 'unknown year')}){season_info} [{ids_info}]")
+                    logging.info(
+                        f"Added {media['media_type']}: {media['title']} ({media.get('year', 'unknown year')}){season_info} [{ids_info}]"
+                    )
 
         logging.info(f"Trakt list {list_id} fetched successfully. Found {len(media_items)} items.")
         return media_items
@@ -388,13 +396,13 @@ def fetch_trakt_list(list_id: str) -> list[dict[str, Any]]:
 def fetch_trakt_special_list(url_or_shortcut: str) -> list[dict[str, Any]]:
     """
     Fetch special Trakt list (trending, popular, etc.) using Trakt API v2.
-    
+
     Args:
         url_or_shortcut (str): Trakt special list URL or shortcut format (e.g., "trending:movies")
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items (max: TRAKT_SPECIAL_ITEMS_LIMIT from config, default 20)
-        
+
     Raises:
         ValueError: If URL format is invalid or API credentials not set
         requests.HTTPError: If API request fails
@@ -449,17 +457,23 @@ def fetch_trakt_special_list(url_or_shortcut: str) -> list[dict[str, Any]]:
 
                 media = extract_media_from_special_list_item(item, endpoint)
                 if media:
-                    media_items.append({
-                        "title": media["title"],
-                        "media_type": media["media_type"],
-                        "year": media.get("year"),
-                        "tmdb_id": media.get("tmdb_id"),
-                        "imdb_id": media.get("imdb_id"),
-                    })
+                    media_items.append(
+                        {
+                            "title": media["title"],
+                            "media_type": media["media_type"],
+                            "year": media.get("year"),
+                            "tmdb_id": media.get("tmdb_id"),
+                            "imdb_id": media.get("imdb_id"),
+                        }
+                    )
                     total_items_fetched += 1
                     # Log every 5th item to reduce log verbosity
                     if total_items_fetched % 5 == 0 or total_items_fetched <= 3:
-                        ids_info = f"TMDB: {media.get('tmdb_id')}, IMDB: {media.get('imdb_id')}" if media.get("tmdb_id") or media.get("imdb_id") else "No IDs"
+                        ids_info = (
+                            f"TMDB: {media.get('tmdb_id')}, IMDB: {media.get('imdb_id')}"
+                            if media.get("tmdb_id") or media.get("imdb_id")
+                            else "No IDs"
+                        )
                         logging.info(
                             f"Added {media['media_type']}: {media['title']} ({media.get('year', 'unknown year')}) [{ids_info}] "
                             f"[{total_items_fetched}/{items_limit}]",
@@ -473,13 +487,14 @@ def fetch_trakt_special_list(url_or_shortcut: str) -> list[dict[str, Any]]:
             page += 1
 
         logging.info(
-            f"Special Trakt list fetched successfully. Got {len(media_items)} items "
-            f"(target: {items_limit}).",
+            f"Special Trakt list fetched successfully. Got {len(media_items)} items " f"(target: {items_limit}).",
         )
         return media_items
 
     except SyncCancelledException:
-        logging.warning(f"⚠️ Trakt special list fetch cancelled by user - returning {len(media_items)} items fetched so far")
+        logging.warning(
+            f"⚠️ Trakt special list fetch cancelled by user - returning {len(media_items)} items fetched so far"
+        )
         raise
 
     except requests.exceptions.HTTPError as e:
@@ -487,7 +502,9 @@ def fetch_trakt_special_list(url_or_shortcut: str) -> list[dict[str, Any]]:
         request_params = params if "params" in locals() else None
 
         if e.response.status_code == 401:
-            log_trakt_error_details(e, request_url, request_params, "Trakt API authentication failed. Please check TRAKT_CLIENT_ID.")
+            log_trakt_error_details(
+                e, request_url, request_params, "Trakt API authentication failed. Please check TRAKT_CLIENT_ID."
+            )
             raise ValueError("Trakt API authentication failed. Please check your TRAKT_CLIENT_ID.")
         log_trakt_error_details(e, request_url, request_params, "Trakt API error")
         raise
@@ -499,13 +516,13 @@ def fetch_trakt_special_list(url_or_shortcut: str) -> list[dict[str, Any]]:
 def parse_special_list_url(url_or_shortcut: str) -> str:
     """
     Parse special list URL or shortcut to API endpoint.
-    
+
     Args:
         url_or_shortcut (str): URL or shortcut like "trending:movies"
-        
+
     Returns:
         str: API endpoint path (e.g., '/movies/trending')
-        
+
     Raises:
         ValueError: If format is invalid
     """
@@ -549,11 +566,11 @@ def extract_media_from_special_list_item(item: dict[str, Any], endpoint: str) ->
     """
     Extract media information from a special list item.
     Special lists can have different formats (trending vs popular, etc.)
-    
+
     Args:
         item (Dict[str, Any]): API response item
         endpoint (str): The API endpoint to help determine format
-        
+
     Returns:
         Optional[Dict[str, Any]]: Normalized media item or None if parsing fails
     """
@@ -595,11 +612,11 @@ def extract_media_from_special_list_item(item: dict[str, Any], endpoint: str) ->
 def search_trakt_by_imdb_id(imdb_id: str, max_retries: int = 3) -> dict[str, Any] | None:
     """
     Search Trakt by IMDB ID to get TMDB ID and other metadata.
-    
+
     Args:
         imdb_id (str): IMDB ID (e.g., 'tt0372784')
         max_retries (int): Maximum number of retry attempts for failed requests
-        
+
     Returns:
         Optional[Dict[str, Any]]: Media info with IDs or None if not found
     """
@@ -610,8 +627,10 @@ def search_trakt_by_imdb_id(imdb_id: str, max_retries: int = 3) -> dict[str, Any
         try:
             if attempt > 0:
                 # Exponential backoff with jitter
-                delay = (2 ** attempt) + random.uniform(0, 1)
-                logging.warning(f"🔄 Retry attempt {attempt}/{max_retries} for IMDB ID {imdb_id} after {delay:.1f}s delay")
+                delay = (2**attempt) + random.uniform(0, 1)
+                logging.warning(
+                    f"🔄 Retry attempt {attempt}/{max_retries} for IMDB ID {imdb_id} after {delay:.1f}s delay"
+                )
                 time.sleep(delay)
 
             logging.info(f"🔍 Trakt API: Searching by IMDB ID: {imdb_id}")
@@ -668,7 +687,9 @@ def search_trakt_by_imdb_id(imdb_id: str, max_retries: int = 3) -> dict[str, Any
                 logging.warning(f"⚠️  Trakt API: Found match but no TMDB ID available for '{title}'")
 
             # Log only essential info instead of full media object to reduce log size
-            logging.debug(f"Trakt found: {media.get('title', 'Unknown')} ({media.get('year', 'N/A')}) → TMDB {media.get('ids', {}).get('tmdb', 'N/A')}")
+            logging.debug(
+                f"Trakt found: {media.get('title', 'Unknown')} ({media.get('year', 'N/A')}) → TMDB {media.get('ids', {}).get('tmdb', 'N/A')}"
+            )
 
             return {
                 "title": title,
@@ -700,19 +721,21 @@ def search_trakt_by_imdb_id(imdb_id: str, max_retries: int = 3) -> dict[str, Any
     return None
 
 
-def get_trakt_metadata(tmdb_id: int | None = None, imdb_id: str | None = None, media_type: str = "movie") -> dict[str, Any] | None:
+def get_trakt_metadata(
+    tmdb_id: int | None = None, imdb_id: str | None = None, media_type: str = "movie"
+) -> dict[str, Any] | None:
     """
     Get full metadata from Trakt including poster, rating, overview, and genres.
     Uses Trakt's native image hosting (cached from external sources).
-    
+
     IMPORTANT: Always prefer IMDB ID over TMDB ID. The Trakt API treats numeric IDs as Trakt IDs,
     not TMDB IDs, which causes wrong results. IMDB IDs (with 'tt' prefix) work correctly.
-    
+
     Args:
         tmdb_id (Optional[int]): TMDB ID
         imdb_id (Optional[str]): IMDB ID
         media_type (str): 'movie' or 'tv'
-        
+
     Returns:
         Optional[Dict[str, Any]]: Metadata including poster_url, rating, overview, genres
     """
@@ -733,7 +756,9 @@ def get_trakt_metadata(tmdb_id: int | None = None, imdb_id: str | None = None, m
             # For TMDB IDs, we need to search first to get the Trakt ID
             # Use the search/tmdb endpoint which properly handles TMDB IDs
             logging.debug(f"Fetching Trakt metadata via TMDB ID: {tmdb_id} (using search)")
-            search_url = f"{TRAKT_BASE_URL}/search/tmdb/{tmdb_id}?type={trakt_type[:-1]}"  # Remove 's' from movies/shows
+            search_url = (
+                f"{TRAKT_BASE_URL}/search/tmdb/{tmdb_id}?type={trakt_type[:-1]}"  # Remove 's' from movies/shows
+            )
             search_response = requests.get(search_url, headers=get_trakt_headers(), timeout=30)
 
             if search_response.status_code == 429:
@@ -806,6 +831,7 @@ def get_trakt_metadata(tmdb_id: int | None = None, imdb_id: str | None = None, m
                     # Instead of returning the direct Trakt URL, return a proxy URL
                     # This ensures compliance with Trakt's caching requirements
                     from urllib.parse import quote
+
                     poster_url = f"/api/images/proxy?url={quote(trakt_url)}"
 
                     logging.debug(f"Constructed proxy poster URL for Trakt image: {poster_url} (original: {trakt_url})")
@@ -822,13 +848,17 @@ def get_trakt_metadata(tmdb_id: int | None = None, imdb_id: str | None = None, m
             "imdb_id": imdb_id_from_trakt,
         }
 
-        logging.debug(f"Successfully fetched metadata for '{metadata['title']}' (Rating: {metadata['rating']}, Poster: {'Yes' if metadata['poster_url'] else 'No'})")
+        logging.debug(
+            f"Successfully fetched metadata for '{metadata['title']}' (Rating: {metadata['rating']}, Poster: {'Yes' if metadata['poster_url'] else 'No'})"
+        )
         return metadata
 
     except requests.exceptions.HTTPError as e:
         request_url = url if url else "N/A (error before URL construction)"
         if e.response.status_code == 401:
-            log_trakt_error_details(e, request_url, error_type="❌ Trakt API authentication failed. Check TRAKT_CLIENT_ID.")
+            log_trakt_error_details(
+                e, request_url, error_type="❌ Trakt API authentication failed. Check TRAKT_CLIENT_ID."
+            )
         else:
             log_trakt_error_details(e, request_url, error_type="❌ Trakt API error")
         return None
@@ -840,12 +870,12 @@ def get_trakt_metadata(tmdb_id: int | None = None, imdb_id: str | None = None, m
 def search_trakt_by_title(title: str, year: int | None, media_type: str) -> dict[str, Any] | None:
     """
     Search Trakt by title and year to get TMDB ID and other metadata.
-    
+
     Args:
         title (str): Title to search for
         year (Optional[int]): Release year (helps with matching)
         media_type (str): 'movie' or 'tv'
-        
+
     Returns:
         Optional[Dict[str, Any]]: Media info with IDs or None if not found
     """
@@ -866,6 +896,7 @@ def search_trakt_by_title(title: str, year: int | None, media_type: str) -> dict
             retry_after = int(response.headers.get("Retry-After", 10))
             logging.warning(f"⚠️  Trakt API rate limit hit. Waiting {retry_after} seconds...")
             import time
+
             time.sleep(retry_after)
             # Retry once
             response = requests.get(url, headers=get_trakt_headers(), params=params, timeout=30)
@@ -916,7 +947,9 @@ def search_trakt_by_title(title: str, year: int | None, media_type: str) -> dict
                     break
                 if not exact_year_match and abs(result_year - year) <= 1:
                     # Close year match (±1 year)
-                    logging.info(f"🔶 Trakt API: Close year match: '{result_title}' ({result_year}) vs expected ({year})")
+                    logging.info(
+                        f"🔶 Trakt API: Close year match: '{result_title}' ({result_year}) vs expected ({year})"
+                    )
                     if not best_match:
                         best_match = {
                             "title": result_title,
@@ -951,7 +984,9 @@ def search_trakt_by_title(title: str, year: int | None, media_type: str) -> dict
     except requests.exceptions.HTTPError as e:
         request_params = params if "params" in locals() else None
         if e.response.status_code == 401:
-            log_trakt_error_details(e, url, request_params, "❌ Trakt API authentication failed. Check TRAKT_CLIENT_ID.")
+            log_trakt_error_details(
+                e, url, request_params, "❌ Trakt API authentication failed. Check TRAKT_CLIENT_ID."
+            )
         else:
             log_trakt_error_details(e, url, request_params, "❌ Trakt API error")
         return None

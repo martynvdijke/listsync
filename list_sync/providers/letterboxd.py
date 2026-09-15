@@ -14,10 +14,10 @@ from . import SyncCancelledException, check_and_raise_if_cancelled, register_pro
 def _determine_media_type(title: str) -> str:
     """
     Determine if a title is a movie or TV show based on common patterns
-    
+
     Args:
         title (str): The title to analyze
-        
+
     Returns:
         str: "movie" or "tv_show"
     """
@@ -26,10 +26,19 @@ def _determine_media_type(title: str) -> str:
     # TV show indicators
     tv_indicators = [
         ":",  # Colon often indicates episode (e.g., "Euphoria: Trouble Don't Last Always")
-        "season", "episode", "series",
-        "special", "pilot", "finale",
-        "part i", "part ii", "part iii", "part iv", "part v",
-        "chapter", "episode",
+        "season",
+        "episode",
+        "series",
+        "special",
+        "pilot",
+        "finale",
+        "part i",
+        "part ii",
+        "part iii",
+        "part iv",
+        "part v",
+        "chapter",
+        "episode",
     ]
 
     # Check for TV show patterns
@@ -38,15 +47,31 @@ def _determine_media_type(title: str) -> str:
             return "tv_show"
 
     # Check for specific TV show patterns
-    if any(pattern in title_lower for pattern in [
-        "black mirror:", "sherlock:", "euphoria:", "sense8:",
-        "bojack horseman", "wet hot american summer",
-        "conversations with a killer", "the walking dead:",
-        "big little lies", "sharp objects", "godless",
-        "who is america", "the young pope", "war and peace",
-        "the vietnam war", "the civil war", "cosmos:",
-        "roots", "show me a hero", "patrick melrose",
-    ]):
+    if any(
+        pattern in title_lower
+        for pattern in [
+            "black mirror:",
+            "sherlock:",
+            "euphoria:",
+            "sense8:",
+            "bojack horseman",
+            "wet hot american summer",
+            "conversations with a killer",
+            "the walking dead:",
+            "big little lies",
+            "sharp objects",
+            "godless",
+            "who is america",
+            "the young pope",
+            "war and peace",
+            "the vietnam war",
+            "the civil war",
+            "cosmos:",
+            "roots",
+            "show me a hero",
+            "patrick melrose",
+        ]
+    ):
         return "tv_show"
 
     # Default to movie
@@ -57,10 +82,10 @@ def _determine_media_type(title: str) -> str:
 def fetch_letterboxd_list(list_id: str) -> list[dict[str, Any]]:
     """
     Fetch Letterboxd list using Selenium with pagination, supporting both regular lists and watchlists
-    
+
     Args:
         list_id (str): Letterboxd list ID (username/list-slug) or full URL
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
     """
@@ -191,13 +216,15 @@ def fetch_letterboxd_list(list_id: str) -> list[dict[str, Any]]:
                         # Determine media type (all appear to be films)
                         media_type = "movie"
 
-                        media_items.append({
-                            "title": title,
-                            "media_type": media_type,
-                            "year": year,
-                            "film_id": film_id,
-                            "slug": slug,
-                        })
+                        media_items.append(
+                            {
+                                "title": title,
+                                "media_type": media_type,
+                                "year": year,
+                                "film_id": film_id,
+                                "slug": slug,
+                            }
+                        )
                         logging.info(f"Added {media_type}: {title} ({year if year else 'year unknown'})")
 
                     except Exception as e:
@@ -256,7 +283,9 @@ def fetch_letterboxd_list(list_id: str) -> list[dict[str, Any]]:
             return media_items
 
     except SyncCancelledException:
-        logging.warning(f"⚠️ Letterboxd list fetch cancelled by user - returning {len(media_items)} items fetched so far")
+        logging.warning(
+            f"⚠️ Letterboxd list fetch cancelled by user - returning {len(media_items)} items fetched so far"
+        )
         raise
 
     except Exception as e:

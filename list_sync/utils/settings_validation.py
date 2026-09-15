@@ -58,7 +58,9 @@ def validate_discord_webhook(value: str) -> str:
         str: An error message, or "" if the URL is acceptable
     """
     allowed, reason = validate_outbound_url(
-        value, allow_private=False, allowed_hosts=DISCORD_WEBHOOK_HOSTS,
+        value,
+        allow_private=False,
+        allowed_hosts=DISCORD_WEBHOOK_HOSTS,
     )
     if not allowed:
         return f"Invalid Discord webhook URL: {reason}"
@@ -66,10 +68,7 @@ def validate_discord_webhook(value: str) -> str:
     # Discord's own webhook path. A URL on discord.com that isn't a webhook is
     # still somewhere this server should not be POSTing sync summaries.
     if "/api/webhooks/" not in value:
-        return (
-            "Invalid Discord webhook URL: it should look like "
-            "https://discord.com/api/webhooks/<id>/<token>"
-        )
+        return "Invalid Discord webhook URL: it should look like " "https://discord.com/api/webhooks/<id>/<token>"
 
     return ""
 
@@ -108,7 +107,8 @@ def validate_settings(settings: dict[str, Any]) -> dict[str, str]:
         if not value or not str(value).strip():
             continue
         allowed, reason = validate_outbound_url(
-            str(value).strip(), allow_private=sink["allow_private"],
+            str(value).strip(),
+            allow_private=sink["allow_private"],
         )
         if not allowed:
             errors[key] = f"{sink['label']} rejected: {reason}"
@@ -138,8 +138,7 @@ def validate_settings(settings: dict[str, Any]) -> dict[str, str]:
         else:
             if not MIN_SYNC_INTERVAL_HOURS <= interval <= MAX_SYNC_INTERVAL_HOURS:
                 errors["sync_interval"] = (
-                    f"Sync interval must be between {MIN_SYNC_INTERVAL_HOURS} and "
-                    f"{MAX_SYNC_INTERVAL_HOURS} hours"
+                    f"Sync interval must be between {MIN_SYNC_INTERVAL_HOURS} and " f"{MAX_SYNC_INTERVAL_HOURS} hours"
                 )
 
     timezone = settings.get("timezone")

@@ -14,12 +14,13 @@ class SyncCancelledException(Exception):
 def check_cancellation() -> bool:
     """
     Check if sync cancellation has been requested.
-    
+
     Returns:
         bool: True if cancellation was requested, False otherwise
     """
     try:
         from ..utils.sync_status import get_sync_tracker
+
         sync_tracker = get_sync_tracker()
         return sync_tracker.is_cancellation_requested()
     except Exception as e:
@@ -30,7 +31,7 @@ def check_cancellation() -> bool:
 def check_and_raise_if_cancelled():
     """
     Check if cancellation was requested and raise SyncCancelledException if so.
-    
+
     Raises:
         SyncCancelledException: If cancellation was requested
     """
@@ -46,29 +47,31 @@ PROVIDERS = {}
 def register_provider(provider_type: str):
     """
     Decorator to register a provider function.
-    
+
     Args:
         provider_type (str): Type of provider (e.g., 'imdb', 'trakt')
-        
+
     Returns:
         Callable: Decorator function
     """
+
     def decorator(func):
         PROVIDERS[provider_type] = func
         return func
+
     return decorator
 
 
 def get_provider(provider_type: str) -> Callable:
     """
     Get the provider function for a given type.
-    
+
     Args:
         provider_type (str): Type of provider
-        
+
     Returns:
         Callable: Provider function
-        
+
     Raises:
         ValueError: If provider type is not supported
     """
@@ -84,7 +87,7 @@ def get_provider(provider_type: str) -> Callable:
 def get_available_providers() -> list[str]:
     """
     Get a list of available provider types.
-    
+
     Returns:
         List[str]: List of available provider types
     """
@@ -101,6 +104,7 @@ def _import_all_providers():
         from . import anilist, collections, imdb, letterboxd, mdblist, simkl, stevenlu, tmdb, trakt, tvdb
     except ImportError as e:
         import logging
+
         logging.warning(f"Could not import all providers: {e}")
 
 

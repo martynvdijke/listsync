@@ -17,13 +17,13 @@ from . import register_provider
 def fetch_tvdb_list(list_id: str) -> list[dict[str, Any]]:
     """
     Fetch TVDB list using API if available, otherwise fallback to web scraping
-    
+
     Args:
         list_id (str): TVDB list ID, user ID for favorites, or URL
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
-        
+
     Raises:
         ValueError: If list ID format is invalid
     """
@@ -43,10 +43,10 @@ def fetch_tvdb_list(list_id: str) -> list[dict[str, Any]]:
 def _get_tvdb_token(api_key: str) -> str | None:
     """
     Get TVDB API token for authentication.
-    
+
     Args:
         api_key (str): TVDB API key
-        
+
     Returns:
         Optional[str]: JWT token if successful, None otherwise
     """
@@ -79,11 +79,11 @@ def _get_tvdb_token(api_key: str) -> str | None:
 def _fetch_tvdb_list_api(list_id: str, api_key: str) -> list[dict[str, Any]]:
     """
     Fetch TVDB list using web scraping with optional API enhancement
-    
+
     Args:
         list_id (str): TVDB list URL or identifier
         api_key (str): TVDB API key (optional for enhancement)
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
     """
@@ -119,11 +119,11 @@ def _fetch_tvdb_list_api(list_id: str, api_key: str) -> list[dict[str, Any]]:
 def _fetch_tvdb_user_favorites(user_id: str, headers: dict[str, str]) -> list[dict[str, Any]]:
     """
     Fetch user favorites from TVDB API.
-    
+
     Args:
         user_id (str): TVDB user ID
         headers (Dict[str, str]): API headers with authentication
-        
+
     Returns:
         List[Dict[str, Any]]: List of favorite series
     """
@@ -175,11 +175,11 @@ def _fetch_tvdb_user_favorites(user_id: str, headers: dict[str, str]) -> list[di
 def _get_tvdb_series_details(series_id: str, headers: dict[str, str]) -> dict[str, Any] | None:
     """
     Get detailed series information from TVDB API.
-    
+
     Args:
         series_id (str): TVDB series ID
         headers (Dict[str, str]): API headers with authentication
-        
+
     Returns:
         Optional[Dict[str, Any]]: Series details or None if failed
     """
@@ -203,10 +203,10 @@ def _get_tvdb_series_details(series_id: str, headers: dict[str, str]) -> dict[st
 def _process_tvdb_series_item(series: dict[str, Any]) -> dict[str, Any] | None:
     """
     Process a single series from TVDB API response
-    
+
     Args:
         series (Dict[str, Any]): Series from TVDB API response
-        
+
     Returns:
         Optional[Dict[str, Any]]: Processed item or None if processing failed
     """
@@ -240,10 +240,10 @@ def _process_tvdb_series_item(series: dict[str, Any]) -> dict[str, Any] | None:
 def _fetch_tvdb_list_scraping(list_id: str) -> list[dict[str, Any]]:
     """
     Fetch TVDB list using web scraping (fallback implementation)
-    
+
     Args:
         list_id (str): TVDB list ID or URL
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
     """
@@ -294,11 +294,11 @@ def _fetch_tvdb_list_scraping(list_id: str) -> list[dict[str, Any]]:
 def _process_tvdb_list(sb, url) -> list[dict[str, Any]]:
     """
     Process a TVDB list page using web scraping.
-    
+
     Args:
         sb: SeleniumBase instance
         url: URL of the list
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
     """
@@ -380,13 +380,15 @@ def _process_tvdb_list(sb, url) -> list[dict[str, Any]]:
                 except Exception:
                     pass
 
-                media_items.append({
-                    "title": title,
-                    "media_type": media_type,
-                    "year": year,
-                    "tvdb_id": media_id,
-                    "description": description,
-                })
+                media_items.append(
+                    {
+                        "title": title,
+                        "media_type": media_type,
+                        "year": year,
+                        "tvdb_id": media_id,
+                        "description": description,
+                    }
+                )
 
                 logging.info(f"Added {media_type}: {title} ({year if year else 'year unknown'}) (TVDB ID: {media_id})")
 
@@ -405,11 +407,11 @@ def _process_tvdb_list(sb, url) -> list[dict[str, Any]]:
 def _enhance_with_tvdb_api(media_items: list[dict[str, Any]], headers: dict[str, str]) -> list[dict[str, Any]]:
     """
     Enhance scraped data with TVDB API information.
-    
+
     Args:
         media_items (List[Dict[str, Any]]): List of scraped media items
         headers (Dict[str, str]): API headers with authentication
-        
+
     Returns:
         List[Dict[str, Any]]: Enhanced media items
     """
@@ -423,15 +425,17 @@ def _enhance_with_tvdb_api(media_items: list[dict[str, Any]], headers: dict[str,
                 series_details = _get_tvdb_series_details(item["tvdb_id"], headers)
                 if series_details:
                     # Enhance with API data
-                    item.update({
-                        "overview": series_details.get("overview", item.get("description", "")),
-                        "status": series_details.get("status", ""),
-                        "network": series_details.get("network", ""),
-                        "first_aired": series_details.get("firstAired", ""),
-                        "runtime": series_details.get("runtime", ""),
-                        "rating": series_details.get("rating", ""),
-                        "genres": ", ".join(series_details.get("genres", [])),
-                    })
+                    item.update(
+                        {
+                            "overview": series_details.get("overview", item.get("description", "")),
+                            "status": series_details.get("status", ""),
+                            "network": series_details.get("network", ""),
+                            "first_aired": series_details.get("firstAired", ""),
+                            "runtime": series_details.get("runtime", ""),
+                            "rating": series_details.get("rating", ""),
+                            "genres": ", ".join(series_details.get("genres", [])),
+                        }
+                    )
 
             enhanced_items.append(item)
 
@@ -451,16 +455,12 @@ def _extract_year_from_text(text: str) -> int | None:
     date_patterns = [
         # Full date formats: "July 19, 2010", "Dec 25, 2023", "January 1, 2000"
         r"(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+(\d{4})",
-
         # Month day year: "7/19/2010", "12/25/2023", "1/1/2000"
         r"\d{1,2}/\d{1,2}/(\d{4})",
-
         # Year month day: "2010-07-19", "2023-12-25"
         r"(\d{4})-\d{1,2}-\d{1,2}",
-
         # Just year: "2010", "2023"
         r"(\d{4})",
-
         # Year in parentheses: "(2010)", "(2023)"
         r"\((\d{4})\)",
     ]

@@ -27,6 +27,7 @@ _MIN_AGE_BEFORE_PID_CHECK_SECONDS = 60
 @dataclass
 class SyncState:
     """Current sync state information"""
+
     is_running: bool = False
     sync_type: str | None = None  # 'full' or 'single'
     session_id: str | None = None
@@ -63,6 +64,7 @@ class SyncStatusTracker:
     ) -> None:
         """Mark sync as started"""
         import os
+
         with self._state_lock:
             self._state.is_running = True
             self._state.sync_type = sync_type
@@ -208,6 +210,7 @@ def is_cancel_requested_persisted(session_id: str) -> bool:
 # Pause scheduling until a given timestamp
 # ---------------------------------------------
 
+
 def set_pause_until(timestamp_iso: str):
     data = _read_cancel_requests()
     data[_PAUSE_KEY] = timestamp_iso
@@ -229,6 +232,7 @@ def clear_pause_until():
 # ---------------------------------------------
 # Liveness of in-progress sync records
 # ---------------------------------------------
+
 
 def get_stale_timeout_seconds() -> int:
     """How long a sync record may go untouched before it counts as abandoned."""
@@ -321,10 +325,7 @@ def get_sync_last_activity(sync_record: dict[str, Any]) -> datetime.datetime | N
     """Most recent sign of life for a sync record, as an aware UTC datetime."""
     if not sync_record:
         return None
-    return (
-        parse_db_timestamp(sync_record.get("last_heartbeat"))
-        or parse_db_timestamp(sync_record.get("start_time"))
-    )
+    return parse_db_timestamp(sync_record.get("last_heartbeat")) or parse_db_timestamp(sync_record.get("start_time"))
 
 
 def get_sync_staleness_reason(

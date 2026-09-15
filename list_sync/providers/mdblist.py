@@ -15,13 +15,13 @@ from . import register_provider
 def fetch_mdblist_list(list_id: str) -> list[dict[str, Any]]:
     """
     Fetch MDBList list using Selenium with infinite scrolling support
-    
+
     Args:
         list_id (str): MDBList list ID in format 'username/listname' or full URL
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
-        
+
     Raises:
         ValueError: If list ID format is invalid
     """
@@ -125,12 +125,14 @@ def fetch_mdblist_list(list_id: str) -> list[dict[str, Any]]:
                         logging.warning("Skipping item with empty title")
                         continue
 
-                    media_items.append({
-                        "title": title,
-                        "imdb_id": imdb_id,
-                        "media_type": media_type,
-                        "year": year,
-                    })
+                    media_items.append(
+                        {
+                            "title": title,
+                            "imdb_id": imdb_id,
+                            "media_type": media_type,
+                            "year": year,
+                        }
+                    )
                     logging.info(f"Added {media_type}: {title} ({year}) (IMDB ID: {imdb_id})")
                 except Exception as e:
                     logging.warning(f"Failed to parse MDBList item: {e!s}")

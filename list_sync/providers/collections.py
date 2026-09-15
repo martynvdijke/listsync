@@ -72,7 +72,7 @@ def clear_collections_cache():
 def get_all_collections() -> list[dict[str, Any]]:
     """
     Get all collections with their metadata.
-    
+
     Returns:
         List[Dict[str, Any]]: List of all collections
     """
@@ -83,10 +83,10 @@ def get_all_collections() -> list[dict[str, Any]]:
 def get_collection_by_name(franchise_name: str) -> dict[str, Any] | None:
     """
     Get a specific collection by franchise name.
-    
+
     Args:
         franchise_name (str): The franchise name (e.g., "Harry Potter Collection")
-        
+
     Returns:
         Optional[Dict[str, Any]]: Collection data or None if not found
     """
@@ -101,13 +101,13 @@ def get_oldest_movie_id(collection: dict[str, Any]) -> int | None:
     """
     Find the movie ID with the most votes from a collection for poster fetching.
     Uses the most popular/voted movie instead of the oldest.
-    
+
     Special case: Marvel Cinematic Universe uses the 2nd most popular movie
     to avoid duplicate poster with The Avengers collection.
-    
+
     Args:
         collection (Dict[str, Any]): Collection data
-        
+
     Returns:
         Optional[int]: TMDB ID of the movie with most votes (or 2nd for MCU), or None if not found
     """
@@ -119,13 +119,10 @@ def get_oldest_movie_id(collection: dict[str, Any]) -> int | None:
 
     # Check if this is Marvel Cinematic Universe (use 2nd most popular)
     franchise = collection.get("franchise", "")
-    use_second_most = (franchise == "Marvel Cinematic Universe")
+    use_second_most = franchise == "Marvel Cinematic Universe"
 
     # Sort movies by vote count (descending)
-    movies_with_votes = [
-        movie for movie in movie_ratings
-        if movie.get("voteCount", 0) > 0
-    ]
+    movies_with_votes = [movie for movie in movie_ratings if movie.get("voteCount", 0) > 0]
 
     if not movies_with_votes:
         # Fallback to first movie ID if no votes found
@@ -147,10 +144,10 @@ def get_oldest_movie_id(collection: dict[str, Any]) -> int | None:
 def fetch_collection(franchise_name: str) -> list[dict[str, Any]]:
     """
     Fetch movies from a collection by franchise name.
-    
+
     Args:
         franchise_name (str): The franchise name (e.g., "Harry Potter Collection")
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items in standard format
     """
@@ -212,4 +209,3 @@ def fetch_collection(franchise_name: str) -> list[dict[str, Any]]:
 
     logging.info(f"Fetched {len(movie_items)} movies from collection: {franchise_name}")
     return movie_items
-

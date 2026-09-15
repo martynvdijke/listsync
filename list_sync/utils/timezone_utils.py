@@ -13,275 +13,219 @@ TIMEZONE_ABBREVIATIONS: dict[str, str] = {
     "UTC": "UTC",
     "GMT": "GMT",
     "Z": "UTC",
-
     # North America - Eastern
     "EST": "America/New_York",
     "EDT": "America/New_York",
     "ET": "America/New_York",
-
     # North America - Central
     "CST": "America/Chicago",
     "CDT": "America/Chicago",
     "CT": "America/Chicago",
-
     # North America - Mountain
     "MST": "America/Denver",
     "MDT": "America/Denver",
     "MT": "America/Denver",
-
     # North America - Pacific
     "PST": "America/Los_Angeles",
     "PDT": "America/Los_Angeles",
     "PT": "America/Los_Angeles",
-
     # North America - Alaska
     "AKST": "America/Anchorage",
     "AKDT": "America/Anchorage",
     "AT": "America/Anchorage",
-
     # North America - Hawaii
     "HST": "Pacific/Honolulu",
     "HDT": "Pacific/Honolulu",
-
     # North America - Atlantic
     "AST": "America/Halifax",
     "ADT": "America/Halifax",
-
     # North America - Newfoundland
     "NST": "America/St_Johns",
     "NDT": "America/St_Johns",
-
     # Europe - Western
     "WET": "Europe/London",
     "WEST": "Europe/London",
     "BST": "Europe/London",  # British Summer Time
     "IST": "Europe/Dublin",  # Irish Standard Time
-
     # Europe - Central
     "CET": "Europe/Berlin",
     "CEST": "Europe/Berlin",
     "MEZ": "Europe/Berlin",  # German
-    "MESZ": "Europe/Berlin", # German Summer Time
-
+    "MESZ": "Europe/Berlin",  # German Summer Time
     # Europe - Eastern
     "EET": "Europe/Athens",
     "EEST": "Europe/Athens",
     "OEZ": "Europe/Athens",  # German
-    "OESZ": "Europe/Athens", # German Summer Time
-
+    "OESZ": "Europe/Athens",  # German Summer Time
     # Europe - Moscow
     "MSK": "Europe/Moscow",
     "MSD": "Europe/Moscow",
-
     # Asia - China
     "CST": "Asia/Shanghai",  # China Standard Time (conflicts with Central Standard Time)
     "CCT": "Asia/Shanghai",  # China Coast Time
-
     # Asia - Japan
     "JST": "Asia/Tokyo",
     "JDT": "Asia/Tokyo",
-
     # Asia - Korea
     "KST": "Asia/Seoul",
     "KDT": "Asia/Seoul",
-
     # Asia - India
     "IST": "Asia/Kolkata",  # India Standard Time (conflicts with Irish Standard Time)
-    "IT": "Asia/Kolkata",   # India Time
-
+    "IT": "Asia/Kolkata",  # India Time
     # Asia - Singapore/Malaysia
     "SGT": "Asia/Singapore",
-    "SST": "Asia/Singapore", # Singapore Standard Time
+    "SST": "Asia/Singapore",  # Singapore Standard Time
     "MYT": "Asia/Kuala_Lumpur",
-    "MST": "Asia/Kuala_Lumpur", # Malaysian Standard Time (conflicts with Mountain Standard Time)
-
+    "MST": "Asia/Kuala_Lumpur",  # Malaysian Standard Time (conflicts with Mountain Standard Time)
     # Asia - Hong Kong
     "HKT": "Asia/Hong_Kong",
-
     # Asia - Philippines
     "PHT": "Asia/Manila",
     "PST": "Asia/Manila",  # Philippine Standard Time (conflicts with Pacific Standard Time)
-
     # Asia - Thailand/Vietnam
     "ICT": "Asia/Bangkok",  # Indochina Time
-
     # Asia - Indonesia
-    "WIB": "Asia/Jakarta",   # Western Indonesian Time
-    "WITA": "Asia/Makassar", # Central Indonesian Time
+    "WIB": "Asia/Jakarta",  # Western Indonesian Time
+    "WITA": "Asia/Makassar",  # Central Indonesian Time
     "WIT": "Asia/Jayapura",  # Eastern Indonesian Time
-
     # Asia - Pakistan
     "PKT": "Asia/Karachi",
-
     # Asia - Bangladesh
     "BST": "Asia/Dhaka",  # Bangladesh Standard Time (conflicts with British Summer Time)
     "BDT": "Asia/Dhaka",  # Bangladesh Time
-
     # Asia - Nepal
     "NPT": "Asia/Kathmandu",
-
     # Asia - Sri Lanka
     "SLST": "Asia/Colombo",
-
     # Asia - Myanmar
     "MMT": "Asia/Yangon",
-
     # Asia - Iran
     "IRST": "Asia/Tehran",
     "IRDT": "Asia/Tehran",
     "IT": "Asia/Tehran",  # Iran Time (conflicts with India Time)
-
     # Asia - Afghanistan
     "AFT": "Asia/Kabul",
-
     # Asia - UAE/Gulf
     "GST": "Asia/Dubai",  # Gulf Standard Time
     "AST": "Asia/Dubai",  # Arabia Standard Time (conflicts with Atlantic Standard Time)
-
     # Asia - Israel
-    "IST": "Asia/Jerusalem", # Israel Standard Time (conflicts with others)
+    "IST": "Asia/Jerusalem",  # Israel Standard Time (conflicts with others)
     "IDT": "Asia/Jerusalem",
-
     # Australia - Eastern
     "AEST": "Australia/Sydney",
     "AEDT": "Australia/Sydney",
     "AET": "Australia/Sydney",
-    "EST": "Australia/Sydney", # Eastern Standard Time (conflicts with US EST)
-    "EDT": "Australia/Sydney", # Eastern Daylight Time (conflicts with US EDT)
-
+    "EST": "Australia/Sydney",  # Eastern Standard Time (conflicts with US EST)
+    "EDT": "Australia/Sydney",  # Eastern Daylight Time (conflicts with US EDT)
     # Australia - Central
     "ACST": "Australia/Adelaide",
     "ACDT": "Australia/Adelaide",
-    "CST": "Australia/Adelaide", # Central Standard Time (conflicts with others)
-    "CDT": "Australia/Adelaide", # Central Daylight Time (conflicts with others)
-
+    "CST": "Australia/Adelaide",  # Central Standard Time (conflicts with others)
+    "CDT": "Australia/Adelaide",  # Central Daylight Time (conflicts with others)
     # Australia - Western
     "AWST": "Australia/Perth",
     "AWDT": "Australia/Perth",
     "WST": "Australia/Perth",
     "WDT": "Australia/Perth",
-
     # New Zealand
     "NZST": "Pacific/Auckland",
     "NZDT": "Pacific/Auckland",
-
     # Africa - South Africa
     "SAST": "Africa/Johannesburg",
-
     # Africa - West Africa
     "WAT": "Africa/Lagos",
     "WAST": "Africa/Lagos",
-
     # Africa - Central Africa
     "CAT": "Africa/Harare",
-
     # Africa - East Africa
     "EAT": "Africa/Nairobi",
-
     # South America - Brazil
     "BRT": "America/Sao_Paulo",  # Brasília Time
-    "BRST": "America/Sao_Paulo", # Brasília Summer Time
+    "BRST": "America/Sao_Paulo",  # Brasília Summer Time
     "BST": "America/Sao_Paulo",  # Brazil Summer Time (conflicts with British Summer Time)
-
     # South America - Argentina
     "ART": "America/Argentina/Buenos_Aires",
-
     # South America - Chile
     "CLT": "America/Santiago",
     "CLST": "America/Santiago",
-
     # South America - Colombia
     "COT": "America/Bogota",
-
     # South America - Peru
     "PET": "America/Lima",
-
     # South America - Venezuela
     "VET": "America/Caracas",
-
     # South America - Ecuador
     "ECT": "America/Guayaquil",
-
     # South America - Bolivia
     "BOT": "America/La_Paz",
-
     # South America - Paraguay
     "PYT": "America/Asuncion",
     "PYST": "America/Asuncion",
-
     # South America - Uruguay
     "UYT": "America/Montevideo",
     "UYST": "America/Montevideo",
-
     # South America - Guyana
     "GYT": "America/Guyana",
-
     # South America - Suriname
     "SRT": "America/Paramaribo",
-
     # South America - French Guiana
     "GFT": "America/Cayenne",
-
     # Caribbean
-    "AST": "America/Puerto_Rico", # Atlantic Standard Time (conflicts with others)
-    "ADT": "America/Puerto_Rico", # Atlantic Daylight Time (conflicts with others)
-
+    "AST": "America/Puerto_Rico",  # Atlantic Standard Time (conflicts with others)
+    "ADT": "America/Puerto_Rico",  # Atlantic Daylight Time (conflicts with others)
     # Mexico
-    "CST": "America/Mexico_City", # Central Standard Time (conflicts with others)
-    "CDT": "America/Mexico_City", # Central Daylight Time (conflicts with others)
-    "MST": "America/Mazatlan",    # Mountain Standard Time (conflicts with others)
-    "MDT": "America/Mazatlan",    # Mountain Daylight Time (conflicts with others)
-    "PST": "America/Tijuana",     # Pacific Standard Time (conflicts with others)
-    "PDT": "America/Tijuana",     # Pacific Daylight Time (conflicts with others)
-
+    "CST": "America/Mexico_City",  # Central Standard Time (conflicts with others)
+    "CDT": "America/Mexico_City",  # Central Daylight Time (conflicts with others)
+    "MST": "America/Mazatlan",  # Mountain Standard Time (conflicts with others)
+    "MDT": "America/Mazatlan",  # Mountain Daylight Time (conflicts with others)
+    "PST": "America/Tijuana",  # Pacific Standard Time (conflicts with others)
+    "PDT": "America/Tijuana",  # Pacific Daylight Time (conflicts with others)
     # Canada specific
-    "NST": "America/St_Johns",    # Newfoundland Standard Time
-    "NDT": "America/St_Johns",    # Newfoundland Daylight Time
-    "AST": "America/Halifax",     # Atlantic Standard Time (conflicts with others)
-    "ADT": "America/Halifax",     # Atlantic Daylight Time (conflicts with others)
-
+    "NST": "America/St_Johns",  # Newfoundland Standard Time
+    "NDT": "America/St_Johns",  # Newfoundland Daylight Time
+    "AST": "America/Halifax",  # Atlantic Standard Time (conflicts with others)
+    "ADT": "America/Halifax",  # Atlantic Daylight Time (conflicts with others)
     # Pacific Islands
-    "HST": "Pacific/Honolulu",    # Hawaii Standard Time
+    "HST": "Pacific/Honolulu",  # Hawaii Standard Time
     "AKST": "America/Anchorage",  # Alaska Standard Time
     "AKDT": "America/Anchorage",  # Alaska Daylight Time
-    "ChST": "Pacific/Guam",       # Chamorro Standard Time
-    "GST": "Pacific/Guam",        # Guam Standard Time (conflicts with Gulf Standard Time)
-    "JST": "Asia/Tokyo",          # Japan Standard Time (also used in Pacific)
-    "FJST": "Pacific/Fiji",       # Fiji Summer Time
-    "FJT": "Pacific/Fiji",        # Fiji Time
-    "NZST": "Pacific/Auckland",   # New Zealand Standard Time
-    "NZDT": "Pacific/Auckland",   # New Zealand Daylight Time
-    "WST": "Pacific/Samoa",       # West Samoa Time (conflicts with Western Standard Time)
-    "SST": "Pacific/Samoa",       # Samoa Standard Time (conflicts with Singapore Standard Time)
-    "TOT": "Pacific/Tongatapu",   # Tonga Time
+    "ChST": "Pacific/Guam",  # Chamorro Standard Time
+    "GST": "Pacific/Guam",  # Guam Standard Time (conflicts with Gulf Standard Time)
+    "JST": "Asia/Tokyo",  # Japan Standard Time (also used in Pacific)
+    "FJST": "Pacific/Fiji",  # Fiji Summer Time
+    "FJT": "Pacific/Fiji",  # Fiji Time
+    "NZST": "Pacific/Auckland",  # New Zealand Standard Time
+    "NZDT": "Pacific/Auckland",  # New Zealand Daylight Time
+    "WST": "Pacific/Samoa",  # West Samoa Time (conflicts with Western Standard Time)
+    "SST": "Pacific/Samoa",  # Samoa Standard Time (conflicts with Singapore Standard Time)
+    "TOT": "Pacific/Tongatapu",  # Tonga Time
     "TOST": "Pacific/Tongatapu",  # Tonga Summer Time
-
     # Military Time Zones (single letters)
-    "A": "Europe/Paris",      # Alpha Time Zone (UTC+1)
-    "B": "Europe/Athens",     # Bravo Time Zone (UTC+2)
-    "C": "Europe/Moscow",     # Charlie Time Zone (UTC+3)
-    "D": "Asia/Dubai",        # Delta Time Zone (UTC+4)
-    "E": "Asia/Karachi",      # Echo Time Zone (UTC+5)
-    "F": "Asia/Dhaka",        # Foxtrot Time Zone (UTC+6)
-    "G": "Asia/Bangkok",      # Golf Time Zone (UTC+7)
-    "H": "Asia/Shanghai",     # Hotel Time Zone (UTC+8)
-    "I": "Asia/Tokyo",        # India Time Zone (UTC+9)
-    "K": "Pacific/Guam",      # Kilo Time Zone (UTC+10)
-    "L": "Pacific/Noumea",    # Lima Time Zone (UTC+11)
+    "A": "Europe/Paris",  # Alpha Time Zone (UTC+1)
+    "B": "Europe/Athens",  # Bravo Time Zone (UTC+2)
+    "C": "Europe/Moscow",  # Charlie Time Zone (UTC+3)
+    "D": "Asia/Dubai",  # Delta Time Zone (UTC+4)
+    "E": "Asia/Karachi",  # Echo Time Zone (UTC+5)
+    "F": "Asia/Dhaka",  # Foxtrot Time Zone (UTC+6)
+    "G": "Asia/Bangkok",  # Golf Time Zone (UTC+7)
+    "H": "Asia/Shanghai",  # Hotel Time Zone (UTC+8)
+    "I": "Asia/Tokyo",  # India Time Zone (UTC+9)
+    "K": "Pacific/Guam",  # Kilo Time Zone (UTC+10)
+    "L": "Pacific/Noumea",  # Lima Time Zone (UTC+11)
     "M": "Pacific/Auckland",  # Mike Time Zone (UTC+12)
-    "N": "Atlantic/Azores",   # November Time Zone (UTC-1)
-    "O": "America/Noronha",   # Oscar Time Zone (UTC-2)
-    "P": "America/Sao_Paulo", # Papa Time Zone (UTC-3)
-    "Q": "America/Halifax",   # Quebec Time Zone (UTC-4)
+    "N": "Atlantic/Azores",  # November Time Zone (UTC-1)
+    "O": "America/Noronha",  # Oscar Time Zone (UTC-2)
+    "P": "America/Sao_Paulo",  # Papa Time Zone (UTC-3)
+    "Q": "America/Halifax",  # Quebec Time Zone (UTC-4)
     "R": "America/New_York",  # Romeo Time Zone (UTC-5)
-    "S": "America/Chicago",   # Sierra Time Zone (UTC-6)
-    "T": "America/Denver",    # Tango Time Zone (UTC-7)
-    "U": "America/Los_Angeles", # Uniform Time Zone (UTC-8)
-    "V": "America/Anchorage", # Victor Time Zone (UTC-9)
+    "S": "America/Chicago",  # Sierra Time Zone (UTC-6)
+    "T": "America/Denver",  # Tango Time Zone (UTC-7)
+    "U": "America/Los_Angeles",  # Uniform Time Zone (UTC-8)
+    "V": "America/Anchorage",  # Victor Time Zone (UTC-9)
     "W": "Pacific/Honolulu",  # Whiskey Time Zone (UTC-10)
-    "X": "Pacific/Midway",    # X-ray Time Zone (UTC-11)
-    "Y": "Pacific/Kwajalein", # Yankee Time Zone (UTC-12)
-    "Z": "UTC",               # Zulu Time Zone (UTC+0)
+    "X": "Pacific/Midway",  # X-ray Time Zone (UTC-11)
+    "Y": "Pacific/Kwajalein",  # Yankee Time Zone (UTC-12)
+    "Z": "UTC",  # Zulu Time Zone (UTC+0)
 }
 
 # Regional preference mapping for conflicting abbreviations
@@ -329,19 +273,19 @@ REGIONAL_PREFERENCES: dict[str, dict[str, str]] = {
 def normalize_timezone_input(tz_input: str, region_hint: str | None = None) -> str:
     """
     Normalize timezone input to a valid timezone name.
-    
+
     Supports:
     - IANA timezone names (e.g., "Europe/Paris", "America/New_York")
     - Common abbreviations (e.g., "EST", "CET", "PST")
     - UTC/GMT offsets (e.g., "UTC+1", "GMT-5", "UTC+5:30")
-    
+
     Args:
         tz_input (str): Timezone input (abbreviation, full name, or offset)
         region_hint (str, optional): Regional hint for resolving conflicts (US, EU, ASIA, AU, NZ)
-        
+
     Returns:
         str: Valid timezone name
-        
+
     Raises:
         ValueError: If timezone cannot be resolved
     """
@@ -407,7 +351,9 @@ def normalize_timezone_input(tz_input: str, region_hint: str | None = None) -> s
         if region_hint and region_hint.upper() in REGIONAL_PREFERENCES:
             regional_prefs = REGIONAL_PREFERENCES[region_hint.upper()]
             if tz_input in regional_prefs:
-                logging.info(f"Resolved '{original_input}' to '{regional_prefs[tz_input]}' using region hint '{region_hint}'")
+                logging.info(
+                    f"Resolved '{original_input}' to '{regional_prefs[tz_input]}' using region hint '{region_hint}'"
+                )
                 return regional_prefs[tz_input]
 
         # Otherwise use the default mapping
@@ -436,8 +382,9 @@ def normalize_timezone_input(tz_input: str, region_hint: str | None = None) -> s
             continue
 
     # If nothing works, raise an error with helpful suggestions
-    similar_abbrevs = [abbrev for abbrev in TIMEZONE_ABBREVIATIONS
-                      if abbrev.startswith(tz_input[:2]) or tz_input[:2] in abbrev]
+    similar_abbrevs = [
+        abbrev for abbrev in TIMEZONE_ABBREVIATIONS if abbrev.startswith(tz_input[:2]) or tz_input[:2] in abbrev
+    ]
 
     error_msg = f"Unknown timezone: '{original_input}'. "
     error_msg += "Supported formats:\n"
@@ -454,10 +401,10 @@ def normalize_timezone_input(tz_input: str, region_hint: str | None = None) -> s
 def get_timezone_from_env(region_hint: str | None = None) -> str:
     """
     Get timezone from environment variable with abbreviation support.
-    
+
     Args:
         region_hint (str, optional): Regional hint for resolving conflicts
-        
+
     Returns:
         str: Valid timezone name, defaults to UTC if not found or invalid
     """
@@ -477,10 +424,10 @@ def get_timezone_from_env(region_hint: str | None = None) -> str:
 def set_system_timezone(timezone_name: str) -> bool:
     """
     Set the system timezone (for Docker containers).
-    
+
     Args:
         timezone_name (str): Valid timezone name
-        
+
     Returns:
         bool: True if successful, False otherwise
     """
@@ -495,11 +442,17 @@ def set_system_timezone(timezone_name: str) -> bool:
         if os.path.exists("/usr/share/zoneinfo"):
             try:
                 import subprocess
-                subprocess.run([
-                    "ln", "-snf",
-                    f"/usr/share/zoneinfo/{timezone_name}",
-                    "/etc/localtime",
-                ], check=True, capture_output=True)
+
+                subprocess.run(
+                    [
+                        "ln",
+                        "-snf",
+                        f"/usr/share/zoneinfo/{timezone_name}",
+                        "/etc/localtime",
+                    ],
+                    check=True,
+                    capture_output=True,
+                )
 
                 with open("/etc/timezone", "w") as f:
                     f.write(timezone_name + "\n")
@@ -521,7 +474,7 @@ def set_system_timezone(timezone_name: str) -> bool:
 def get_current_timezone_info() -> dict[str, str]:
     """
     Get current timezone information.
-    
+
     Returns:
         Dict containing timezone info
     """
@@ -558,7 +511,7 @@ def get_current_timezone_info() -> dict[str, str]:
 def list_supported_abbreviations() -> dict[str, list]:
     """
     Get a list of all supported timezone abbreviations organized by region.
-    
+
     Returns:
         Dict with regions as keys and lists of abbreviations as values
     """

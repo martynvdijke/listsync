@@ -9,6 +9,7 @@ from typing import Any
 
 try:
     from discord_webhook import DiscordEmbed, DiscordWebhook
+
     DISCORD_AVAILABLE = True
 except ImportError:
     DISCORD_AVAILABLE = False
@@ -20,13 +21,14 @@ from ..ui.display import SyncResults
 def get_discord_webhook_url():
     """
     Get Discord webhook URL from database config or environment variable.
-    
+
     Returns:
         str or None: Discord webhook URL if configured, None otherwise
     """
     # Try to load from ConfigManager/database first
     try:
         from ..config import ConfigManager
+
         config = ConfigManager()
 
         # Check if Discord is enabled
@@ -42,7 +44,9 @@ def get_discord_webhook_url():
     return os.getenv("DISCORD_WEBHOOK_URL")
 
 
-def send_to_discord_webhook(summary_text, sync_results, webhook_url: str | None = None, automated: bool = False, is_single_list: bool = False):
+def send_to_discord_webhook(
+    summary_text, sync_results, webhook_url: str | None = None, automated: bool = False, is_single_list: bool = False
+):
     """Send enhanced multi-embed Discord notification with rich context."""
     if not DISCORD_AVAILABLE:
         return
@@ -69,6 +73,7 @@ def send_to_discord_webhook(summary_text, sync_results, webhook_url: str | None 
     # Double-check if Discord is enabled in config
     try:
         from ..config import ConfigManager
+
         config = ConfigManager()
         discord_enabled = config.get_setting("discord_enabled")
         if discord_enabled and str(discord_enabled).lower() not in ("true", "1", "yes"):
@@ -93,7 +98,9 @@ def send_to_discord_webhook(summary_text, sync_results, webhook_url: str | None 
         logging.exception(f"Failed to send enhanced Discord notification: {e!s}")
 
 
-def collect_enhanced_sync_data(sync_results: SyncResults, automated: bool = False, is_single_list: bool = False) -> dict[str, Any]:
+def collect_enhanced_sync_data(
+    sync_results: SyncResults, automated: bool = False, is_single_list: bool = False
+) -> dict[str, Any]:
     """Collect data for enhanced notifications."""
     return {
         "sync_results": sync_results,
@@ -109,10 +116,12 @@ def build_summary_embed(data: dict[str, Any]) -> DiscordEmbed:
     processing_time = data["processing_time"]
 
     total_items = sync_results.total_items or 1
-    successful_items = (sync_results.results["requested"] +
-                       sync_results.results["already_available"] +
-                       sync_results.results["already_requested"] +
-                       sync_results.results["skipped"])
+    successful_items = (
+        sync_results.results["requested"]
+        + sync_results.results["already_available"]
+        + sync_results.results["already_requested"]
+        + sync_results.results["skipped"]
+    )
     success_rate = (successful_items / total_items) * 100 if total_items > 0 else 0
     failed_items = sync_results.results["not_found"] + sync_results.results["error"]
 
@@ -336,10 +345,6 @@ def get_list_emoji(list_type: str) -> str:
     }
 
     return emoji_map.get(list_type_upper, "📋")
-
-
-
-
 
 
 def format_time(seconds: float) -> str:

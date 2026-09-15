@@ -29,6 +29,7 @@ _RESULT_KEYS = {
 def is_available() -> bool:
     """Whether a TMDB API key is configured."""
     from ..config import get_tmdb_api_key
+
     return bool(get_tmdb_api_key())
 
 

@@ -1,21 +1,32 @@
 """Drive the list-user endpoints through FastAPI's test client."""
+
 import os
 import sys
 import tempfile
 import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 def stub(name, attrs=()):
     m = types.ModuleType(name)
     for a in attrs:
         setattr(m, a, type(a, (), {}))
     sys.modules[name] = m
     return m
+
+
 for n in ("seleniumbase", "bs4", "halo"):
-    try: __import__(n)
-    except ImportError: stub(n, ("SB", "BeautifulSoup", "Halo"))
-c = stub("cryptography"); f = stub("cryptography.fernet", ("Fernet", "InvalidToken")); c.fernet = f
-d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a, **k: None
+    try:
+        __import__(n)
+    except ImportError:
+        stub(n, ("SB", "BeautifulSoup", "Halo"))
+c = stub("cryptography")
+f = stub("cryptography.fernet", ("Fernet", "InvalidToken"))
+c.fernet = f
+d = stub("dotenv")
+d.load_dotenv = lambda *a, **k: None
+d.set_key = lambda *a, **k: None
 
 tmp = tempfile.mkdtemp()
 import list_sync.utils.logger as lg
@@ -25,10 +36,12 @@ import list_sync.database as db
 
 db.DB_FILE = os.path.join(tmp, "list_sync.db")
 db.init_database()
-db.save_seerr_users([
-    {"id": 1, "display_name": "Admin", "email": "a@x", "avatar": ""},
-    {"id": 7, "display_name": "Jess", "email": "j@x", "avatar": ""},
-])
+db.save_seerr_users(
+    [
+        {"id": 1, "display_name": "Admin", "email": "a@x", "avatar": ""},
+        {"id": 7, "display_name": "Jess", "email": "j@x", "avatar": ""},
+    ]
+)
 
 import api_server
 
@@ -39,10 +52,14 @@ from fastapi.testclient import TestClient
 client = TestClient(api_server.app)
 
 fail = []
+
+
 def check(label, got, want):
     ok = got == want
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
-    if not ok: fail.append(label)
+    if not ok:
+        fail.append(label)
+
 
 # Add a list assigned to a real user
 r = client.post("/api/lists", json={"list_type": "imdb", "list_id": "ls123456789", "user_id": "7"})

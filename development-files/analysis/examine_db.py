@@ -14,7 +14,7 @@ if os.path.exists(db_path):
     for table in tables:
         print(f"  - {table[0]}")
 
-    print("\n" + "="*50)
+    print("\n" + "=" * 50)
 
     # Examine each table structure and sample data
     for table in tables:
@@ -47,16 +47,19 @@ else:
     print(f"Database file not found: {db_path}")
 
 # Also check if there are any processes running that might be ListSync
-print("\n" + "="*50)
+print("\n" + "=" * 50)
 print("Checking for running processes...")
 
 try:
     import psutil
+
     for proc in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
             if proc.info["name"] and "python" in proc.info["name"].lower():
                 cmdline = proc.info["cmdline"]
-                if cmdline and any("listsync" in str(cmd).lower() or "list_sync" in str(cmd).lower() for cmd in cmdline):
+                if cmdline and any(
+                    "listsync" in str(cmd).lower() or "list_sync" in str(cmd).lower() for cmd in cmdline
+                ):
                     print(f"Found ListSync process: PID {proc.info['pid']}")
                     print(f"  Command: {' '.join(cmdline)}")
         except (psutil.NoSuchProcess, psutil.AccessDenied):

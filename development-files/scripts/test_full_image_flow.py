@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 # Add the project root to the Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
+
 def test_database_schema():
     """Test that all required database schema changes are in place"""
     print("=== Testing Database Schema ===")
@@ -65,6 +66,7 @@ def test_database_schema():
         print(f"[FAIL] Database schema test failed: {e}")
         return False
 
+
 def test_image_caching_functions():
     """Test the image caching database functions"""
     print("\n=== Testing Image Caching Functions ===")
@@ -101,6 +103,7 @@ def test_image_caching_functions():
     except Exception as e:
         print(f"[FAIL] Image caching functions test failed: {e}")
         return False
+
 
 def test_trakt_metadata_fetcher():
     """Test that Trakt metadata fetcher returns proxy URLs instead of direct Trakt URLs"""
@@ -163,6 +166,7 @@ def test_trakt_metadata_fetcher():
         print(f"[FAIL] Trakt metadata fetcher test failed: {e}")
         return False
 
+
 def test_proxy_api_logic():
     """Test the proxy API logic without actually making HTTP requests"""
     print("\n=== Testing Proxy API Logic ===")
@@ -200,6 +204,7 @@ def test_proxy_api_logic():
         print(f"[FAIL] Proxy API logic test failed: {e}")
         return False
 
+
 def test_enriched_items_flow():
     """Test that enriched items API uses cached poster URLs"""
     print("\n=== Testing Enriched Items Flow ===")
@@ -225,6 +230,7 @@ def test_enriched_items_flow():
 
         # Verify it was saved
         from list_sync.database import DB_FILE
+
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
         cursor.execute("SELECT poster_url FROM synced_items WHERE id = ?", (item_id,))
@@ -243,6 +249,7 @@ def test_enriched_items_flow():
         print(f"[FAIL] Enriched items flow test failed: {e}")
         return False
 
+
 def test_full_flow():
     """Test the complete flow from Trakt API to cached image serving"""
     print("\n=== Testing Complete Flow ===")
@@ -258,6 +265,7 @@ def test_full_flow():
     print("8. [PASS] No direct Trakt hotlinking - fully compliant!")
 
     return True
+
 
 def main():
     """Run all tests"""
@@ -298,6 +306,7 @@ def main():
         return True
     print("\n[FAILURE] Some tests failed. Compliance not verified.")
     return False
+
 
 if __name__ == "__main__":
     success = main()

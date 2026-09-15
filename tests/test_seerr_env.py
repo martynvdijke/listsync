@@ -1,18 +1,31 @@
 """SEERR_* must be preferred, OVERSEERR_* must keep working."""
+
 import os
 import sys
 import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 def stub(n, a=()):
     m = types.ModuleType(n)
-    for x in a: setattr(m, x, type(x, (), {}))
-    sys.modules[n] = m; return m
+    for x in a:
+        setattr(m, x, type(x, (), {}))
+    sys.modules[n] = m
+    return m
+
+
 for n in ("seleniumbase", "bs4", "halo"):
-    try: __import__(n)
-    except ImportError: stub(n, ("SB", "BeautifulSoup", "Halo"))
-c = stub("cryptography"); f = stub("cryptography.fernet", ("Fernet", "InvalidToken")); c.fernet = f
-d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a, **k: None
+    try:
+        __import__(n)
+    except ImportError:
+        stub(n, ("SB", "BeautifulSoup", "Halo"))
+c = stub("cryptography")
+f = stub("cryptography.fernet", ("Fernet", "InvalidToken"))
+c.fernet = f
+d = stub("dotenv")
+d.load_dotenv = lambda *a, **k: None
+d.set_key = lambda *a, **k: None
 
 import logging
 
@@ -22,16 +35,23 @@ import list_sync.config as cfg
 from list_sync.config import LEGACY_ENV_NAMES, get_seerr_env
 
 fail = []
+
+
 def check(label, got, want):
     ok = got == want
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
-    if not ok: fail.append(label)
+    if not ok:
+        fail.append(label)
+
 
 ALL = list(LEGACY_ENV_NAMES) + list(LEGACY_ENV_NAMES.values())
+
+
 def clear():
     for v in ALL:
         os.environ.pop(v, None)
     cfg._reported_legacy_names.clear()
+
 
 # --- the new name works ---
 clear()
@@ -85,17 +105,14 @@ check("empty old name falls to default", get_seerr_env("SEERR_USER_ID", "1"), "1
 # therefore pass ${SEERR_USER_ID:-} and let the application default instead.
 clear()
 os.environ["OVERSEERR_USER_ID"] = "3"
-check("legacy user id survives an unset new name",
-      get_seerr_env("SEERR_USER_ID", "1"), "3")
+check("legacy user id survives an unset new name", get_seerr_env("SEERR_USER_ID", "1"), "3")
 clear()
-os.environ["SEERR_USER_ID"] = ""          # what ${SEERR_USER_ID:-} produces
+os.environ["SEERR_USER_ID"] = ""  # what ${SEERR_USER_ID:-} produces
 os.environ["OVERSEERR_USER_ID"] = "3"
-check("legacy user id survives compose's empty new name",
-      get_seerr_env("SEERR_USER_ID", "1"), "3")
+check("legacy user id survives compose's empty new name", get_seerr_env("SEERR_USER_ID", "1"), "3")
 clear()
 os.environ["OVERSEERR_4K"] = "true"
-check("legacy 4k survives an unset new name",
-      get_seerr_env("SEERR_4K", "false"), "true")
+check("legacy 4k survives an unset new name", get_seerr_env("SEERR_4K", "false"), "true")
 
 # --- neither set ---
 clear()
@@ -106,7 +123,7 @@ check("neither set, no default", get_seerr_env("SEERR_URL"), None)
 clear()
 os.environ["SYNC_INTERVAL"] = "12"
 check("unmapped name read directly", get_seerr_env("SYNC_INTERVAL", "24"), "12")
-os.environ.pop("SYNC_INTERVAL", None)   # not in LEGACY_ENV_NAMES, so clear() misses it
+os.environ.pop("SYNC_INTERVAL", None)  # not in LEGACY_ENV_NAMES, so clear() misses it
 check("unmapped name default", get_seerr_env("SYNC_INTERVAL", "24"), "24")
 
 # --- the deprecation notice is said once, not on every read ---
@@ -114,21 +131,24 @@ clear()
 os.environ["OVERSEERR_URL"] = "http://seerr:5055"
 logging.disable(logging.NOTSET)
 seen = []
+
+
 class Catch(logging.Handler):
-    def emit(self, record): seen.append(record.getMessage())
+    def emit(self, record):
+        seen.append(record.getMessage())
+
+
 root = logging.getLogger()
-root.addHandler(Catch()); root.setLevel(logging.WARNING)
+root.addHandler(Catch())
+root.setLevel(logging.WARNING)
 for _ in range(5):
     get_seerr_env("SEERR_URL")
-check("warned exactly once over five reads",
-      sum(1 for m in seen if "OVERSEERR_URL" in m), 1)
-check("warning names both spellings",
-      all(k in seen[0] for k in ("OVERSEERR_URL", "SEERR_URL")), True)
+check("warned exactly once over five reads", sum(1 for m in seen if "OVERSEERR_URL" in m), 1)
+check("warning names both spellings", all(k in seen[0] for k in ("OVERSEERR_URL", "SEERR_URL")), True)
 logging.disable(logging.CRITICAL)
 
 # --- every mapped pair is exercised above ---
-check("all four settings mapped", sorted(LEGACY_ENV_NAMES),
-      ["SEERR_4K", "SEERR_API_KEY", "SEERR_URL", "SEERR_USER_ID"])
+check("all four settings mapped", sorted(LEGACY_ENV_NAMES), ["SEERR_4K", "SEERR_API_KEY", "SEERR_URL", "SEERR_USER_ID"])
 
 clear()
 print()

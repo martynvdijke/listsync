@@ -29,30 +29,36 @@ from urllib.parse import urlparse
 
 # Addresses that hand out cloud credentials. Never a legitimate target, so
 # these are refused even when a sink otherwise permits private addresses.
-_METADATA_ADDRESSES = frozenset({
-    "169.254.169.254",     # AWS IMDS, Azure IMDS, DigitalOcean, Oracle
-    "169.254.170.2",       # AWS ECS task metadata
-    "100.100.100.200",     # Alibaba Cloud
-    "192.0.0.192",         # Oracle Cloud legacy
-    "fd00:ec2::254",       # AWS IMDS over IPv6
-})
+_METADATA_ADDRESSES = frozenset(
+    {
+        "169.254.169.254",  # AWS IMDS, Azure IMDS, DigitalOcean, Oracle
+        "169.254.170.2",  # AWS ECS task metadata
+        "100.100.100.200",  # Alibaba Cloud
+        "192.0.0.192",  # Oracle Cloud legacy
+        "fd00:ec2::254",  # AWS IMDS over IPv6
+    }
+)
 
-_METADATA_HOSTNAMES = frozenset({
-    "metadata.google.internal",
-    "metadata.goog",
-    "instance-data",
-})
+_METADATA_HOSTNAMES = frozenset(
+    {
+        "metadata.google.internal",
+        "metadata.goog",
+        "instance-data",
+    }
+)
 
 _ALLOWED_SCHEMES = frozenset({"http", "https"})
 
 # Discord's webhook hosts. Anything else claiming to be a Discord webhook
 # isn't one.
-DISCORD_WEBHOOK_HOSTS = frozenset({
-    "discord.com",
-    "discordapp.com",
-    "ptb.discord.com",
-    "canary.discord.com",
-})
+DISCORD_WEBHOOK_HOSTS = frozenset(
+    {
+        "discord.com",
+        "discordapp.com",
+        "ptb.discord.com",
+        "canary.discord.com",
+    }
+)
 
 
 def _address_is_private(ip: ipaddress._BaseAddress) -> bool:
@@ -62,14 +68,7 @@ def _address_is_private(ip: ipaddress._BaseAddress) -> bool:
     if mapped is not None:
         ip = mapped
 
-    return (
-        ip.is_private
-        or ip.is_loopback
-        or ip.is_link_local
-        or ip.is_reserved
-        or ip.is_multicast
-        or ip.is_unspecified
-    )
+    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified
 
 
 def _resolve(hostname: str) -> tuple[list, str | None]:
@@ -126,9 +125,7 @@ def validate_outbound_url(
         return False, f"Malformed URL ({e})"
 
     if parsed.scheme.lower() not in _ALLOWED_SCHEMES:
-        return False, (
-            f"URL scheme '{parsed.scheme}' is not allowed - only http and https are"
-        )
+        return False, (f"URL scheme '{parsed.scheme}' is not allowed - only http and https are")
 
     # user:password@host can be used to disguise the real host from a reader,
     # and no legitimate caller here needs it.
@@ -147,10 +144,7 @@ def validate_outbound_url(
     if allowed_hosts is not None:
         permitted = {h.lower() for h in allowed_hosts}
         if not any(lowered == h or lowered.endswith("." + h) for h in permitted):
-            return False, (
-                f"Host '{hostname}' is not permitted here. "
-                f"Allowed: {', '.join(sorted(permitted))}"
-            )
+            return False, (f"Host '{hostname}' is not permitted here. " f"Allowed: {', '.join(sorted(permitted))}")
 
     # A literal address needs no lookup; a name needs every answer checked,
     # since one bad address among several is enough.
@@ -168,10 +162,7 @@ def validate_outbound_url(
             return False, f"'{hostname}' resolves to cloud metadata address {text}"
 
         if not allow_private and _address_is_private(address):
-            return False, (
-                f"'{hostname}' resolves to {text}, which is on a private or "
-                f"reserved network"
-            )
+            return False, (f"'{hostname}' resolves to {text}, which is on a private or " f"reserved network")
 
     return True, f"'{hostname}' is allowed"
 
@@ -199,7 +190,9 @@ def assert_safe_url(
         ValueError: If the URL must not be fetched
     """
     allowed, reason = validate_outbound_url(
-        raw_url, allow_private=allow_private, allowed_hosts=allowed_hosts,
+        raw_url,
+        allow_private=allow_private,
+        allowed_hosts=allowed_hosts,
     )
     if not allowed:
         logging.warning(f"Refused to fetch {what}: {reason}")

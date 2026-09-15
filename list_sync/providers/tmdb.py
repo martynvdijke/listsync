@@ -16,13 +16,13 @@ from . import register_provider
 def fetch_tmdb_list(list_id: str) -> list[dict[str, Any]]:
     """
     Fetch TMDB list using API if available, otherwise fallback to web scraping
-    
+
     Args:
         list_id (str): TMDB list ID or URL
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
-        
+
     Raises:
         ValueError: If list ID format is invalid
     """
@@ -42,11 +42,11 @@ def fetch_tmdb_list(list_id: str) -> list[dict[str, Any]]:
 def _fetch_tmdb_list_api(list_id: str, api_key: str) -> list[dict[str, Any]]:
     """
     Fetch TMDB list using the official API with pagination support
-    
+
     Args:
         list_id (str): TMDB list ID
         api_key (str): TMDB API key
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
     """
@@ -112,6 +112,7 @@ def _fetch_tmdb_list_api(list_id: str, api_key: str) -> list[dict[str, Any]]:
 
                     # Small delay to be respectful to the API
                     import time
+
                     time.sleep(0.1)
 
                 except Exception as e:
@@ -132,10 +133,10 @@ def _fetch_tmdb_list_api(list_id: str, api_key: str) -> list[dict[str, Any]]:
 def _process_tmdb_api_item(item: dict[str, Any]) -> dict[str, Any] | None:
     """
     Process a single item from TMDB API response
-    
+
     Args:
         item (Dict[str, Any]): Item from TMDB API response
-        
+
     Returns:
         Optional[Dict[str, Any]]: Processed item or None if processing failed
     """
@@ -169,10 +170,10 @@ def _process_tmdb_api_item(item: dict[str, Any]) -> dict[str, Any] | None:
 def _fetch_tmdb_list_scraping(list_id: str) -> list[dict[str, Any]]:
     """
     Fetch TMDB list using web scraping (original implementation)
-    
+
     Args:
         list_id (str): TMDB list ID or URL
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
     """
@@ -222,11 +223,11 @@ def _fetch_tmdb_list_scraping(list_id: str) -> list[dict[str, Any]]:
 def _process_tmdb_list(sb, url) -> list[dict[str, Any]]:
     """
     Process a TMDB list page using proven selectors from testing.
-    
+
     Args:
         sb: SeleniumBase instance
         url: URL of the list
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
     """
@@ -292,12 +293,14 @@ def _process_tmdb_list(sb, url) -> list[dict[str, Any]]:
             # Determine media type
             media_type = _determine_media_type(item, title)
 
-            media_items.append({
-                "title": title.strip(),
-                "media_type": media_type,
-                "year": year,
-                "tmdb_id": unique_id,
-            })
+            media_items.append(
+                {
+                    "title": title.strip(),
+                    "media_type": media_type,
+                    "year": year,
+                    "tmdb_id": unique_id,
+                }
+            )
             logging.info(f"Added {media_type}: {title} ({year if year else 'year unknown'}) (TMDB ID: {unique_id})")
 
         except Exception as e:
@@ -402,7 +405,9 @@ def _process_tmdb_list(sb, url) -> list[dict[str, Any]]:
         # Check if we made progress
         if current_item_count <= previous_item_count:
             no_progress_count += 1
-            logging.info(f"No progress made (still {current_item_count} items) - no progress count: {no_progress_count}")
+            logging.info(
+                f"No progress made (still {current_item_count} items) - no progress count: {no_progress_count}"
+            )
 
             # Additional check: look for end-of-list indicators
             try:
@@ -460,12 +465,14 @@ def _process_tmdb_list(sb, url) -> list[dict[str, Any]]:
             # Determine media type
             media_type = _determine_media_type(item, title)
 
-            media_items.append({
-                "title": title.strip(),
-                "media_type": media_type,
-                "year": year,
-                "tmdb_id": unique_id,
-            })
+            media_items.append(
+                {
+                    "title": title.strip(),
+                    "media_type": media_type,
+                    "year": year,
+                    "tmdb_id": unique_id,
+                }
+            )
 
         except Exception as e:
             logging.warning(f"Failed to parse TMDB item {i+1} after pagination: {e!s}")
@@ -546,16 +553,12 @@ def _extract_year_from_text(text: str) -> int:
     date_patterns = [
         # Full date formats: "July 19, 2010", "Dec 25, 2023", "January 1, 2000"
         r"(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},?\s+(\d{4})",
-
         # Month day year: "7/19/2010", "12/25/2023", "1/1/2000"
         r"\d{1,2}/\d{1,2}/(\d{4})",
-
         # Year month day: "2010-07-19", "2023-12-25"
         r"(\d{4})-\d{1,2}-\d{1,2}",
-
         # Just year: "2010", "2023"
         r"(\d{4})",
-
         # Year in parentheses: "(2010)", "(2023)"
         r"\((\d{4})\)",
     ]
@@ -612,5 +615,3 @@ def _determine_media_type(item, title: str) -> str:
         pass
 
     return media_type
-
-

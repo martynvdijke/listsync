@@ -28,18 +28,18 @@ ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"
 def parse_anilist_url(list_id: str) -> dict[str, str]:
     """
     Parse AniList URL to extract username and optional list status.
-    
+
     Supported formats:
     - https://anilist.co/user/{username}/animelist
     - https://anilist.co/user/{username}/animelist/{status}
     - Just username (defaults to all lists)
-    
+
     Args:
         list_id (str): AniList URL or username
-        
+
     Returns:
         Dict[str, str]: Dictionary with 'username' and optional 'status'
-        
+
     Raises:
         ValueError: If URL format is invalid
     """
@@ -57,7 +57,11 @@ def parse_anilist_url(list_id: str) -> dict[str, str]:
 
         # Normalize status (capitalize first letter)
         if status:
-            status = status.upper() if status.upper() in ["PLANNING", "WATCHING", "COMPLETED", "PAUSED", "DROPPED"] else status.capitalize()
+            status = (
+                status.upper()
+                if status.upper() in ["PLANNING", "WATCHING", "COMPLETED", "PAUSED", "DROPPED"]
+                else status.capitalize()
+            )
 
         return {"username": username, "status": status}
 
@@ -75,11 +79,11 @@ def parse_anilist_url(list_id: str) -> dict[str, str]:
 def fetch_anilist_animelist_graphql(username: str, status_filter: str | None = None) -> list[dict[str, Any]]:
     """
     Fetch anime list from AniList using GraphQL API.
-    
+
     Args:
         username (str): AniList username
         status_filter (Optional[str]): Filter by status (Planning, Watching, etc.) or None for all
-        
+
     Returns:
         List[Dict[str, Any]]: List of anime with title, year, and metadata
     """
@@ -183,7 +187,10 @@ def fetch_anilist_animelist_graphql(username: str, status_filter: str | None = N
                 list_type = "Custom" if is_custom else "Status"
                 logging.info(f"  📋 [{list_type}] {list_name}: {len(entries)} entries")
 
-        logging.info(f"✅ AniList: Found {total_count} anime entries" + (f" with status '{status_filter}'" if status_filter else ""))
+        logging.info(
+            f"✅ AniList: Found {total_count} anime entries"
+            + (f" with status '{status_filter}'" if status_filter else "")
+        )
 
         return all_entries
 
@@ -203,10 +210,10 @@ def fetch_anilist_animelist_graphql(username: str, status_filter: str | None = N
 def extract_media_from_anilist_entry(entry: dict[str, Any]) -> dict[str, Any] | None:
     """
     Extract and normalize media information from an AniList list entry.
-    
+
     Args:
         entry (Dict[str, Any]): AniList list entry
-        
+
     Returns:
         Optional[Dict[str, Any]]: Normalized media item with title, year, media_type
     """
@@ -255,15 +262,15 @@ def extract_media_from_anilist_entry(entry: dict[str, Any]) -> dict[str, Any] | 
 def fetch_anilist_list(list_id: str) -> list[dict[str, Any]]:
     """
     Fetch anime list from AniList and resolve to TMDB IDs via Trakt.
-    
+
     This is the main entry point for the AniList provider, decorated with @register_provider.
-    
+
     Args:
         list_id (str): AniList URL or username
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items with title, year, media_type, and TMDB IDs
-        
+
     Raises:
         ValueError: If URL is invalid or user not found
     """
@@ -272,8 +279,10 @@ def fetch_anilist_list(list_id: str) -> list[dict[str, Any]]:
     username = parsed["username"]
     status_filter = parsed.get("status")
 
-    logging.info(f"🎌 AniList Provider: Fetching list for user '{username}'" +
-                 (f" (status: {status_filter})" if status_filter else ""))
+    logging.info(
+        f"🎌 AniList Provider: Fetching list for user '{username}'"
+        + (f" (status: {status_filter})" if status_filter else "")
+    )
 
     # Fetch entries from AniList
     entries = fetch_anilist_animelist_graphql(username, status_filter)
@@ -316,16 +325,18 @@ def fetch_anilist_list(list_id: str) -> list[dict[str, Any]]:
                 logging.debug(f"  ✓ Resolved via Romaji title: {title} -> TMDB {tmdb_id}")
 
         # Add to results
-        media_items.append({
-            "title": title,
-            "year": year,
-            "media_type": "tv",
-            "tmdb_id": tmdb_id,
-            "imdb_id": imdb_id,
-            # Keep AniList metadata for reference
-            "anilist_id": media.get("anilist_id"),
-            "mal_id": media.get("mal_id"),
-        })
+        media_items.append(
+            {
+                "title": title,
+                "year": year,
+                "media_type": "tv",
+                "tmdb_id": tmdb_id,
+                "imdb_id": imdb_id,
+                # Keep AniList metadata for reference
+                "anilist_id": media.get("anilist_id"),
+                "mal_id": media.get("mal_id"),
+            }
+        )
 
         # Log progress periodically
         if len(media_items) % 25 == 0 or len(media_items) <= 5:
@@ -334,7 +345,8 @@ def fetch_anilist_list(list_id: str) -> list[dict[str, Any]]:
 
     # Final summary
     resolved_count = sum(1 for m in media_items if m.get("tmdb_id"))
-    logging.info(f"✅ AniList Provider: {len(media_items)} anime processed, {resolved_count} resolved to TMDB IDs ({resolved_count/len(media_items)*100:.1f}%)")
+    logging.info(
+        f"✅ AniList Provider: {len(media_items)} anime processed, {resolved_count} resolved to TMDB IDs ({resolved_count/len(media_items)*100:.1f}%)"
+    )
 
     return media_items
-

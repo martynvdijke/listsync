@@ -11,8 +11,10 @@ from pathlib import Path
 # Fix Unicode encoding for Windows console
 if sys.platform == "win32":
     import io
+
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
 
 def check_dependencies():
     """Check if required dependencies are installed"""
@@ -20,6 +22,7 @@ def check_dependencies():
         import fastapi
         import psutil
         import uvicorn
+
         print("✅ All dependencies are installed")
         return True
     except ImportError as e:
@@ -32,6 +35,7 @@ def check_dependencies():
         except subprocess.CalledProcessError:
             print("❌ Failed to install dependencies")
             return False
+
 
 def check_listsync_data():
     """Check if ListSync data directory exists"""
@@ -49,10 +53,12 @@ def check_listsync_data():
     print(f"✅ Found ListSync database: {db_file} ({db_file.stat().st_size} bytes)")
     return True
 
+
 def check_listsync_process():
     """Check if ListSync is running"""
     try:
         import psutil
+
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
             try:
                 if proc.info["cmdline"]:
@@ -69,6 +75,7 @@ def check_listsync_process():
     except Exception as e:
         print(f"❌ Error checking processes: {e}")
         return True  # Don't block API startup
+
 
 def main():
     print("🚀 Starting ListSync Web UI API Server...")
@@ -95,6 +102,7 @@ def main():
     # Start the API server
     try:
         import uvicorn
+
         # Disable reload in Docker/production (causes issues with file watching)
         is_docker = os.environ.get("RUNNING_IN_DOCKER", "false").lower() == "true"
         uvicorn.run(
@@ -109,6 +117,7 @@ def main():
     except Exception as e:
         print(f"❌ Error starting API server: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

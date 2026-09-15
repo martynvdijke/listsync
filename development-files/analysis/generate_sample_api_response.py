@@ -1,4 +1,5 @@
 """Generate sample API response from actual logs."""
+
 import json
 import os
 import sys
@@ -50,6 +51,6 @@ def main():
     print(f"Total sessions: {len(sessions)}")
     print(f"Sample includes: {len(sample_sessions)} sessions")
 
+
 if __name__ == "__main__":
     main()
-

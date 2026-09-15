@@ -15,7 +15,7 @@ class LogRotator:
     def __init__(self, log_file_path: str, max_size_mb: int = 20, max_backups: int = 5):
         """
         Initialize log rotator
-        
+
         Args:
             log_file_path: Path to the main log file
             max_size_mb: Maximum size in MB before rotation (default: 20MB)
@@ -41,7 +41,7 @@ class LogRotator:
     def rotate_log(self) -> bool:
         """
         Rotate the log file if it exceeds the size limit
-        
+
         Returns:
             bool: True if rotation was performed, False otherwise
         """
@@ -82,7 +82,7 @@ class LogRotator:
     def get_available_log_files(self) -> list:
         """
         Get list of available log files (main + backups)
-        
+
         Returns:
             list: List of log file paths in order (newest first)
         """
@@ -103,7 +103,7 @@ class LogRotator:
     def get_log_file_info(self) -> dict:
         """
         Get information about log files
-        
+
         Returns:
             dict: Information about log files
         """
@@ -135,13 +135,14 @@ class LogRotator:
 
         return info
 
+
 def setup_log_rotation(log_file_path: str = "data/list_sync.log") -> LogRotator:
     """
     Set up log rotation for the main log file
-    
+
     Args:
         log_file_path: Path to the log file
-        
+
     Returns:
         LogRotator: Configured log rotator instance
     """
@@ -154,8 +155,10 @@ def setup_log_rotation(log_file_path: str = "data/list_sync.log") -> LogRotator:
 
     return rotator
 
+
 # Global rotator instance
 _log_rotator: LogRotator | None = None
+
 
 def get_log_rotator() -> LogRotator:
     """Get the global log rotator instance"""
@@ -164,10 +167,12 @@ def get_log_rotator() -> LogRotator:
         _log_rotator = setup_log_rotation()
     return _log_rotator
 
+
 def check_and_rotate_logs():
     """Check if logs need rotation and rotate if necessary"""
     rotator = get_log_rotator()
     return rotator.rotate_log()
+
 
 if __name__ == "__main__":
     # Test the log rotator

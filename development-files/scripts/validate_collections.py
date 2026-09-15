@@ -5,7 +5,7 @@ Ensures each collection contains all movies from the official TMDB collection.
 
 Usage:
     python validate_collections.py [--update] [--collection "Collection Name"]
-    
+
 Options:
     --update: Update the JSON file with missing movies (creates backup first)
     --collection: Only validate a specific collection by name
@@ -35,11 +35,11 @@ REQUEST_DELAY = 0.26  # ~38 requests per 10 seconds to be safe
 def search_collection(query: str, api_key: str) -> dict[str, Any] | None:
     """
     Search for a collection by name using TMDB API.
-    
+
     Args:
         query: Collection name to search for
         api_key: TMDB API key
-        
+
     Returns:
         Collection search result or None if not found
     """
@@ -75,11 +75,11 @@ def search_collection(query: str, api_key: str) -> dict[str, Any] | None:
 def get_collection_details(collection_id: int, api_key: str) -> dict[str, Any] | None:
     """
     Get full collection details including all movies.
-    
+
     Args:
         collection_id: TMDB collection ID
         api_key: TMDB API key
-        
+
     Returns:
         Collection details dict or None if not found
     """
@@ -106,11 +106,11 @@ def get_collection_details(collection_id: int, api_key: str) -> dict[str, Any] |
 def get_movie_collection_id(movie_id: int, api_key: str) -> int | None:
     """
     Get the collection ID for a movie by checking its belongs_to_collection field.
-    
+
     Args:
         movie_id: TMDB movie ID
         api_key: TMDB API key
-        
+
     Returns:
         Collection ID or None if movie doesn't belong to a collection
     """
@@ -143,11 +143,11 @@ def get_movie_collection_id(movie_id: int, api_key: str) -> int | None:
 def get_movie_details(movie_id: int, api_key: str) -> dict[str, Any] | None:
     """
     Get full movie details from TMDB API.
-    
+
     Args:
         movie_id: TMDB movie ID
         api_key: TMDB API key
-        
+
     Returns:
         Full movie details dict or None if not found
     """
@@ -174,10 +174,10 @@ def get_movie_details(movie_id: int, api_key: str) -> dict[str, Any] | None:
 def enrich_movie_data(movie_data: dict[str, Any]) -> dict[str, Any]:
     """
     Extract and format relevant movie data from TMDB API response.
-    
+
     Args:
         movie_data: Full movie data from TMDB API
-        
+
     Returns:
         Enriched movie data dict
     """
@@ -212,12 +212,12 @@ def validate_collection(
 ) -> dict[str, Any]:
     """
     Validate a collection against TMDB API by getting collection ID from movies.
-    
+
     Args:
         collection: Collection dict from JSON
         api_key: TMDB API key
         use_movie_lookup: If True, get collection ID from first movie (default: True)
-        
+
     Returns:
         Dict with validation results
     """
@@ -279,11 +279,13 @@ def validate_collection(
     for movie_id in missing_movies:
         for movie in parts:
             if movie.get("id") == movie_id:
-                missing_movie_details.append({
-                    "id": movie_id,
-                    "title": movie.get("title", "Unknown"),
-                    "release_date": movie.get("release_date", "Unknown"),
-                })
+                missing_movie_details.append(
+                    {
+                        "id": movie_id,
+                        "title": movie.get("title", "Unknown"),
+                        "release_date": movie.get("release_date", "Unknown"),
+                    }
+                )
                 break
 
     status = "valid"
@@ -337,13 +339,13 @@ def update_collection(
 ) -> dict[str, Any]:
     """
     Update a collection with missing movies and enrich with collection ID and movie data.
-    
+
     Args:
         collection: Original collection dict
         validation_result: Validation result with missing movies and collection data
         api_key: TMDB API key for fetching movie details
         enrich_all_movies: If True, fetch and enrich all movies with full TMDB data
-        
+
     Returns:
         Updated collection dict
     """
@@ -392,13 +394,15 @@ def update_collection(
                     print(f"      ✅ Enriched: {enriched['title']}")
                 else:
                     # Fallback to basic data
-                    movie_ratings.append({
-                        "id": detail["id"],
-                        "title": detail["title"],
-                        "rating": 0,
-                        "voteCount": 0,
-                        "releaseDate": detail["release_date"],
-                    })
+                    movie_ratings.append(
+                        {
+                            "id": detail["id"],
+                            "title": detail["title"],
+                            "rating": 0,
+                            "voteCount": 0,
+                            "releaseDate": detail["release_date"],
+                        }
+                    )
                     print(f"      ⚠️  Basic data only: {detail['title']}")
 
     # Enrich all existing movies if requested
@@ -525,10 +529,7 @@ def main():
 
     # Filter collections if specific one requested
     if args.collection:
-        collections = [
-            c for c in collections
-            if args.collection.lower() in c.get("franchise", "").lower()
-        ]
+        collections = [c for c in collections if args.collection.lower() in c.get("franchise", "").lower()]
         if not collections:
             print(f"❌ No collection found matching '{args.collection}'")
             sys.exit(1)
@@ -688,4 +689,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

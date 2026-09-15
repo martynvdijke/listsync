@@ -8,14 +8,16 @@ import os
 # Define paths for data directory
 DATA_DIR = "./data"
 
+
 def ensure_data_directory_exists():
     """Ensure the data directory exists for logs and configuration files."""
     os.makedirs(DATA_DIR, exist_ok=True)
 
+
 def setup_logging():
     """
     Set up logging with file and console handlers.
-    
+
     Returns:
         logging.Logger: Logger for added items
     """

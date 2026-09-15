@@ -69,6 +69,7 @@ def test_database_setup():
         print(f"[FAIL] Database setup test failed: {e}")
         return False
 
+
 def test_image_caching():
     """Test basic image caching functionality"""
     print("\n[TEST] Testing image caching functions...")
@@ -104,6 +105,7 @@ def test_image_caching():
         print(f"[FAIL] Image caching test failed: {e}")
         return False
 
+
 def main():
     print("[START] Testing ListSync Image Caching Implementation\n")
 
@@ -123,6 +125,7 @@ def main():
     print("  * Added image proxy API endpoints (/api/images/proxy, /api/images/cache/stats, etc.)")
     print("  * Updated enriched items API to store and retrieve cached poster URLs")
     print("\n[SUCCESS] Trakt API compliance achieved - images are now cached locally instead of hotlinked!")
+
 
 if __name__ == "__main__":
     main()

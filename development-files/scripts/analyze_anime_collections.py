@@ -27,11 +27,11 @@ REQUEST_DELAY = 0.25  # Delay between API requests (seconds)
 def get_tmdb_movie_details(tmdb_id: int, api_key: str) -> dict[str, Any] | None:
     """
     Fetch movie details from TMDB API.
-    
+
     Args:
         tmdb_id: TMDB movie ID
         api_key: TMDB API key
-        
+
     Returns:
         Movie details dict or None if not found
     """
@@ -58,11 +58,11 @@ def get_tmdb_movie_details(tmdb_id: int, api_key: str) -> dict[str, Any] | None:
 def get_tmdb_tv_details(tmdb_id: int, api_key: str) -> dict[str, Any] | None:
     """
     Fetch TV show details from TMDB API.
-    
+
     Args:
         tmdb_id: TMDB TV ID
         api_key: TMDB API key
-        
+
     Returns:
         TV show details dict or None if not found
     """
@@ -90,11 +90,11 @@ def is_anime(tmdb_id: int, api_key: str) -> tuple[bool, str | None]:
     """
     Check if a TMDB ID is anime by checking genres.
     Tries movie endpoint first, then TV if movie fails.
-    
+
     Args:
         tmdb_id: TMDB ID
         api_key: TMDB API key
-        
+
     Returns:
         Tuple of (is_anime: bool, media_type: Optional[str])
         media_type will be "movie", "tv", or None if not found
@@ -120,11 +120,11 @@ def is_anime(tmdb_id: int, api_key: str) -> tuple[bool, str | None]:
 def analyze_collection(collection: dict[str, Any], api_key: str) -> dict[str, Any]:
     """
     Analyze a collection to determine if it contains anime.
-    
+
     Args:
         collection: Collection dict from JSON
         api_key: TMDB API key
-        
+
     Returns:
         Dict with analysis results
     """
@@ -270,10 +270,13 @@ def main():
             total = result["total_movies"]
 
             while True:
-                response = input(
-                    f"❓ Remove '{franchise}'? "
-                    f"({anime_count}/{total} anime) [y/n]: ",
-                ).strip().lower()
+                response = (
+                    input(
+                        f"❓ Remove '{franchise}'? " f"({anime_count}/{total} anime) [y/n]: ",
+                    )
+                    .strip()
+                    .lower()
+                )
 
                 if response in ["y", "yes"]:
                     collections_to_remove.append(franchise)
@@ -290,10 +293,7 @@ def main():
         print("=" * 80)
 
         # Filter out collections marked for removal
-        revised_collections = [
-            coll for coll in collections
-            if coll.get("franchise") not in collections_to_remove
-        ]
+        revised_collections = [coll for coll in collections if coll.get("franchise") not in collections_to_remove]
 
         # Update metadata
         revised_data = data.copy()
@@ -328,4 +328,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

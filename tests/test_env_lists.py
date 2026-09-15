@@ -1,20 +1,32 @@
 """End-to-end: env vars -> database -> per-list requester."""
+
 import os
 import sys
 import tempfile
 import types
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
 def stub(name, attrs=()):
     m = types.ModuleType(name)
-    for a in attrs: setattr(m, a, type(a, (), {}))
+    for a in attrs:
+        setattr(m, a, type(a, (), {}))
     sys.modules[name] = m
     return m
+
+
 for n in ("seleniumbase", "bs4", "halo"):
-    try: __import__(n)
-    except ImportError: stub(n, ("SB", "BeautifulSoup", "Halo"))
-c = stub("cryptography"); f = stub("cryptography.fernet", ("Fernet", "InvalidToken")); c.fernet = f
-d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a, **k: None
+    try:
+        __import__(n)
+    except ImportError:
+        stub(n, ("SB", "BeautifulSoup", "Halo"))
+c = stub("cryptography")
+f = stub("cryptography.fernet", ("Fernet", "InvalidToken"))
+c.fernet = f
+d = stub("dotenv")
+d.load_dotenv = lambda *a, **k: None
+d.set_key = lambda *a, **k: None
 
 tmp = tempfile.mkdtemp()
 import list_sync.utils.logger as lg
@@ -29,14 +41,21 @@ import list_sync.config as cfg
 
 
 # Force the environment fallback rather than ConfigManager (which needs a key).
-class BrokenConfigManager(Exception): pass
+class BrokenConfigManager(Exception):
+    pass
+
+
 cfg.ConfigManager = lambda *a, **k: (_ for _ in ()).throw(BrokenConfigManager())
 
 fail = []
+
+
 def check(label, got, want):
     ok = got == want
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
-    if not ok: fail.append(label)
+    if not ok:
+        fail.append(label)
+
 
 os.environ["OVERSEERR_USER_ID"] = "4"
 os.environ["IMDB_LISTS"] = "ls111111111::7, ls222222222 , https://www.imdb.com/list/ls333333333/::9"

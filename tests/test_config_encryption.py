@@ -12,6 +12,7 @@ cryptography is not installed for these suites, so Fernet and PBKDF2 are stood
 in for. What is being checked is the file format and which derivation each path
 picks - not the primitives themselves.
 """
+
 import base64
 import hashlib
 import json
@@ -25,14 +26,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def stub(n, a=()):
     m = types.ModuleType(n)
-    for x in a: setattr(m, x, type(x, (), {}))
-    sys.modules[n] = m; return m
+    for x in a:
+        setattr(m, x, type(x, (), {}))
+    sys.modules[n] = m
+    return m
 
 
 for n in ("seleniumbase", "bs4", "halo"):
-    try: __import__(n)
-    except ImportError: stub(n, ("SB", "BeautifulSoup", "Halo"))
-d = stub("dotenv"); d.load_dotenv = lambda *a, **k: None; d.set_key = lambda *a, **k: None
+    try:
+        __import__(n)
+    except ImportError:
+        stub(n, ("SB", "BeautifulSoup", "Halo"))
+d = stub("dotenv")
+d.load_dotenv = lambda *a, **k: None
+d.set_key = lambda *a, **k: None
 
 
 class FakeFernet:
@@ -96,7 +103,8 @@ fail = []
 def check(label, got, want):
     ok = got == want
     print(f"{'PASS' if ok else 'FAIL'}  {label}: got={got!r} want={want!r}")
-    if not ok: fail.append(label)
+    if not ok:
+        fail.append(label)
 
 
 DATA = {"overseerr_url": "http://seerr:5055", "api_key": "s3cret", "requester_user_id": "1"}
@@ -107,7 +115,7 @@ check("marked with the format magic", blob.startswith(config._CONFIG_MAGIC), Tru
 check("round-trips", config.decrypt_config(blob, "hunter2"), DATA)
 
 again = config.encrypt_config(DATA, "hunter2")
-salt_of = lambda b: b[len(config._CONFIG_MAGIC):len(config._CONFIG_MAGIC) + config._CONFIG_SALT_BYTES]
+salt_of = lambda b: b[len(config._CONFIG_MAGIC) : len(config._CONFIG_MAGIC) + config._CONFIG_SALT_BYTES]
 check("same password, different salt", salt_of(blob) == salt_of(again), False)
 check("so the same password gives different ciphertext", blob == again, False)
 check("and the second file round-trips too", config.decrypt_config(again, "hunter2"), DATA)
@@ -138,8 +146,7 @@ for blob_name, blob_bytes in [("new format", blob), ("legacy format", legacy)]:
 
 print()
 print("=== the work factor is set, not left at a token value ===")
-check("PBKDF2 rounds at or above the OWASP floor",
-      config._CONFIG_KDF_ROUNDS >= 600_000, True)
+check("PBKDF2 rounds at or above the OWASP floor", config._CONFIG_KDF_ROUNDS >= 600_000, True)
 check("salt is at least 16 bytes", config._CONFIG_SALT_BYTES >= 16, True)
 
 print()

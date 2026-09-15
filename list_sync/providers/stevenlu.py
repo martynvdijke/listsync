@@ -14,10 +14,10 @@ from . import register_provider
 def fetch_stevenlu_list(list_id=None) -> list[dict[str, Any]]:
     """
     Fetch Steven Lu's popular movies list from the JSON endpoint
-    
+
     Args:
         list_id: JSON URL or preset identifier (e.g., "stevenlu", "movies-metacritic-min70.json", or full URL)
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items
     """
@@ -35,7 +35,11 @@ def fetch_stevenlu_list(list_id=None) -> list[dict[str, Any]]:
         json_url = f"https://movies.stevenlu.com/{list_id}"
     else:
         # Preset identifier, construct URL
-        json_url = f"https://movies.stevenlu.com/{list_id}.json" if not list_id.endswith(".json") else f"https://movies.stevenlu.com/{list_id}"
+        json_url = (
+            f"https://movies.stevenlu.com/{list_id}.json"
+            if not list_id.endswith(".json")
+            else f"https://movies.stevenlu.com/{list_id}"
+        )
 
     logging.info(f"Fetching Steven Lu movies from: {json_url}")
 
@@ -74,18 +78,22 @@ def fetch_stevenlu_list(list_id=None) -> list[dict[str, Any]]:
                         logging.debug(f"Could not enrich '{title}' (IMDB: {imdb_id}) with Trakt: {e}")
 
                 # All items from this source are movies
-                media_items.append({
-                    "title": title,
-                    "imdb_id": imdb_id,
-                    "tmdb_id": tmdb_id,
-                    "media_type": "movie",
-                    "year": year,  # Enriched from Trakt API
-                })
+                media_items.append(
+                    {
+                        "title": title,
+                        "imdb_id": imdb_id,
+                        "tmdb_id": tmdb_id,
+                        "media_type": "movie",
+                        "year": year,  # Enriched from Trakt API
+                    }
+                )
 
                 # Log progress every 50 items
                 if len(media_items) % 50 == 0:
                     year_str = f"({year})" if year else "(year unknown)"
-                    logging.info(f"Progress: {len(media_items)}/{len(movies_data)} items processed, {items_enriched} enriched with year data")
+                    logging.info(
+                        f"Progress: {len(media_items)}/{len(movies_data)} items processed, {items_enriched} enriched with year data"
+                    )
                 elif len(media_items) <= 3:
                     year_str = f"({year})" if year else "(year unknown)"
                     logging.info(f"Added movie: {title} {year_str} (IMDB: {imdb_id}, TMDB: {tmdb_id})")

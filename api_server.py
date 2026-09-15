@@ -60,6 +60,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
+
 @app.on_event("startup")
 async def startup_event():
     """Set the server start time when the FastAPI app starts"""
@@ -77,7 +78,9 @@ async def startup_event():
     print(f"🚀 API Server started at: {datetime.fromtimestamp(SERVER_START_TIME).isoformat()}")
     print("📊 Dashboard available at: http://localhost:3222")
 
+
 # Add CORS middleware
+
 
 def get_allowed_origins():
     """Get allowed origins from environment or use defaults"""
@@ -99,12 +102,15 @@ def get_allowed_origins():
 
     # Add common local network patterns
     for i in range(1, 255):
-        default_origins.extend([
-            f"http://192.168.1.{i}:3222",
-            f"http://192.168.1.{i}:4222",
-        ])
+        default_origins.extend(
+            [
+                f"http://192.168.1.{i}:3222",
+                f"http://192.168.1.{i}:4222",
+            ]
+        )
 
     return default_origins
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -114,17 +120,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # Pydantic models for request/response
 class SyncIntervalUpdate(BaseModel):
     interval_hours: float
+
 
 class ListAdd(BaseModel):
     list_type: str
     list_id: str
     user_id: str = "1"
 
+
 class ListUserUpdate(BaseModel):
     user_id: str
+
 
 class ProcessInfo(BaseModel):
     pid: int
@@ -133,6 +143,7 @@ class ProcessInfo(BaseModel):
     cmdline: list[str]
     memory_percent: float | None = None
     cpu_percent: float | None = None
+
 
 class LogInfo(BaseModel):
     last_sync_start: str | None = None
@@ -144,12 +155,14 @@ class LogInfo(BaseModel):
     log_file_size: int = 0
     log_last_modified: str = ""
 
+
 class SystemStatus(BaseModel):
     database: dict[str, Any]
     process: dict[str, Any]
     sync: dict[str, Any]
     logs: LogInfo
     overall_health: str
+
 
 class LogEntry(BaseModel):
     id: str
@@ -160,11 +173,13 @@ class LogEntry(BaseModel):
     raw_line: str
     media_info: dict[str, Any] | None = None
 
+
 class LogStreamResponse(BaseModel):
     entries: list[LogEntry]
     total_count: int
     has_more: bool
     last_position: int
+
 
 # Utility functions
 def find_listsync_processes() -> list[ProcessInfo]:
@@ -178,18 +193,21 @@ def find_listsync_processes() -> list[ProcessInfo]:
                     if ("list_sync" in cmdline_str or "listsync" in cmdline_str) and "python" in cmdline_str:
                         # Filter out API server itself
                         if "api_server.py" not in cmdline_str:
-                            processes.append(ProcessInfo(
-                                pid=proc.info["pid"],
-                                cmdline=proc.info["cmdline"],
-                                created=datetime.fromtimestamp(proc.info["create_time"]).isoformat(),
-                                status=proc.status(),
-                            ))
+                            processes.append(
+                                ProcessInfo(
+                                    pid=proc.info["pid"],
+                                    cmdline=proc.info["cmdline"],
+                                    created=datetime.fromtimestamp(proc.info["create_time"]).isoformat(),
+                                    status=proc.status(),
+                                )
+                            )
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 pass
     except Exception as e:
         print(f"Error finding processes: {e}")
 
     return processes
+
 
 def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int = 200) -> LogInfo:
     """Parse log file for sync timing information"""
@@ -325,7 +343,9 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
                 log_info.sync_status = "unknown"
         else:
             log_info.sync_status = "unknown"
-            print(f"Cannot calculate next sync - last_sync: {log_info.last_sync_complete}, interval: {log_info.sync_interval_hours}")
+            print(
+                f"Cannot calculate next sync - last_sync: {log_info.last_sync_complete}, interval: {log_info.sync_interval_hours}"
+            )
 
         # Look for recent errors (last 50 lines only)
         error_lines = recent_lines[-50:] if len(recent_lines) > 50 else recent_lines
@@ -343,15 +363,16 @@ def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int
 
     return log_info
 
+
 def normalize_list_id(list_type: str, list_id: str) -> str:
     """
     Normalize list_id to match what's stored in item_lists table.
     Extracts the actual ID from URLs if needed.
-    
+
     Args:
         list_type: Type of list (e.g., 'mdblist', 'trakt', 'imdb')
         list_id: List ID (may be a URL or just an ID)
-        
+
     Returns:
         Normalized list_id that matches what's in item_lists table
     """
@@ -407,6 +428,7 @@ def normalize_list_id(list_type: str, list_id: str) -> str:
     # For other types or if extraction fails, try to get the last meaningful segment
     # This is a fallback that should work for most cases
     from urllib.parse import urlparse
+
     try:
         parsed = urlparse(list_id.rstrip("/"))
         path_parts = [p for p in parsed.path.split("/") if p]
@@ -430,7 +452,9 @@ def get_deduplicated_items():
         cursor = conn.cursor()
 
         # Get all synced items including year and source list info
-        cursor.execute("SELECT id, title, media_type, year, imdb_id, overseerr_id, status, last_synced, source_list_type, source_list_id FROM synced_items")
+        cursor.execute(
+            "SELECT id, title, media_type, year, imdb_id, overseerr_id, status, last_synced, source_list_type, source_list_id FROM synced_items"
+        )
         items = cursor.fetchall()
 
         unique_items = {}
@@ -447,7 +471,18 @@ def get_deduplicated_items():
         }
 
         for item in items:
-            item_id, title, media_type, year, imdb_id, overseerr_id, status, last_synced, source_list_type, source_list_id = item
+            (
+                item_id,
+                title,
+                media_type,
+                year,
+                imdb_id,
+                overseerr_id,
+                status,
+                last_synced,
+                source_list_type,
+                source_list_id,
+            ) = item
 
             # Create unique key based on title and media type
             key = f"{title}_{media_type}".lower().strip()
@@ -497,6 +532,7 @@ def get_deduplicated_items():
         print(f"Error getting deduplicated items: {e}")
         return []
 
+
 def analyze_data_quality():
     """Analyze data quality with deduplication stats"""
     if not os.path.exists(DB_FILE):
@@ -524,9 +560,11 @@ def analyze_data_quality():
 
             # Create unique key (prefer items with overseerr_id and more recent sync)
             key = f"{title}_{media_type}".lower()
-            if key not in unique_items or \
-               (overseerr_id and not unique_items[key][4]) or \
-               last_synced > unique_items[key][6]:
+            if (
+                key not in unique_items
+                or (overseerr_id and not unique_items[key][4])
+                or last_synced > unique_items[key][6]
+            ):
                 unique_items[key] = item
 
         # Categorize statuses
@@ -553,6 +591,7 @@ def analyze_data_quality():
     except Exception as e:
         print(f"Error analyzing data quality: {e}")
         return None
+
 
 def parse_docker_logs_for_activity(limit: int = 10) -> list[dict[str, Any]]:
     """Parse ListSync core logs for recent sync activity"""
@@ -612,7 +651,7 @@ def parse_docker_logs_for_activity(limit: int = 10) -> list[dict[str, Any]]:
                 timestamp_match = re.match(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", line)
                 if timestamp_match:
                     timestamp_str = timestamp_match.group(1)
-                    log_content = line[len(timestamp_match.group(0)):].strip()
+                    log_content = line[len(timestamp_match.group(0)) :].strip()
                 else:
                     # Fallback: use current time if no timestamp found
                     timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -647,10 +686,26 @@ def parse_docker_logs_for_activity(limit: int = 10) -> list[dict[str, Any]]:
 
                     # Common TV show indicators
                     tv_indicators = [
-                        "game of thrones", "breaking bad", "the walking dead", "big bang theory",
-                        "stranger things", "sherlock", "how i met your mother", "dexter", "friends",
-                        "lost", "rick and morty", "black mirror", "house", "the office", "arrow",
-                        "chernobyl", "better call saul", "mr. robot", "the boys", "squid game",
+                        "game of thrones",
+                        "breaking bad",
+                        "the walking dead",
+                        "big bang theory",
+                        "stranger things",
+                        "sherlock",
+                        "how i met your mother",
+                        "dexter",
+                        "friends",
+                        "lost",
+                        "rick and morty",
+                        "black mirror",
+                        "house",
+                        "the office",
+                        "arrow",
+                        "chernobyl",
+                        "better call saul",
+                        "mr. robot",
+                        "the boys",
+                        "squid game",
                     ]
 
                     title_lower = title.lower()
@@ -698,7 +753,9 @@ def parse_docker_logs_for_activity(limit: int = 10) -> list[dict[str, Any]]:
         if activities:
             print("DEBUG: First 10 activities (sorted by item number):")
             for i, activity in enumerate(activities[:10]):
-                print(f"  {i+1}. #{activity['item_number']}: {activity['title']} - {activity['action']} - {activity['last_synced']}")
+                print(
+                    f"  {i+1}. #{activity['item_number']}: {activity['title']} - {activity['action']} - {activity['last_synced']}"
+                )
 
         # No deduplication - return raw stream of recent activity
         print(f"Returning {len(activities[:limit])} raw activities from logs")
@@ -708,8 +765,10 @@ def parse_docker_logs_for_activity(limit: int = 10) -> list[dict[str, Any]]:
     except Exception as e:
         print(f"Error parsing logs: {e}")
         import traceback
+
         traceback.print_exc()
         return []
+
 
 def parse_failures_from_logs():
     """Parse failure items from the log file"""
@@ -769,14 +828,16 @@ def parse_failures_from_logs():
             not_found_match = re.search(r"•\s+(.+?)\s+\(Not Found\)", line)
             if not_found_match:
                 item_name = not_found_match.group(1).strip()
-                failures_data["not_found"].append({
-                    "name": item_name,
-                    "timestamp": timestamp_str,
-                    "item_number": None,
-                    "total_items": None,
-                    "sync_session": None,
-                    "error_details": "Item not found in Seerr database",
-                })
+                failures_data["not_found"].append(
+                    {
+                        "name": item_name,
+                        "timestamp": timestamp_str,
+                        "item_number": None,
+                        "total_items": None,
+                        "sync_session": None,
+                        "error_details": "Item not found in Seerr database",
+                    }
+                )
                 continue
 
             # Look for HTTP errors like: "• Star Wars: Andor (2022) (Error: 404 Not Found)"
@@ -794,14 +855,16 @@ def parse_failures_from_logs():
                     if close_count > open_count:
                         error_details = error_details[:-1]
 
-                failures_data["errors"].append({
-                    "name": item_name,
-                    "timestamp": timestamp_str,
-                    "item_number": None,
-                    "total_items": None,
-                    "sync_session": None,
-                    "error_details": error_details,
-                })
+                failures_data["errors"].append(
+                    {
+                        "name": item_name,
+                        "timestamp": timestamp_str,
+                        "item_number": None,
+                        "total_items": None,
+                        "sync_session": None,
+                        "error_details": error_details,
+                    }
+                )
                 continue
 
             # If we hit an empty line or new section, exit not found section
@@ -877,6 +940,7 @@ def parse_failures_from_logs():
 
     return failures_data
 
+
 def parse_historic_items_from_logs():
     """Parse all items from the entire log file for historic data"""
     log_file_paths = [
@@ -949,7 +1013,9 @@ def parse_historic_items_from_logs():
                 current_sync_session = {
                     "timestamp": timestamp_str,
                     "total_items": int(total_match.group(1)),
-                    "session_id": f"sync_{timestamp_str}_{total_match.group(1)}" if timestamp_str else f"sync_unknown_{len(historic_data['sync_sessions'])}",
+                    "session_id": f"sync_{timestamp_str}_{total_match.group(1)}"
+                    if timestamp_str
+                    else f"sync_unknown_{len(historic_data['sync_sessions'])}",
                 }
                 historic_data["sync_sessions"].append(current_sync_session)
 
@@ -969,7 +1035,7 @@ def parse_historic_items_from_logs():
                 year_patterns = [
                     r"\((\d{4})\)",  # (2023)
                     r"\s(\d{4})\s",  # 2023 with spaces
-                    r"\s(\d{4})$",   # 2023 at end
+                    r"\s(\d{4})$",  # 2023 at end
                 ]
 
                 for pattern in year_patterns:
@@ -986,10 +1052,26 @@ def parse_historic_items_from_logs():
                 # Determine media type
                 media_type = "movie"  # default
                 tv_indicators = [
-                    "game of thrones", "breaking bad", "the walking dead", "big bang theory",
-                    "stranger things", "sherlock", "how i met your mother", "dexter", "friends",
-                    "lost", "rick and morty", "black mirror", "house", "the office", "arrow",
-                    "chernobyl", "better call saul", "mr. robot", "the boys", "squid game",
+                    "game of thrones",
+                    "breaking bad",
+                    "the walking dead",
+                    "big bang theory",
+                    "stranger things",
+                    "sherlock",
+                    "how i met your mother",
+                    "dexter",
+                    "friends",
+                    "lost",
+                    "rick and morty",
+                    "black mirror",
+                    "house",
+                    "the office",
+                    "arrow",
+                    "chernobyl",
+                    "better call saul",
+                    "mr. robot",
+                    "the boys",
+                    "squid game",
                 ]
 
                 if any(indicator in title.lower() for indicator in tv_indicators):
@@ -1040,8 +1122,9 @@ def parse_historic_items_from_logs():
                     existing_priority = status_priority.get(existing["status"], 0)
 
                     # Replace if higher priority or same priority but more recent
-                    if (current_priority > existing_priority or
-                        (current_priority == existing_priority and iso_timestamp > existing["timestamp"])):
+                    if current_priority > existing_priority or (
+                        current_priority == existing_priority and iso_timestamp > existing["timestamp"]
+                    ):
                         all_items[unique_key] = item_data
 
                 break  # Found a match, don't check other patterns
@@ -1075,6 +1158,7 @@ def parse_historic_items_from_logs():
     print(f"  Sync sessions found: {len(historic_data['sync_sessions'])}")
 
     return historic_data
+
 
 def get_duplicates_from_current_sync():
     """Calculate actual duplicates (same name appearing multiple times) within the most recent sync session from logs"""
@@ -1145,11 +1229,14 @@ def get_duplicates_from_current_sync():
 
                 # Count duplicates
                 from collections import Counter
+
                 name_counts = Counter(item_names)
                 duplicates_count = sum(count - 1 for count in name_counts.values() if count > 1)
 
                 print(f"DEBUG - Found {len(item_names)} total items processed in sync session")
-                print(f"DEBUG - Found {len([count for count in name_counts.values() if count > 1])} items with duplicates")
+                print(
+                    f"DEBUG - Found {len([count for count in name_counts.values() if count > 1])} items with duplicates"
+                )
                 print(f"DEBUG - Total duplicate occurrences: {duplicates_count}")
 
                 # Debug: Show some duplicate examples
@@ -1168,6 +1255,7 @@ def get_duplicates_from_current_sync():
     print("DEBUG - No sync session found in logs")
     return 0
 
+
 def categorize_log_entry(message: str, level: str) -> str:
     """Categorize log entries based on comprehensive regex patterns"""
     message_lower = message.lower()
@@ -1175,63 +1263,120 @@ def categorize_log_entry(message: str, level: str) -> str:
     # Pattern-based categorization with priority order
 
     # Sync operations (patterns 14, 21, 29)
-    if any(keyword in message_lower for keyword in [
-        "starting automated sync", "starting in automated mode", "sync operation completed",
-        "full sync", "sync complete",
-    ]):
+    if any(
+        keyword in message_lower
+        for keyword in [
+            "starting automated sync",
+            "starting in automated mode",
+            "sync operation completed",
+            "full sync",
+            "sync complete",
+        ]
+    ):
         return "sync"
 
     # Web scraping operations - IMDb, Letterboxd, MDBList, Trakt (patterns 6, 7, 8, 9, 16, 18, 23, 24, 25, 26, 27, 28)
-    if any(keyword in message_lower for keyword in [
-        "fetching imdb list", "fetching letterboxd", "fetching mdblist",
-        "attempting to load url", "list fetched successfully",
-        "found", "items using selector", "processing page", "trying to find chart",
-        "chart parent found", "clicking next page", "total items in chart",
-        "beautifulsoup", "selenium", "scraping",
-    ]):
+    if any(
+        keyword in message_lower
+        for keyword in [
+            "fetching imdb list",
+            "fetching letterboxd",
+            "fetching mdblist",
+            "attempting to load url",
+            "list fetched successfully",
+            "found",
+            "items using selector",
+            "processing page",
+            "trying to find chart",
+            "chart parent found",
+            "clicking next page",
+            "total items in chart",
+            "beautifulsoup",
+            "selenium",
+            "scraping",
+        ]
+    ):
         return "web_scraping"
 
     # API Calls - Seerr, TMDb, Trakt API (pattern 13, 19)
-    if any(keyword in message_lower for keyword in [
-        "overseerr api", "api connection", "tmdb", "detailed response for movie id",
-        "fetching trakt", "trakt api", "api request", "api call",
-        '"id":', "response for",
-    ]) or ("{" in message and ('"id"' in message or "tmdbId" in message or "imdbId" in message)):
+    if any(
+        keyword in message_lower
+        for keyword in [
+            "overseerr api",
+            "api connection",
+            "tmdb",
+            "detailed response for movie id",
+            "fetching trakt",
+            "trakt api",
+            "api request",
+            "api call",
+            '"id":',
+            "response for",
+        ]
+    ) or ("{" in message and ('"id"' in message or "tmdbId" in message or "imdbId" in message)):
         return "api_calls"
 
     # Database operations - Title matching, searching (patterns 10, 11, 12, 20)
-    if any(keyword in message_lower for keyword in [
-        "searching for", "match candidate", "final match for", "score:",
-        "database", "exact year match", "close year match",
-    ]):
+    if any(
+        keyword in message_lower
+        for keyword in [
+            "searching for",
+            "match candidate",
+            "final match for",
+            "score:",
+            "database",
+            "exact year match",
+            "close year match",
+        ]
+    ):
         return "database"
 
     # Item processing operations (patterns 3, 4, 5)
-    if any(keyword in message_lower for keyword in [
-        "added tv:", "added movie:", "processing item", "requesting",
-    ]):
+    if any(
+        keyword in message_lower
+        for keyword in [
+            "added tv:",
+            "added movie:",
+            "processing item",
+            "requesting",
+        ]
+    ):
         return "item_processing"
 
     # Webhook and notification operations (patterns 15, 30)
-    if any(keyword in message_lower for keyword in [
-        "discord webhook", "webhook notification", "webhook integration",
-    ]):
+    if any(
+        keyword in message_lower
+        for keyword in [
+            "discord webhook",
+            "webhook notification",
+            "webhook integration",
+        ]
+    ):
         return "webhook"
 
     # Pagination operations (pattern 17)
-    if any(keyword in message_lower for keyword in [
-        "no more pages available", "pagination",
-    ]):
+    if any(
+        keyword in message_lower
+        for keyword in [
+            "no more pages available",
+            "pagination",
+        ]
+    ):
         return "pagination"
 
     # Process management (pattern 22)
-    if any(keyword in message_lower for keyword in [
-        "process pid", "sigusr1",
-    ]):
+    if any(
+        keyword in message_lower
+        for keyword in [
+            "process pid",
+            "sigusr1",
+        ]
+    ):
         return "process"
 
     # Default category
     return "general"
+
 
 def extract_media_info(message: str) -> dict[str, Any] | None:
     """Extract comprehensive media information from log messages using all 30 patterns"""
@@ -1548,6 +1693,7 @@ def extract_media_info(message: str) -> dict[str, Any] | None:
 
     return None
 
+
 def parse_log_line(line: str, line_number: int) -> LogEntry | None:
     """Parse a single log line into a LogEntry"""
     # Pattern: "YYYY-MM-DD HH:MM:SS,mmm - LEVEL - MESSAGE"
@@ -1579,6 +1725,7 @@ def parse_log_line(line: str, line_number: int) -> LogEntry | None:
         media_info=media_info,
     )
 
+
 def get_line_number(entry):
     """Extract line number from log entry ID for secondary sorting"""
     try:
@@ -1586,6 +1733,7 @@ def get_line_number(entry):
         return int(entry.id.split("-")[1])
     except (IndexError, ValueError):
         return 0
+
 
 def get_log_entries(
     log_path: str = "data/list_sync.log",
@@ -1624,9 +1772,10 @@ def get_log_entries(
         if search:
             search_lower = search.lower()
             filtered_entries = [
-                e for e in filtered_entries
-                if search_lower in e.message.lower() or
-                   (e.media_info and e.media_info.get("title", "").lower().find(search_lower) != -1)
+                e
+                for e in filtered_entries
+                if search_lower in e.message.lower()
+                or (e.media_info and e.media_info.get("title", "").lower().find(search_lower) != -1)
             ]
 
         # Sort by timestamp and line number to maintain original file order for same timestamps
@@ -1654,6 +1803,7 @@ def get_log_entries(
     except Exception as e:
         print(f"Error reading log file: {e}")
         return LogStreamResponse(entries=[], total_count=0, has_more=False, last_position=0)
+
 
 async def stream_log_updates(
     log_path: str = "data/list_sync.log",
@@ -1688,10 +1838,17 @@ async def stream_log_updates(
                             # Apply filters
                             if level_filter and entry.level != level_filter:
                                 continue
-                            if category_filters and len(category_filters) > 0 and entry.category not in category_filters:
+                            if (
+                                category_filters
+                                and len(category_filters) > 0
+                                and entry.category not in category_filters
+                            ):
                                 continue
                             if search and search.lower() not in entry.message.lower():
-                                if not (entry.media_info and entry.media_info.get("title", "").lower().find(search.lower()) != -1):
+                                if not (
+                                    entry.media_info
+                                    and entry.media_info.get("title", "").lower().find(search.lower()) != -1
+                                ):
                                     continue
 
                             new_entries.append(entry)
@@ -1711,7 +1868,9 @@ async def stream_log_updates(
 
         await asyncio.sleep(1)  # Check for updates every second
 
+
 # API Endpoints
+
 
 @app.get("/api/system/status")
 async def get_system_status():
@@ -1775,15 +1934,18 @@ async def get_system_status():
         overall_health=overall_health,
     )
 
+
 @app.get("/api/system/processes")
 async def get_processes():
     """Get ListSync process information"""
     return find_listsync_processes()
 
+
 @app.get("/api/system/logs")
 async def get_log_info():
     """Get log file analysis"""
     return parse_log_for_sync_info()
+
 
 @app.get("/api/system/database/test")
 async def test_database():
@@ -1795,6 +1957,7 @@ async def test_database():
         return {"connected": True}
     except Exception as e:
         return {"connected": False, "error": str(e)}
+
 
 @app.get("/api/system/health")
 async def get_health_check():
@@ -1826,11 +1989,12 @@ async def get_health_check():
 # Setup Wizard Endpoints - First-Run Configuration
 # ============================================================================
 
+
 @app.get("/api/setup/status")
 async def get_setup_status():
     """
     Check setup status and determine if wizard should be shown.
-    
+
     Returns:
         - is_complete: Whether setup wizard has been completed
         - has_env: Whether .env file exists with basic config
@@ -1899,7 +2063,7 @@ async def migrate_from_env():
 async def test_overseerr_connection(data: dict):
     """
     Test Seerr connection with provided URL and API key.
-    
+
     Expected data:
         - seerr_url: str
         - seerr_api_key: str
@@ -1978,14 +2142,17 @@ async def test_overseerr_connection(data: dict):
             if users:
                 try:
                     from list_sync.database import save_seerr_users
+
                     formatted_users = []
                     for user in users:
-                        formatted_users.append({
-                            "id": str(user.get("id")),
-                            "display_name": user.get("displayName", user.get("username", "Unknown")),
-                            "email": user.get("email", ""),
-                            "avatar": user.get("avatar", ""),
-                        })
+                        formatted_users.append(
+                            {
+                                "id": str(user.get("id")),
+                                "display_name": user.get("displayName", user.get("username", "Unknown")),
+                                "email": user.get("email", ""),
+                                "avatar": user.get("avatar", ""),
+                            }
+                        )
                     save_seerr_users(formatted_users)
                     logging.info(f"Pre-populated {len(formatted_users)} Seerr users to database during setup")
                 except Exception as e:
@@ -2021,7 +2188,9 @@ async def test_overseerr_connection(data: dict):
             except:
                 status_data = {}
 
-            logging.info(f"Seerr connection test successful - API key validated, found user: {default_user.get('displayName') or default_user.get('username')}")
+            logging.info(
+                f"Seerr connection test successful - API key validated, found user: {default_user.get('displayName') or default_user.get('username')}"
+            )
 
             # Prepare user info for response
             user_info = {
@@ -2163,12 +2332,14 @@ async def sync_seerr_users_endpoint():
             if full_avatar and full_avatar.startswith(("http://", "https://")):
                 proxied_avatar = f"/api/images/proxy?url={quote(full_avatar, safe='')}"
 
-            formatted_users.append({
-                "id": str(user.get("id")),
-                "display_name": user.get("displayName", user.get("username", "Unknown")),
-                "email": user.get("email", ""),
-                "avatar": proxied_avatar or full_avatar or "",
-            })
+            formatted_users.append(
+                {
+                    "id": str(user.get("id")),
+                    "display_name": user.get("displayName", user.get("username", "Unknown")),
+                    "email": user.get("email", ""),
+                    "avatar": proxied_avatar or full_avatar or "",
+                }
+            )
 
         # Save to database
         save_seerr_users(formatted_users)
@@ -2192,7 +2363,7 @@ async def sync_seerr_users_endpoint():
 async def test_trakt_client_id(data: dict):
     """
     Test Trakt Client ID validity.
-    
+
     Expected data:
         - trakt_client_id: str
     """
@@ -2324,7 +2495,7 @@ async def test_trakt_client_id(data: dict):
 async def save_step1_essential(data: dict):
     """
     Save and validate Step 1: Essential configuration (Seerr).
-    
+
     Expected data:
         - seerr_url: str
         - seerr_api_key: str
@@ -2348,6 +2519,7 @@ async def save_step1_essential(data: dict):
             # that are never a real Seerr. Private addresses stay allowed:
             # a self-hosted instance is normally on one.
             from list_sync.utils.url_safety import validate_outbound_url
+
             _ok, _reason = validate_outbound_url(seerr_url, allow_private=True)
             if not _ok:
                 errors["overseerr_url"] = _reason
@@ -2373,7 +2545,9 @@ async def save_step1_essential(data: dict):
                     logging.error("Seerr API key validation failed: 401 Unauthorized")
                 # If we get 403, the API key doesn't have permission
                 elif response.status_code == 403:
-                    errors["overseerr_api_key"] = "API key does not have required permissions. Please check your API key."
+                    errors["overseerr_api_key"] = (
+                        "API key does not have required permissions. Please check your API key."
+                    )
                     logging.error("Seerr API key validation failed: 403 Forbidden")
                 else:
                     # Raise for other HTTP errors
@@ -2398,7 +2572,9 @@ async def save_step1_essential(data: dict):
                 if e.response.status_code == 401:
                     errors["overseerr_api_key"] = "Invalid API key. Please check your Seerr API key."
                 elif e.response.status_code == 403:
-                    errors["overseerr_api_key"] = "API key does not have required permissions. Please check your API key."
+                    errors["overseerr_api_key"] = (
+                        "API key does not have required permissions. Please check your API key."
+                    )
                 else:
                     errors["overseerr_url"] = f"HTTP {e.response.status_code}: Connection test failed"
             except requests.exceptions.RequestException as e:
@@ -2427,6 +2603,7 @@ async def save_step1_essential(data: dict):
     except Exception as e:
         logging.exception(f"Error in step 1: {e}")
         import traceback
+
         logging.exception(f"Traceback: {traceback.format_exc()}")
         # Return error in same format as validation errors
         return {
@@ -2441,7 +2618,7 @@ async def save_step1_essential(data: dict):
 async def save_step2_configuration(data: dict):
     """
     Save and validate Step 2: Configuration (Trakt + Sync settings + Notifications).
-    
+
     Expected data:
         - trakt_client_id: str
         - sync_interval: int
@@ -2469,11 +2646,16 @@ async def save_step2_configuration(data: dict):
         if not errors and trakt_client_id:
             # Validate format first - check for valid hex string
             import re
+
             if len(trakt_client_id) < 16:
-                errors["trakt_client_id"] = "Invalid Trakt Client ID format. Client ID is too short (minimum 16 characters)."
+                errors["trakt_client_id"] = (
+                    "Invalid Trakt Client ID format. Client ID is too short (minimum 16 characters)."
+                )
                 logging.error("Trakt Client ID validation failed: Too short")
             elif not re.match(r"^[a-f0-9]+$", trakt_client_id.lower()):
-                errors["trakt_client_id"] = "Invalid Trakt Client ID format. Client ID should contain only hexadecimal characters (0-9, a-f)."
+                errors["trakt_client_id"] = (
+                    "Invalid Trakt Client ID format. Client ID should contain only hexadecimal characters (0-9, a-f)."
+                )
                 logging.error("Trakt Client ID validation failed: Invalid format")
             else:
                 try:
@@ -2496,15 +2678,25 @@ async def save_step2_configuration(data: dict):
                         try:
                             error_data = response.json()
                             error_message = error_data.get("error", "").lower()
-                            if "invalid" in error_message or "unauthorized" in error_message or "forbidden" in error_message:
-                                errors["trakt_client_id"] = "Invalid Trakt Client ID. Please verify your Client ID is correct."
+                            if (
+                                "invalid" in error_message
+                                or "unauthorized" in error_message
+                                or "forbidden" in error_message
+                            ):
+                                errors["trakt_client_id"] = (
+                                    "Invalid Trakt Client ID. Please verify your Client ID is correct."
+                                )
                                 logging.error("Trakt Client ID validation failed: Invalid Client ID")
                             else:
-                                errors["trakt_client_id"] = "Invalid Trakt Client ID. The API returned unauthorized. Please check your Client ID."
+                                errors["trakt_client_id"] = (
+                                    "Invalid Trakt Client ID. The API returned unauthorized. Please check your Client ID."
+                                )
                                 logging.error("Trakt Client ID validation failed: Unauthorized")
                         except:
                             # Can't parse error, assume invalid Client ID
-                            errors["trakt_client_id"] = "Invalid Trakt Client ID. The API returned unauthorized. Please check your Client ID."
+                            errors["trakt_client_id"] = (
+                                "Invalid Trakt Client ID. The API returned unauthorized. Please check your Client ID."
+                            )
                             logging.exception("Trakt Client ID validation failed: Unauthorized")
                     elif response.status_code == 400:
                         errors["trakt_client_id"] = "Invalid Trakt Client ID format. Please check your Client ID."
@@ -2520,9 +2712,15 @@ async def save_step2_configuration(data: dict):
                             logging.info("Trakt Client ID validation successful")
                         else:
                             # Unexpected status - be more cautious
-                            logging.warning(f"Trakt Client ID validation returned unexpected status: {response.status_code}")
-                            errors["trakt_client_id"] = f"Unexpected response from Trakt API (status {response.status_code}). Please check your Client ID."
-                            logging.error(f"Trakt Client ID validation failed: Unexpected status {response.status_code}")
+                            logging.warning(
+                                f"Trakt Client ID validation returned unexpected status: {response.status_code}"
+                            )
+                            errors["trakt_client_id"] = (
+                                f"Unexpected response from Trakt API (status {response.status_code}). Please check your Client ID."
+                            )
+                            logging.error(
+                                f"Trakt Client ID validation failed: Unexpected status {response.status_code}"
+                            )
                 except requests.exceptions.Timeout:
                     errors["trakt_client_id"] = "Connection timeout. Check your network connection."
                 except requests.exceptions.ConnectionError:
@@ -2622,7 +2820,7 @@ async def save_step2_configuration(data: dict):
 async def save_step3_content_sources(data: dict):
     """
     Save and validate Step 3: Content Sources (at least one required).
-    
+
     Expected data:
         - imdb_lists: str
         - trakt_lists: str
@@ -2646,9 +2844,16 @@ async def save_step3_content_sources(data: dict):
 
         # Check if at least one list source is provided
         list_fields = [
-            "imdb_lists", "trakt_lists", "trakt_special_lists", "letterboxd_lists",
-            "anilist_lists", "mdblist_lists", "stevenlu_lists", "tmdb_lists",
-            "tvdb_lists", "simkl_lists",
+            "imdb_lists",
+            "trakt_lists",
+            "trakt_special_lists",
+            "letterboxd_lists",
+            "anilist_lists",
+            "mdblist_lists",
+            "stevenlu_lists",
+            "tmdb_lists",
+            "tvdb_lists",
+            "simkl_lists",
         ]
 
         has_any_list = any(data.get(field, "").strip() for field in list_fields)
@@ -2710,6 +2915,7 @@ async def complete_setup():
 
         # Load lists from config into database
         from list_sync.config import load_env_lists
+
         load_env_lists()
 
         logging.info("Setup wizard completed successfully")
@@ -2762,6 +2968,7 @@ async def get_sync_interval():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.put("/api/sync-interval")
 async def update_sync_interval(update: SyncIntervalUpdate):
     """Update sync interval in database"""
@@ -2775,6 +2982,7 @@ async def update_sync_interval(update: SyncIntervalUpdate):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/sync-interval/sync-from-env")
 async def sync_interval_from_env():
@@ -2797,6 +3005,7 @@ async def sync_interval_from_env():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/stats/sync")
 async def get_sync_stats():
@@ -2831,7 +3040,9 @@ async def get_sync_stats():
 
         # Calculate simplified metrics
         total_processed = len(unique_items)
-        successful_items = newly_requested_count + already_requested_count + available_count + skipped_count  # All non-error items
+        successful_items = (
+            newly_requested_count + already_requested_count + available_count + skipped_count
+        )  # All non-error items
         total_requested = newly_requested_count  # Only items actually requested during this sync
         total_errors = log_based_errors  # Use same count as /failures page for consistency
 
@@ -2841,7 +3052,9 @@ async def get_sync_stats():
         # Debug: Print status breakdown
         print("DEBUG - Simplified Stats:")
         print(f"  Total Processed: {total_processed}")
-        print(f"  Successful: {successful_items} (newly requested: {newly_requested_count}, already requested: {already_requested_count}, available: {available_count}, skipped: {skipped_count})")
+        print(
+            f"  Successful: {successful_items} (newly requested: {newly_requested_count}, already requested: {already_requested_count}, available: {available_count}, skipped: {skipped_count})"
+        )
         print(f"  Total Requested (NEW): {total_requested}")
         print(f"  Already Requested: {already_requested_count}")
         print(f"  Errors: {total_errors} (from logs, same as /failures page)")
@@ -2873,6 +3086,7 @@ async def get_sync_stats():
         print(f"ERROR in get_sync_stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/stats/data-quality")
 async def get_data_quality():
     """Get data quality analysis"""
@@ -2883,6 +3097,7 @@ async def get_data_quality():
         return analysis
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/stats/status-breakdown")
 async def get_status_breakdown():
@@ -2913,6 +3128,7 @@ async def get_status_breakdown():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/activity/recent")
 async def get_recent_activity(
@@ -2979,14 +3195,16 @@ async def get_recent_activity(
                     timestamp_match = re.search(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
                     timestamp = timestamp_match.group(1) if timestamp_match else None
 
-                    recent_items.append({
-                        "title": title,
-                        "status": "available",
-                        "status_text": "Already Available",
-                        "timestamp": timestamp,
-                        "position": int(position),
-                        "total": int(total),
-                    })
+                    recent_items.append(
+                        {
+                            "title": title,
+                            "status": "available",
+                            "status_text": "Already Available",
+                            "timestamp": timestamp,
+                            "position": int(position),
+                            "total": int(total),
+                        }
+                    )
 
             elif "❓" in line and "Not Found" in line:
                 # Extract: "❓ Star Wars: Andor: Not Found (5/10)"
@@ -2999,14 +3217,16 @@ async def get_recent_activity(
                     timestamp_match = re.search(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
                     timestamp = timestamp_match.group(1) if timestamp_match else None
 
-                    recent_items.append({
-                        "title": title,
-                        "status": "not_found",
-                        "status_text": "Not Found",
-                        "timestamp": timestamp,
-                        "position": int(position),
-                        "total": int(total),
-                    })
+                    recent_items.append(
+                        {
+                            "title": title,
+                            "status": "not_found",
+                            "status_text": "Not Found",
+                            "timestamp": timestamp,
+                            "position": int(position),
+                            "total": int(total),
+                        }
+                    )
 
             elif "✅" in line and "Requested" in line:
                 # Extract: "✅  Title: Requested (1/10)"
@@ -3019,14 +3239,16 @@ async def get_recent_activity(
                     timestamp_match = re.search(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
                     timestamp = timestamp_match.group(1) if timestamp_match else None
 
-                    recent_items.append({
-                        "title": title,
-                        "status": "requested",
-                        "status_text": "Requested",
-                        "timestamp": timestamp,
-                        "position": int(position),
-                        "total": int(total),
-                    })
+                    recent_items.append(
+                        {
+                            "title": title,
+                            "status": "requested",
+                            "status_text": "Requested",
+                            "timestamp": timestamp,
+                            "position": int(position),
+                            "total": int(total),
+                        }
+                    )
 
             elif "⏭️" in line and "Skipped" in line:
                 # Extract: "⏭️  Title: Skipped (1/10)"
@@ -3039,14 +3261,16 @@ async def get_recent_activity(
                     timestamp_match = re.search(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
                     timestamp = timestamp_match.group(1) if timestamp_match else None
 
-                    recent_items.append({
-                        "title": title,
-                        "status": "skipped",
-                        "status_text": "Skipped",
-                        "timestamp": timestamp,
-                        "position": int(position),
-                        "total": int(total),
-                    })
+                    recent_items.append(
+                        {
+                            "title": title,
+                            "status": "skipped",
+                            "status_text": "Skipped",
+                            "timestamp": timestamp,
+                            "position": int(position),
+                            "total": int(total),
+                        }
+                    )
 
         # Sort by timestamp (most recent first) and position
         recent_items.sort(key=lambda x: (x["timestamp"] or "", x["position"]), reverse=True)
@@ -3083,6 +3307,7 @@ async def get_recent_activity(
             "error": f"Failed to parse log file: {e!s}",
         }
 
+
 @app.get("/api/activity/recent/docker")
 async def get_recent_activity_from_docker(limit: int = Query(10, ge=1, le=100)):
     """Get recent sync activity specifically from Docker logs"""
@@ -3091,6 +3316,7 @@ async def get_recent_activity_from_docker(limit: int = Query(10, ge=1, le=100)):
         return activities
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/lists")
 async def get_lists():
@@ -3111,6 +3337,7 @@ async def get_lists():
                 # Parse URL to get the last meaningful segment
                 try:
                     from urllib.parse import urlparse
+
                     parsed = urlparse(list_id.rstrip("/"))
                     path_parts = [p for p in parsed.path.split("/") if p]
 
@@ -3155,23 +3382,26 @@ async def get_lists():
                     print(f"Error converting timestamp {last_synced}: {e}")
                     # Keep original timestamp as fallback
 
-            formatted_lists.append({
-                "id": i + 1,
-                "list_type": list_item["type"],
-                "list_id": list_item["id"],
-                "list_url": list_item.get("url"),  # Include the stored URL
-                "display_name": display_name,
-                "item_count": list_item.get("item_count", 0),  # Include item count from database
-                "last_synced": last_synced,  # Include converted last_synced timestamp
-                "user_id": list_item.get("user_id", "1"),  # Include user_id for per-list user assignment
-                # Resolve the name here so the UI can show who a list requests
-                # as even before the users store has loaded
-                "user_display_name": user_names.get(str(list_item.get("user_id", "1"))) or None,
-            })
+            formatted_lists.append(
+                {
+                    "id": i + 1,
+                    "list_type": list_item["type"],
+                    "list_id": list_item["id"],
+                    "list_url": list_item.get("url"),  # Include the stored URL
+                    "display_name": display_name,
+                    "item_count": list_item.get("item_count", 0),  # Include item count from database
+                    "last_synced": last_synced,  # Include converted last_synced timestamp
+                    "user_id": list_item.get("user_id", "1"),  # Include user_id for per-list user assignment
+                    # Resolve the name here so the UI can show who a list requests
+                    # as even before the users store has loaded
+                    "user_display_name": user_names.get(str(list_item.get("user_id", "1"))) or None,
+                }
+            )
 
         return {"lists": formatted_lists}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/lists/debug")
 async def get_lists_debug():
@@ -3205,14 +3435,13 @@ async def get_lists_debug():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 def _overseerr_user_names() -> dict[str, str]:
     """Map Seerr user IDs to display names, from the local user cache."""
     try:
         from list_sync.database import get_seerr_users
-        return {
-            str(u.get("id")): (u.get("display_name") or u.get("email") or "")
-            for u in (get_seerr_users() or [])
-        }
+
+        return {str(u.get("id")): (u.get("display_name") or u.get("email") or "") for u in (get_seerr_users() or [])}
     except Exception as e:
         logging.debug(f"Could not load Seerr user names: {e}")
         return {}
@@ -3233,6 +3462,7 @@ def _validate_overseerr_user(user_id: str) -> str | None:
     """
     try:
         from list_sync.database import get_seerr_users
+
         users = get_seerr_users()
     except Exception as e:
         logging.debug(f"Could not verify user {user_id}: {e}")
@@ -3330,6 +3560,7 @@ async def add_list(list_add: ListAdd):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/lists/{list_type}/{list_id:path}/items")
 async def get_list_items_endpoint(list_type: str, list_id: str, limit: int = Query(20, ge=1, le=100)):
     """Get items from a specific list with enriched metadata"""
@@ -3374,6 +3605,7 @@ async def get_list_items_endpoint(list_type: str, list_id: str, limit: int = Que
         logging.exception(f"Error fetching list items: {e!s}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.delete("/api/lists/{list_type}/{list_id:path}")
 async def delete_list_endpoint(list_type: str, list_id: str):
     """Delete list - uses :path to capture full URLs with forward slashes"""
@@ -3408,6 +3640,7 @@ async def delete_list_endpoint(list_type: str, list_id: str):
         logging.error(f"Error deleting list {list_type}/{list_id}: {e!s}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/items")
 async def get_items(page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=100)):
     """Get all synced items (deduplicated)"""
@@ -3426,28 +3659,43 @@ async def get_items(page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=
 
         items = []
         for item in page_items:
-            item_id, title, media_type, year, imdb_id, overseerr_id, status, last_synced, source_list_type, source_list_id = item
+            (
+                item_id,
+                title,
+                media_type,
+                year,
+                imdb_id,
+                overseerr_id,
+                status,
+                last_synced,
+                source_list_type,
+                source_list_id,
+            ) = item
 
             # Build list_sources from source columns
             list_sources = []
             if source_list_type and source_list_id:
-                list_sources.append({
-                    "list_type": source_list_type,
-                    "list_id": source_list_id,
-                    "display_name": None,
-                })
+                list_sources.append(
+                    {
+                        "list_type": source_list_type,
+                        "list_id": source_list_id,
+                        "display_name": None,
+                    }
+                )
 
-            items.append({
-                "id": item_id,
-                "title": title,
-                "media_type": media_type,
-                "year": year,
-                "imdb_id": imdb_id,
-                "overseerr_id": overseerr_id,
-                "status": status,
-                "last_synced": last_synced,
-                "list_sources": list_sources,
-            })
+            items.append(
+                {
+                    "id": item_id,
+                    "title": title,
+                    "media_type": media_type,
+                    "year": year,
+                    "imdb_id": imdb_id,
+                    "overseerr_id": overseerr_id,
+                    "status": status,
+                    "last_synced": last_synced,
+                    "list_sources": list_sources,
+                }
+            )
 
         return {
             "items": items,
@@ -3459,9 +3707,11 @@ async def get_items(page: int = Query(1, ge=1), limit: int = Query(50, ge=1, le=
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # Simple in-memory cache for metadata (expires after 1 hour)
 _metadata_cache = {}
 _cache_ttl = 3600  # 1 hour in seconds
+
 
 @app.post("/api/items/enriched/clear-cache")
 async def clear_enriched_cache():
@@ -3471,6 +3721,7 @@ async def clear_enriched_cache():
     _metadata_cache = {}
     logging.info(f"Cleared metadata cache ({cache_size} entries)")
     return {"message": f"Cleared {cache_size} cached entries", "success": True}
+
 
 @app.get("/api/items/enriched")
 async def get_enriched_items(
@@ -3507,18 +3758,22 @@ async def get_enriched_items(
                 # Normalize the list_id to match what's stored in database
                 normalized_list_id = normalize_list_id(filter_list_type, filter_list_id)
 
-                logging.info(f"📋 Filtering by list {filter_list_type}:{filter_list_id} (normalized: {normalized_list_id})")
+                logging.info(
+                    f"📋 Filtering by list {filter_list_type}:{filter_list_id} (normalized: {normalized_list_id})"
+                )
 
                 # Filter items where source_list_type and source_list_id match
                 # Item tuple: (id, title, media_type, year, imdb_id, overseerr_id, status, last_synced, source_list_type, source_list_id)
                 before_count = len(unique_items)
                 unique_items = [
-                    item for item in unique_items
-                    if (item[8] == filter_list_type and
-                        (item[9] == normalized_list_id or item[9] == filter_list_id))
+                    item
+                    for item in unique_items
+                    if (item[8] == filter_list_type and (item[9] == normalized_list_id or item[9] == filter_list_id))
                 ]
 
-                logging.info(f"📋 Filtered {before_count} items → {len(unique_items)} items match list {filter_list_type}:{filter_list_id}")
+                logging.info(
+                    f"📋 Filtered {before_count} items → {len(unique_items)} items match list {filter_list_type}:{filter_list_id}"
+                )
             except ValueError:
                 # Invalid list_source format, ignore filter
                 logging.warning(f"Invalid list_source format: {list_source}, ignoring filter")
@@ -3554,7 +3809,9 @@ async def get_enriched_items(
                 placeholders = ",".join("?" * len(item_ids))
 
                 # Fetch tmdb_ids and poster URLs
-                cursor.execute(f"SELECT id, tmdb_id, poster_url FROM synced_items WHERE id IN ({placeholders})", item_ids)
+                cursor.execute(
+                    f"SELECT id, tmdb_id, poster_url FROM synced_items WHERE id IN ({placeholders})", item_ids
+                )
                 for row in cursor.fetchall():
                     item_db_id, tmdb_id, poster_url = row
                     if tmdb_id:
@@ -3572,31 +3829,39 @@ async def get_enriched_items(
                 has_display_name = "display_name" in list_columns
 
                 if has_display_name:
-                    cursor.execute(f"""
+                    cursor.execute(
+                        f"""
                         SELECT il.item_id, il.list_type, il.list_id, l.display_name
                         FROM item_lists il
                         LEFT JOIN lists l ON il.list_type = l.list_type AND il.list_id = l.list_id
                         WHERE il.item_id IN ({placeholders})
                         ORDER BY il.synced_at DESC
-                    """, item_ids)
+                    """,
+                        item_ids,
+                    )
                 else:
                     # Fallback: Don't join lists table, just get list_type and list_id
-                    cursor.execute(f"""
+                    cursor.execute(
+                        f"""
                         SELECT il.item_id, il.list_type, il.list_id, NULL as display_name
                         FROM item_lists il
                         WHERE il.item_id IN ({placeholders})
                         ORDER BY il.synced_at DESC
-                    """, item_ids)
+                    """,
+                        item_ids,
+                    )
 
                 for row in cursor.fetchall():
                     item_db_id, list_type, list_id, display_name = row
                     if item_db_id not in item_lists_map:
                         item_lists_map[item_db_id] = []
-                    item_lists_map[item_db_id].append({
-                        "list_type": list_type,
-                        "list_id": list_id,
-                        "display_name": display_name,
-                    })
+                    item_lists_map[item_db_id].append(
+                        {
+                            "list_type": list_type,
+                            "list_id": list_id,
+                            "display_name": display_name,
+                        }
+                    )
 
                 # Debug: Log how many items have list sources
                 items_with_sources = len([k for k, v in item_lists_map.items() if v])
@@ -3604,7 +3869,9 @@ async def get_enriched_items(
                 if items_with_sources > 0:
                     sample_item = next((k for k, v in item_lists_map.items() if v), None)
                     if sample_item:
-                        logging.info(f"📋 Sample: Item {sample_item} has {len(item_lists_map[sample_item])} list(s): {item_lists_map[sample_item]}")
+                        logging.info(
+                            f"📋 Sample: Item {sample_item} has {len(item_lists_map[sample_item])} list(s): {item_lists_map[sample_item]}"
+                        )
         except Exception as e:
             logging.warning(f"Failed to batch fetch tmdb_ids, poster URLs, and list sources: {e}")
 
@@ -3612,7 +3879,18 @@ async def get_enriched_items(
         current_time = time.time()
 
         for item in page_items:
-            item_id, title, media_type, year, imdb_id, overseerr_id, status, last_synced, source_list_type, source_list_id = item
+            (
+                item_id,
+                title,
+                media_type,
+                year,
+                imdb_id,
+                overseerr_id,
+                status,
+                last_synced,
+                source_list_type,
+                source_list_id,
+            ) = item
 
             # Get tmdb_id and poster_url from batch fetch
             tmdb_id = tmdb_id_map.get(item_id)
@@ -3623,11 +3901,13 @@ async def get_enriched_items(
 
             # If no list sources from item_lists, use the source_list columns as fallback
             if not list_sources and source_list_type and source_list_id:
-                list_sources = [{
-                    "list_type": source_list_type,
-                    "list_id": source_list_id,
-                    "display_name": None,
-                }]
+                list_sources = [
+                    {
+                        "list_type": source_list_type,
+                        "list_id": source_list_id,
+                        "display_name": None,
+                    }
+                ]
 
             # Create base enriched item
             enriched_item = {
@@ -3675,14 +3955,17 @@ async def get_enriched_items(
                     poster_url = cached_data.get("poster_url")
                     if poster_url:
                         from list_sync.database import update_item_poster_url
+
                         update_item_poster_url(item_id, poster_url)
 
-                    enriched_item.update({
-                        "poster_url": poster_url,
-                        "rating": cached_data.get("rating"),
-                        "overview": cached_data.get("overview"),
-                        "genres": cached_data.get("genres", []),
-                    })
+                    enriched_item.update(
+                        {
+                            "poster_url": poster_url,
+                            "rating": cached_data.get("rating"),
+                            "overview": cached_data.get("overview"),
+                            "genres": cached_data.get("genres", []),
+                        }
+                    )
                     enriched_items.append(enriched_item)
                     continue
 
@@ -3702,15 +3985,18 @@ async def get_enriched_items(
                     poster_url = metadata.get("poster_url")
                     if poster_url:
                         from list_sync.database import update_item_poster_url
+
                         update_item_poster_url(item_id, poster_url)
 
                     # Enrich item
-                    enriched_item.update({
-                        "poster_url": poster_url,
-                        "rating": metadata.get("rating"),
-                        "overview": metadata.get("overview"),
-                        "genres": metadata.get("genres", []),
-                    })
+                    enriched_item.update(
+                        {
+                            "poster_url": poster_url,
+                            "rating": metadata.get("rating"),
+                            "overview": metadata.get("overview"),
+                            "genres": metadata.get("genres", []),
+                        }
+                    )
                 else:
                     # Cache negative result to avoid repeated failed lookups
                     _metadata_cache[cache_key] = ({}, current_time)
@@ -3732,6 +4018,7 @@ async def get_enriched_items(
     except Exception as e:
         logging.exception(f"Error in enriched items endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/overseerr/status")
 async def get_overseerr_status():
@@ -3789,6 +4076,7 @@ async def get_overseerr_status():
             "lastChecked": datetime.now().isoformat(),
         }
 
+
 @app.get("/api/system/time")
 async def get_current_time():
     """Get current server time with enhanced timezone support"""
@@ -3836,11 +4124,13 @@ async def get_current_time():
             "error": str(e),
         }
 
+
 @app.post("/api/sync/trigger")
 async def trigger_manual_sync(sync_request: dict = None):
     """Trigger a manual sync by sending SIGUSR1 signal to ListSync process"""
     try:
         from list_sync.utils.sync_status import clear_pause_until
+
         # Parse request body if provided
         sync_type = "all"  # default
         target_list = None
@@ -3923,10 +4213,13 @@ async def trigger_manual_sync(sync_request: dict = None):
             os.environ["SINGLE_LIST_TYPE"] = target_list["list_type"]
             os.environ["SINGLE_LIST_ID"] = target_list["list_id"]
 
-            print(f"DEBUG - Environment variables set as fallback: SINGLE_LIST_SYNC=true, SINGLE_LIST_TYPE={target_list['list_type']}, SINGLE_LIST_ID={target_list['list_id']}")
+            print(
+                f"DEBUG - Environment variables set as fallback: SINGLE_LIST_SYNC=true, SINGLE_LIST_TYPE={target_list['list_type']}, SINGLE_LIST_ID={target_list['list_id']}"
+            )
         else:
             # Clear any existing single list request file for full sync
             import os
+
             request_file = "data/single_list_sync_request.json"
             if os.path.exists(request_file):
                 os.remove(request_file)
@@ -3952,28 +4245,36 @@ async def trigger_manual_sync(sync_request: dict = None):
             try:
                 # Send SIGUSR1 signal to trigger immediate sync
                 os.kill(process.pid, signal.SIGUSR1)
-                signals_sent.append({
-                    "pid": process.pid,
-                    "cmdline": process.cmdline,
-                    "status": "signal_sent",
-                })
+                signals_sent.append(
+                    {
+                        "pid": process.pid,
+                        "cmdline": process.cmdline,
+                        "status": "signal_sent",
+                    }
+                )
                 print(f"Sent SIGUSR1 signal to ListSync process PID {process.pid}")
 
             except ProcessLookupError:
-                errors.append({
-                    "pid": process.pid,
-                    "error": "Process not found (may have exited)",
-                })
+                errors.append(
+                    {
+                        "pid": process.pid,
+                        "error": "Process not found (may have exited)",
+                    }
+                )
             except PermissionError:
-                errors.append({
-                    "pid": process.pid,
-                    "error": "Permission denied (insufficient privileges)",
-                })
+                errors.append(
+                    {
+                        "pid": process.pid,
+                        "error": "Permission denied (insufficient privileges)",
+                    }
+                )
             except Exception as e:
-                errors.append({
-                    "pid": process.pid,
-                    "error": str(e),
-                })
+                errors.append(
+                    {
+                        "pid": process.pid,
+                        "error": str(e),
+                    }
+                )
 
         if not signals_sent and errors:
             # All signals failed
@@ -3999,6 +4300,7 @@ async def trigger_manual_sync(sync_request: dict = None):
     except Exception as e:
         print(f"Error triggering manual sync: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 def _close_running_sync_record(status: str, message: str, pid: int | None = None) -> None:
     """
@@ -4040,8 +4342,9 @@ def _close_running_sync_record(status: str, message: str, pid: int | None = None
         logging.warning(f"Could not close sync record after {status}: {e}")
 
 
-def _run_sync_in_subprocess(list_type: str, list_id: str, seerr_url: str,
-                            seerr_api_key: str, is_4k: bool, result_queue: multiprocessing.Queue):
+def _run_sync_in_subprocess(
+    list_type: str, list_id: str, seerr_url: str, seerr_api_key: str, is_4k: bool, result_queue: multiprocessing.Queue
+):
     """
     Worker function to run sync in a subprocess.
     This function is called by multiprocessing.Process.
@@ -4261,6 +4564,7 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
         except Exception as sync_error:
             print(f"ERROR - Sync execution failed: {sync_error}")
             import traceback
+
             traceback.print_exc()
 
             return {
@@ -4282,14 +4586,17 @@ async def trigger_single_list_sync(target_list: dict, processes: list):
     except Exception as e:
         print(f"CRITICAL ERROR in single list sync: {e}")
         import traceback
+
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Single list sync failed: {e!s}")
+
 
 @app.post("/api/sync/single")
 async def trigger_single_list_sync_endpoint(sync_request: dict):
     """Endpoint for single list sync requests - redirects to main trigger endpoint"""
     # Redirect to the main trigger endpoint with the same payload
     return await trigger_manual_sync(sync_request)
+
 
 @app.get("/api/sync/status")
 async def get_sync_status():
@@ -4303,24 +4610,28 @@ async def get_sync_status():
             try:
                 # Get additional process info
                 proc = psutil.Process(process.pid)
-                process_info.append({
-                    "pid": process.pid,
-                    "status": process.status,
-                    "created": process.created,
-                    "cmdline": process.cmdline,
-                    "memory_percent": proc.memory_percent(),
-                    "cpu_percent": proc.cpu_percent(),
-                    "can_signal": True,  # Assume we can signal unless we find otherwise
-                })
+                process_info.append(
+                    {
+                        "pid": process.pid,
+                        "status": process.status,
+                        "created": process.created,
+                        "cmdline": process.cmdline,
+                        "memory_percent": proc.memory_percent(),
+                        "cpu_percent": proc.cpu_percent(),
+                        "can_signal": True,  # Assume we can signal unless we find otherwise
+                    }
+                )
             except (psutil.NoSuchProcess, psutil.AccessDenied) as e:
-                process_info.append({
-                    "pid": process.pid,
-                    "status": "unknown",
-                    "created": process.created,
-                    "cmdline": process.cmdline,
-                    "error": str(e),
-                    "can_signal": False,
-                })
+                process_info.append(
+                    {
+                        "pid": process.pid,
+                        "status": "unknown",
+                        "created": process.created,
+                        "cmdline": process.cmdline,
+                        "error": str(e),
+                        "can_signal": False,
+                    }
+                )
 
         return {
             "processes_found": len(processes),
@@ -4333,6 +4644,7 @@ async def get_sync_status():
     except Exception as e:
         print(f"Error getting sync status: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/sync/{job_id}/cancel")
 async def cancel_sync(job_id: str):
@@ -4397,6 +4709,7 @@ async def cancel_sync(job_id: str):
             try:
                 import os
                 import signal as sig
+
                 os.kill(target_pid, sig.SIGTERM)
                 termination_method = "SIGTERM"
                 logging.info(f"Sent SIGTERM to sync process PID {target_pid}")
@@ -4467,13 +4780,16 @@ async def cancel_sync(job_id: str):
             "termination_method": termination_method,
             "target_pid": target_pid,
             "session_id": session_id,
-            "pause_until": pause_until.isoformat() if session_id and "pause_until" in locals() and pause_until else None,
+            "pause_until": pause_until.isoformat()
+            if session_id and "pause_until" in locals() and pause_until
+            else None,
             "timestamp": datetime.now().isoformat(),
         }
 
     except Exception as e:
         logging.exception(f"Error canceling sync: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to cancel sync: {e!s}")
+
 
 @app.get("/api/failures")
 async def get_failures(
@@ -4529,23 +4845,16 @@ async def get_failures(
         if search.strip():
             search_term = search.strip().lower()
             filtered_failures = [
-                item for item in filtered_failures
-                if search_term in item.get("title", item.get("name", "")).lower()
+                item for item in filtered_failures if search_term in item.get("title", item.get("name", "")).lower()
             ]
 
         # Failure type filter
         if failure_type_filter.strip():
-            filtered_failures = [
-                item for item in filtered_failures
-                if item["failure_type"] == failure_type_filter
-            ]
+            filtered_failures = [item for item in filtered_failures if item["failure_type"] == failure_type_filter]
 
         # Media type filter
         if media_type_filter.strip():
-            filtered_failures = [
-                item for item in filtered_failures
-                if item["media_type"] == media_type_filter
-            ]
+            filtered_failures = [item for item in filtered_failures if item["media_type"] == media_type_filter]
 
         # Sort by timestamp (most recent first)
         def sort_key(item):
@@ -4602,6 +4911,7 @@ async def get_failures(
         print(f"Error parsing failures: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/processed")
 async def get_processed_items(
     page: int = Query(1, ge=1),
@@ -4643,31 +4953,39 @@ async def get_processed_items(
                     has_display_name = "display_name" in list_columns
 
                     if has_display_name:
-                        cursor.execute(f"""
+                        cursor.execute(
+                            f"""
                             SELECT il.item_id, il.list_type, il.list_id, l.display_name
                             FROM item_lists il
                             LEFT JOIN lists l ON il.list_type = l.list_type AND il.list_id = l.list_id
                             WHERE il.item_id IN ({placeholders})
                             ORDER BY il.synced_at DESC
-                        """, item_ids)
+                        """,
+                            item_ids,
+                        )
                     else:
                         # Fallback: Don't join lists table, just get list_type and list_id
-                        cursor.execute(f"""
+                        cursor.execute(
+                            f"""
                             SELECT il.item_id, il.list_type, il.list_id, NULL as display_name
                             FROM item_lists il
                             WHERE il.item_id IN ({placeholders})
                             ORDER BY il.synced_at DESC
-                        """, item_ids)
+                        """,
+                            item_ids,
+                        )
 
                     for row in cursor.fetchall():
                         item_db_id, list_type, list_id, display_name = row
                         if item_db_id not in item_lists_map:
                             item_lists_map[item_db_id] = []
-                        item_lists_map[item_db_id].append({
-                            "list_type": list_type,
-                            "list_id": list_id,
-                            "display_name": display_name,
-                        })
+                        item_lists_map[item_db_id].append(
+                            {
+                                "list_type": list_type,
+                                "list_id": list_id,
+                                "display_name": display_name,
+                            }
+                        )
             except Exception as e:
                 logging.warning(f"Failed to batch fetch list sources: {e}")
 
@@ -4684,11 +5002,13 @@ async def get_processed_items(
 
             # If no list sources from item_lists, use the source_list columns as fallback
             if not item["list_sources"] and item.get("source_list_type") and item.get("source_list_id"):
-                item["list_sources"] = [{
-                    "list_type": item["source_list_type"],
-                    "list_id": item["source_list_id"],
-                    "display_name": None,
-                }]
+                item["list_sources"] = [
+                    {
+                        "list_type": item["source_list_type"],
+                        "list_id": item["source_list_id"],
+                        "display_name": None,
+                    }
+                ]
 
         # Apply filters BEFORE pagination
         filtered_items = all_items
@@ -4696,24 +5016,15 @@ async def get_processed_items(
         # Search filter (case-insensitive title search)
         if search.strip():
             search_term = search.strip().lower()
-            filtered_items = [
-                item for item in filtered_items
-                if search_term in item["title"].lower()
-            ]
+            filtered_items = [item for item in filtered_items if search_term in item["title"].lower()]
 
         # Status filter
         if status_filter.strip():
-            filtered_items = [
-                item for item in filtered_items
-                if item["status"] == status_filter
-            ]
+            filtered_items = [item for item in filtered_items if item["status"] == status_filter]
 
         # Media type filter
         if media_type_filter.strip():
-            filtered_items = [
-                item for item in filtered_items
-                if item["media_type"] == media_type_filter
-            ]
+            filtered_items = [item for item in filtered_items if item["media_type"] == media_type_filter]
 
         # List source filter
         if list_source and list_source.strip():
@@ -4723,14 +5034,17 @@ async def get_processed_items(
                 # Normalize the list_id to match what's stored in item_lists table
                 normalized_list_id = normalize_list_id(filter_list_type, filter_list_id)
 
-                logging.info(f"📋 Filtering processed items by list {filter_list_type}:{filter_list_id} (normalized: {normalized_list_id})")
+                logging.info(
+                    f"📋 Filtering processed items by list {filter_list_type}:{filter_list_id} (normalized: {normalized_list_id})"
+                )
 
                 # Filter items that have this list in their list_sources
                 filtered_items = [
-                    item for item in filtered_items
+                    item
+                    for item in filtered_items
                     if any(
-                        source["list_type"] == filter_list_type and
-                        (source["list_id"] == normalized_list_id or source["list_id"] == filter_list_id)
+                        source["list_type"] == filter_list_type
+                        and (source["list_id"] == normalized_list_id or source["list_id"] == filter_list_id)
                         for source in item.get("list_sources", [])
                     )
                 ]
@@ -4773,6 +5087,7 @@ async def get_processed_items(
         print(f"Error parsing processed items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/successful")
 async def get_successful_items(
     page: int = Query(1, ge=1),
@@ -4809,24 +5124,15 @@ async def get_successful_items(
         # Search filter (case-insensitive title search)
         if search.strip():
             search_term = search.strip().lower()
-            filtered_items = [
-                item for item in filtered_items
-                if search_term in item["title"].lower()
-            ]
+            filtered_items = [item for item in filtered_items if search_term in item["title"].lower()]
 
         # Status filter
         if status_filter.strip():
-            filtered_items = [
-                item for item in filtered_items
-                if item["status"] == status_filter
-            ]
+            filtered_items = [item for item in filtered_items if item["status"] == status_filter]
 
         # Media type filter
         if media_type_filter.strip():
-            filtered_items = [
-                item for item in filtered_items
-                if item["media_type"] == media_type_filter
-            ]
+            filtered_items = [item for item in filtered_items if item["media_type"] == media_type_filter]
 
         # Calculate pagination on filtered results
         total_items = len(filtered_items)
@@ -4866,6 +5172,7 @@ async def get_successful_items(
     except Exception as e:
         print(f"Error parsing successful items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/requested")
 async def get_requested_items(
@@ -4928,13 +5235,16 @@ async def get_requested_items(
         offset = (page - 1) * limit
 
         # Get paginated items with filters
-        cursor.execute(f"""
+        cursor.execute(
+            f"""
             SELECT id, title, media_type, imdb_id, overseerr_id, status, last_synced 
             FROM synced_items 
             WHERE {where_clause}
             ORDER BY last_synced DESC
             LIMIT ? OFFSET ?
-        """, params + [limit, offset])
+        """,
+            params + [limit, offset],
+        )
 
         items = cursor.fetchall()
 
@@ -4960,17 +5270,19 @@ async def get_requested_items(
             if seerr_base_url and overseerr_id:
                 seerr_url = f"{seerr_base_url}/{media_type}/{overseerr_id}"
 
-            formatted_items.append({
-                "id": item_id,
-                "title": title,
-                "media_type": media_type,
-                "imdb_id": imdb_id,
-                "overseerr_id": overseerr_id,
-                "status": status,
-                "timestamp": last_synced,
-                "action": "Requested",  # Since we only show 'requested' status now
-                "overseerr_url": seerr_url,
-            })
+            formatted_items.append(
+                {
+                    "id": item_id,
+                    "title": title,
+                    "media_type": media_type,
+                    "imdb_id": imdb_id,
+                    "overseerr_id": overseerr_id,
+                    "status": status,
+                    "timestamp": last_synced,
+                    "action": "Requested",  # Since we only show 'requested' status now
+                    "overseerr_url": seerr_url,
+                }
+            )
 
         return {
             "items": formatted_items,
@@ -4996,13 +5308,18 @@ async def get_requested_items(
         print(f"Error getting requested items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # Collections API endpoints
 @app.get("/api/collections")
 async def get_collections(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
     search: str = Query("", description="Search collections by franchise name"),
-    sort: str = Query("total_votes", regex="^(popularity|rating|movie_count|name|total_votes)$", description="Sort by popularity, rating, movie_count, name, or total_votes"),
+    sort: str = Query(
+        "total_votes",
+        regex="^(popularity|rating|movie_count|name|total_votes)$",
+        description="Sort by popularity, rating, movie_count, name, or total_votes",
+    ),
 ):
     """Get all collections with pagination, search, and sorting"""
     try:
@@ -5025,10 +5342,7 @@ async def get_collections(
         # Apply search filter
         if search.strip():
             search_lower = search.strip().lower()
-            collections = [
-                c for c in collections
-                if search_lower in c.get("franchise", "").lower()
-            ]
+            collections = [c for c in collections if search_lower in c.get("franchise", "").lower()]
 
         # Apply sorting (default: total_votes for quality content first)
         if sort == "total_votes":
@@ -5070,7 +5384,9 @@ async def get_collections(
 
 
 @app.get("/api/collections/random")
-async def get_random_collections(count: int = Query(5, ge=1, le=20, description="Number of random collections to return")):
+async def get_random_collections(
+    count: int = Query(5, ge=1, le=20, description="Number of random collections to return"),
+):
     """Get random collections from the full database (only collections with 3+ movies) - cached for performance"""
     try:
         import random
@@ -5083,10 +5399,11 @@ async def get_random_collections(count: int = Query(5, ge=1, le=20, description=
         # Filter to only collections with 3 or more movies (do this once, cache the result)
         if not hasattr(get_random_collections, "_filtered_cache"):
             get_random_collections._filtered_cache = [
-                c for c in collections
-                if c and c.get("franchise") and c.get("totalMovies", 0) >= 3
+                c for c in collections if c and c.get("franchise") and c.get("totalMovies", 0) >= 3
             ]
-            logging.info(f"Cached {len(get_random_collections._filtered_cache)} collections with 3+ movies for random selection")
+            logging.info(
+                f"Cached {len(get_random_collections._filtered_cache)} collections with 3+ movies for random selection"
+            )
 
         filtered_collections = get_random_collections._filtered_cache
 
@@ -5232,6 +5549,7 @@ async def get_collection_movies(franchise_name: str):
         # If no movieRatings, create basic format from movieIds
         if not movies:
             from list_sync.providers.collections import fetch_collection
+
             movies = fetch_collection(decoded_name)
 
         return {
@@ -5468,9 +5786,15 @@ async def request_single_media(request: Request):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-def _run_collection_sync_in_subprocess(list_type: str, list_id: str, seerr_url: str,
-                                       seerr_api_key: str, user_id: str, is_4k: bool,
-                                       result_queue: multiprocessing.Queue):
+def _run_collection_sync_in_subprocess(
+    list_type: str,
+    list_id: str,
+    seerr_url: str,
+    seerr_api_key: str,
+    user_id: str,
+    is_4k: bool,
+    result_queue: multiprocessing.Queue,
+):
     """
     Worker function to run collection sync in a subprocess.
     This function is called by multiprocessing.Process.
@@ -5611,6 +5935,7 @@ async def sync_collection(franchise_name: str):
         logging.exception(f"Error syncing collection: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/timezone/supported")
 async def get_supported_timezones():
     """Get list of all supported timezone abbreviations organized by region"""
@@ -5625,6 +5950,7 @@ async def get_supported_timezones():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/timezone/current")
 async def get_current_timezone():
     """Get detailed information about the current timezone"""
@@ -5638,6 +5964,7 @@ async def get_current_timezone():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/timezone/validate")
 async def validate_timezone(timezone_input: dict):
@@ -5670,7 +5997,9 @@ async def validate_timezone(timezone_input: dict):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # Add these new API endpoints before the main execution block
+
 
 @app.get("/api/logs/entries")
 async def get_log_entries_endpoint(
@@ -5719,6 +6048,7 @@ async def get_log_entries_endpoint(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.get("/api/logs/stream")
 async def stream_logs(
     last_position: int = Query(0, ge=0),
@@ -5745,6 +6075,7 @@ async def stream_logs(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/logs/categories")
 async def get_log_categories():
@@ -5783,6 +6114,7 @@ async def get_log_categories():
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/api/logs/stats")
 async def get_log_stats():
@@ -5878,6 +6210,7 @@ async def get_log_stats():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 # Analytics Pydantic models
 class AnalyticsOverview(BaseModel):
     total_items: int
@@ -5888,11 +6221,13 @@ class AnalyticsOverview(BaseModel):
     total_errors: int
     last_sync_time: str
 
+
 class MediaAdditionData(BaseModel):
     timestamp: str
     count: int
     type: str  # 'movie' or 'tv'
     source: str
+
 
 class ListFetchData(BaseModel):
     timestamp: str
@@ -5901,6 +6236,7 @@ class ListFetchData(BaseModel):
     successful_fetches: int
     failed_fetches: int
     source: str
+
 
 class LowConfidenceMatch(BaseModel):
     title: str
@@ -5911,12 +6247,14 @@ class LowConfidenceMatch(BaseModel):
     timestamp: str
     needs_review: bool
 
+
 class MatchingData(BaseModel):
     perfect_matches: int
     partial_matches: int
     failed_matches: int
     average_score: float
     low_confidence_matches: list[LowConfidenceMatch]
+
 
 class SearchFailureData(BaseModel):
     title: str
@@ -5925,6 +6263,7 @@ class SearchFailureData(BaseModel):
     sources: list[str]
     type: str  # 'movie' or 'tv'
 
+
 class ScrapingPerformanceData(BaseModel):
     timestamp: str
     items_per_minute: float
@@ -5932,12 +6271,14 @@ class ScrapingPerformanceData(BaseModel):
     total_items: int
     processing_time: float
 
+
 class SourceDistributionData(BaseModel):
     source: str
     items_found: int
     average_items_per_page: float
     total_pages: int
     success_rate: float
+
 
 class SelectorPerformanceData(BaseModel):
     website: str
@@ -5947,15 +6288,18 @@ class SelectorPerformanceData(BaseModel):
     last_used: str
     status: str  # 'working', 'failing', 'deprecated'
 
+
 class GenreDistributionData(BaseModel):
     genre: str
     count: int
     percentage: float
 
+
 class YearDistributionData(BaseModel):
     year: int
     count: int
     type: str  # 'movie' or 'tv'
+
 
 class AnalyticsResponse(BaseModel):
     overview: AnalyticsOverview
@@ -5968,6 +6312,7 @@ class AnalyticsResponse(BaseModel):
     selector_performance: list[SelectorPerformanceData]
     genre_distribution: list[GenreDistributionData]
     year_distribution: list[YearDistributionData]
+
 
 # Analytics processing functions
 def process_analytics_data(time_range: str = "24h", category: str = "all") -> AnalyticsResponse:
@@ -6059,6 +6404,7 @@ def process_analytics_data(time_range: str = "24h", category: str = "all") -> An
             year_distribution=[],
         )
 
+
 def process_overview_analytics(entries: list[LogEntry]) -> AnalyticsOverview:
     """Process overview analytics from log entries"""
     total_items = 0
@@ -6102,6 +6448,7 @@ def process_overview_analytics(entries: list[LogEntry]) -> AnalyticsOverview:
         last_sync_time=last_sync_time,
     )
 
+
 def process_media_additions(entries: list[LogEntry]) -> list[MediaAdditionData]:
     """Process media addition analytics"""
     additions_by_source = defaultdict(lambda: defaultdict(int))
@@ -6116,14 +6463,17 @@ def process_media_additions(entries: list[LogEntry]) -> list[MediaAdditionData]:
     result = []
     for timestamp, sources in additions_by_source.items():
         for source, count in sources.items():
-            result.append(MediaAdditionData(
-                timestamp=timestamp,
-                count=count,
-                type="movie",
-                source=source,
-            ))
+            result.append(
+                MediaAdditionData(
+                    timestamp=timestamp,
+                    count=count,
+                    type="movie",
+                    source=source,
+                )
+            )
 
     return sorted(result, key=lambda x: x.timestamp, reverse=True)[:20]
+
 
 def process_list_fetches(entries: list[LogEntry]) -> list[ListFetchData]:
     """Process list fetch analytics"""
@@ -6147,16 +6497,19 @@ def process_list_fetches(entries: list[LogEntry]) -> list[ListFetchData]:
         success_rate = (data["success"] / total * 100) if total > 0 else 0
 
         for source in data["sources"]:
-            result.append(ListFetchData(
-                timestamp=timestamp,
-                success_rate=round(success_rate, 1),
-                total_attempts=total,
-                successful_fetches=data["success"],
-                failed_fetches=data["failed"],
-                source=source,
-            ))
+            result.append(
+                ListFetchData(
+                    timestamp=timestamp,
+                    success_rate=round(success_rate, 1),
+                    total_attempts=total,
+                    successful_fetches=data["success"],
+                    failed_fetches=data["failed"],
+                    source=source,
+                )
+            )
 
     return sorted(result, key=lambda x: x.timestamp, reverse=True)[:20]
+
 
 def process_matching_analytics(entries: list[LogEntry]) -> MatchingData:
     """Process matching accuracy analytics"""
@@ -6181,14 +6534,16 @@ def process_matching_analytics(entries: list[LogEntry]) -> MatchingData:
 
                 # Low confidence matches (score < 0.7)
                 if score < 0.7:
-                    low_confidence.append(LowConfidenceMatch(
-                        title=entry.media_info.get("title", "Unknown"),
-                        year=entry.media_info.get("year"),
-                        score=score,
-                        source=entry.media_info.get("source", "unknown"),
-                        timestamp=entry.timestamp,
-                        needs_review=True,
-                    ))
+                    low_confidence.append(
+                        LowConfidenceMatch(
+                            title=entry.media_info.get("title", "Unknown"),
+                            year=entry.media_info.get("year"),
+                            score=score,
+                            source=entry.media_info.get("source", "unknown"),
+                            timestamp=entry.timestamp,
+                            needs_review=True,
+                        )
+                    )
 
     avg_score = statistics.mean(scores) if scores else 0
 
@@ -6199,6 +6554,7 @@ def process_matching_analytics(entries: list[LogEntry]) -> MatchingData:
         average_score=round(avg_score, 3),
         low_confidence_matches=sorted(low_confidence, key=lambda x: x.score)[:10],
     )
+
 
 def process_search_failures(entries: list[LogEntry]) -> list[SearchFailureData]:
     """Process search failure analytics"""
@@ -6215,15 +6571,18 @@ def process_search_failures(entries: list[LogEntry]) -> list[SearchFailureData]:
 
     result = []
     for title, data in failures.items():
-        result.append(SearchFailureData(
-            title=title,
-            search_count=data["count"],
-            last_attempt=data["last_attempt"],
-            sources=list(data["sources"]),
-            type="movie",  # Default
-        ))
+        result.append(
+            SearchFailureData(
+                title=title,
+                search_count=data["count"],
+                last_attempt=data["last_attempt"],
+                sources=list(data["sources"]),
+                type="movie",  # Default
+            )
+        )
 
     return sorted(result, key=lambda x: x.search_count, reverse=True)[:10]
+
 
 def process_scraping_performance(entries: list[LogEntry]) -> list[ScrapingPerformanceData]:
     """Process scraping performance analytics"""
@@ -6245,15 +6604,18 @@ def process_scraping_performance(entries: list[LogEntry]) -> list[ScrapingPerfor
         items_per_minute = (data["items"] / max(data["time"], 1)) * 60
 
         for source in data["sources"]:
-            result.append(ScrapingPerformanceData(
-                timestamp=timestamp,
-                items_per_minute=round(items_per_minute, 1),
-                source=source,
-                total_items=data["items"],
-                processing_time=data["time"],
-            ))
+            result.append(
+                ScrapingPerformanceData(
+                    timestamp=timestamp,
+                    items_per_minute=round(items_per_minute, 1),
+                    source=source,
+                    total_items=data["items"],
+                    processing_time=data["time"],
+                )
+            )
 
     return sorted(result, key=lambda x: x.timestamp, reverse=True)[:20]
+
 
 def process_source_distribution(entries: list[LogEntry]) -> list[SourceDistributionData]:
     """Process source distribution analytics"""
@@ -6277,15 +6639,18 @@ def process_source_distribution(entries: list[LogEntry]) -> list[SourceDistribut
         avg_items_per_page = data["items"] / total_pages
         success_rate = (data["success"] / data["total"] * 100) if data["total"] > 0 else 0
 
-        result.append(SourceDistributionData(
-            source=source,
-            items_found=data["items"],
-            average_items_per_page=round(avg_items_per_page, 1),
-            total_pages=total_pages,
-            success_rate=round(success_rate, 1),
-        ))
+        result.append(
+            SourceDistributionData(
+                source=source,
+                items_found=data["items"],
+                average_items_per_page=round(avg_items_per_page, 1),
+                total_pages=total_pages,
+                success_rate=round(success_rate, 1),
+            )
+        )
 
     return sorted(result, key=lambda x: x.items_found, reverse=True)[:10]
+
 
 def process_selector_performance(entries: list[LogEntry]) -> list[SelectorPerformanceData]:
     """Process selector performance analytics"""
@@ -6295,24 +6660,45 @@ def process_selector_performance(entries: list[LogEntry]) -> list[SelectorPerfor
     mock_selectors = [
         {"website": "trakt.tv", "selector": ".list-item", "success_rate": 95, "attempts": 150, "status": "working"},
         {"website": "imdb.com", "selector": ".titleColumn", "success_rate": 88, "attempts": 120, "status": "working"},
-        {"website": "letterboxd.com", "selector": ".film-poster", "success_rate": 92, "attempts": 80, "status": "working"},
+        {
+            "website": "letterboxd.com",
+            "selector": ".film-poster",
+            "success_rate": 92,
+            "attempts": 80,
+            "status": "working",
+        },
         {"website": "mubi.com", "selector": ".film-title", "success_rate": 45, "attempts": 30, "status": "failing"},
-        {"website": "criterion.com", "selector": ".spine-title", "success_rate": 78, "attempts": 60, "status": "working"},
-        {"website": "rottentomatoes.com", "selector": ".movie-title", "success_rate": 15, "attempts": 25, "status": "deprecated"},
+        {
+            "website": "criterion.com",
+            "selector": ".spine-title",
+            "success_rate": 78,
+            "attempts": 60,
+            "status": "working",
+        },
+        {
+            "website": "rottentomatoes.com",
+            "selector": ".movie-title",
+            "success_rate": 15,
+            "attempts": 25,
+            "status": "deprecated",
+        },
     ]
 
     result = []
     for selector in mock_selectors:
-        result.append(SelectorPerformanceData(
-            website=selector["website"],
-            selector=selector["selector"],
-            success_rate=selector["success_rate"],
-            total_attempts=selector["attempts"],
-            last_used=datetime.now().isoformat(),
-            status=selector["status"],
-        ))
+        result.append(
+            SelectorPerformanceData(
+                website=selector["website"],
+                selector=selector["selector"],
+                success_rate=selector["success_rate"],
+                total_attempts=selector["attempts"],
+                last_used=datetime.now().isoformat(),
+                status=selector["status"],
+            )
+        )
 
     return result
+
 
 def process_genre_distribution(entries: list[LogEntry]) -> list[GenreDistributionData]:
     """Process genre distribution analytics"""
@@ -6333,13 +6719,16 @@ def process_genre_distribution(entries: list[LogEntry]) -> list[GenreDistributio
     result = []
     for genre in mock_genres:
         percentage = (genre["count"] / total * 100) if total > 0 else 0
-        result.append(GenreDistributionData(
-            genre=genre["genre"],
-            count=genre["count"],
-            percentage=round(percentage, 1),
-        ))
+        result.append(
+            GenreDistributionData(
+                genre=genre["genre"],
+                count=genre["count"],
+                percentage=round(percentage, 1),
+            )
+        )
 
     return result
+
 
 def process_year_distribution(entries: list[LogEntry]) -> list[YearDistributionData]:
     """Process year distribution analytics"""
@@ -6359,13 +6748,16 @@ def process_year_distribution(entries: list[LogEntry]) -> list[YearDistributionD
 
     result = []
     for year, count in years.items():
-        result.append(YearDistributionData(
-            year=year,
-            count=count,
-            type="movie",  # Default
-        ))
+        result.append(
+            YearDistributionData(
+                year=year,
+                count=count,
+                type="movie",  # Default
+            )
+        )
 
     return sorted(result, key=lambda x: x.year, reverse=True)[:10]
+
 
 @app.get("/api/analytics")
 async def get_analytics(
@@ -6379,6 +6771,7 @@ async def get_analytics(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating analytics: {e!s}")
 
+
 @app.get("/api/analytics/overview")
 async def get_analytics_overview(time_range: str = Query("24h", regex="^(1h|24h|7d|30d)$")):
     """Get analytics overview data"""
@@ -6387,6 +6780,7 @@ async def get_analytics_overview(time_range: str = Query("24h", regex="^(1h|24h|
         return analytics_data.overview
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating overview: {e!s}")
+
 
 @app.get("/api/analytics/media-additions")
 async def get_media_additions(time_range: str = Query("24h", regex="^(1h|24h|7d|30d)$")):
@@ -6397,6 +6791,7 @@ async def get_media_additions(time_range: str = Query("24h", regex="^(1h|24h|7d|
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating media additions: {e!s}")
 
+
 @app.get("/api/analytics/list-fetches")
 async def get_list_fetches(time_range: str = Query("24h", regex="^(1h|24h|7d|30d)$")):
     """Get list fetch analytics"""
@@ -6405,6 +6800,7 @@ async def get_list_fetches(time_range: str = Query("24h", regex="^(1h|24h|7d|30d
         return analytics_data.list_fetches
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating list fetches: {e!s}")
+
 
 @app.get("/api/analytics/matching")
 async def get_matching_analytics(time_range: str = Query("24h", regex="^(1h|24h|7d|30d)$")):
@@ -6415,6 +6811,7 @@ async def get_matching_analytics(time_range: str = Query("24h", regex="^(1h|24h|
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating matching analytics: {e!s}")
 
+
 @app.get("/api/analytics/search-failures")
 async def get_search_failures(time_range: str = Query("24h", regex="^(1h|24h|7d|30d)$")):
     """Get search failure analytics"""
@@ -6423,6 +6820,7 @@ async def get_search_failures(time_range: str = Query("24h", regex="^(1h|24h|7d|
         return analytics_data.search_failures
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating search failures: {e!s}")
+
 
 @app.get("/api/analytics/scraping-performance")
 async def get_scraping_performance(time_range: str = Query("24h", regex="^(1h|24h|7d|30d)$")):
@@ -6433,6 +6831,7 @@ async def get_scraping_performance(time_range: str = Query("24h", regex="^(1h|24
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating scraping performance: {e!s}")
 
+
 @app.get("/api/analytics/source-distribution")
 async def get_source_distribution(time_range: str = Query("24h", regex="^(1h|24h|7d|30d)$")):
     """Get source distribution analytics"""
@@ -6441,6 +6840,7 @@ async def get_source_distribution(time_range: str = Query("24h", regex="^(1h|24h
         return analytics_data.source_distribution
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating source distribution: {e!s}")
+
 
 @app.get("/api/analytics/selector-performance")
 async def get_selector_performance(time_range: str = Query("24h", regex="^(1h|24h|7d|30d)$")):
@@ -6451,6 +6851,7 @@ async def get_selector_performance(time_range: str = Query("24h", regex="^(1h|24
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating selector performance: {e!s}")
 
+
 @app.get("/api/analytics/genre-distribution")
 async def get_genre_distribution(time_range: str = Query("24h", regex="^(1h|24h|7d|30d)$")):
     """Get genre distribution analytics"""
@@ -6460,6 +6861,7 @@ async def get_genre_distribution(time_range: str = Query("24h", regex="^(1h|24h|
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating genre distribution: {e!s}")
 
+
 @app.get("/api/analytics/year-distribution")
 async def get_year_distribution(time_range: str = Query("24h", regex="^(1h|24h|7d|30d)$")):
     """Get year distribution analytics"""
@@ -6468,6 +6870,7 @@ async def get_year_distribution(time_range: str = Query("24h", regex="^(1h|24h|7
         return analytics_data.year_distribution
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error generating year distribution: {e!s}")
+
 
 def parse_recent_activity_from_structured_log(limit: int = 50) -> list[dict[str, Any]]:
     """Parse recent sync activity from the structured log file (data/list_sync.log)"""
@@ -6518,17 +6921,19 @@ def parse_recent_activity_from_structured_log(limit: int = 50) -> list[dict[str,
                 position = entry.media_info.get("position", 0)
                 total = entry.media_info.get("total", 0)
 
-                recent_items.append({
-                    "title": title,
-                    "status": status,
-                    "status_text": status_text,
-                    "timestamp": entry.timestamp,
-                    "position": position,
-                    "total": total,
-                    "media_type": media_type,
-                    "source": source,
-                    "log_entry_id": entry.id,
-                })
+                recent_items.append(
+                    {
+                        "title": title,
+                        "status": status,
+                        "status_text": status_text,
+                        "timestamp": entry.timestamp,
+                        "position": position,
+                        "total": total,
+                        "media_type": media_type,
+                        "source": source,
+                        "log_entry_id": entry.id,
+                    }
+                )
 
             # Look for search results and matching patterns
             elif entry.media_info.get("type") == "final_match":
@@ -6547,19 +6952,21 @@ def parse_recent_activity_from_structured_log(limit: int = 50) -> list[dict[str,
                     status = "not_found"
                     status_text = "Poor Match"
 
-                recent_items.append({
-                    "title": title,
-                    "status": status,
-                    "status_text": f"{status_text} ({score:.2f})",
-                    "timestamp": entry.timestamp,
-                    "position": 0,
-                    "total": 0,
-                    "media_type": "unknown",
-                    "source": "matching",
-                    "log_entry_id": entry.id,
-                    "matched_title": matched_title,
-                    "match_score": score,
-                })
+                recent_items.append(
+                    {
+                        "title": title,
+                        "status": status,
+                        "status_text": f"{status_text} ({score:.2f})",
+                        "timestamp": entry.timestamp,
+                        "position": 0,
+                        "total": 0,
+                        "media_type": "unknown",
+                        "source": "matching",
+                        "log_entry_id": entry.id,
+                        "matched_title": matched_title,
+                        "match_score": score,
+                    }
+                )
 
             # Look for list fetch completion
             elif entry.media_info.get("type") == "list_fetch_complete":
@@ -6567,17 +6974,19 @@ def parse_recent_activity_from_structured_log(limit: int = 50) -> list[dict[str,
                 list_id = entry.media_info.get("list_id", "unknown")
                 item_count = entry.media_info.get("item_count", 0)
 
-                recent_items.append({
-                    "title": f"{service.upper()}: {list_id}",
-                    "status": "available",
-                    "status_text": f"Fetched {item_count} items",
-                    "timestamp": entry.timestamp,
-                    "position": 0,
-                    "total": item_count,
-                    "media_type": "list",
-                    "source": service,
-                    "log_entry_id": entry.id,
-                })
+                recent_items.append(
+                    {
+                        "title": f"{service.upper()}: {list_id}",
+                        "status": "available",
+                        "status_text": f"Fetched {item_count} items",
+                        "timestamp": entry.timestamp,
+                        "position": 0,
+                        "total": item_count,
+                        "media_type": "list",
+                        "source": service,
+                        "log_entry_id": entry.id,
+                    }
+                )
 
             # Look for sync operations
             elif entry.media_info.get("type") in ["sync_start", "sync_complete"]:
@@ -6585,29 +6994,33 @@ def parse_recent_activity_from_structured_log(limit: int = 50) -> list[dict[str,
 
                 if sync_type == "sync_start":
                     interval = entry.media_info.get("interval_hours", 0)
-                    recent_items.append({
-                        "title": "Sync Operation",
-                        "status": "requested",
-                        "status_text": f"Started (every {interval}h)",
-                        "timestamp": entry.timestamp,
-                        "position": 0,
-                        "total": 0,
-                        "media_type": "system",
-                        "source": "sync",
-                        "log_entry_id": entry.id,
-                    })
+                    recent_items.append(
+                        {
+                            "title": "Sync Operation",
+                            "status": "requested",
+                            "status_text": f"Started (every {interval}h)",
+                            "timestamp": entry.timestamp,
+                            "position": 0,
+                            "total": 0,
+                            "media_type": "system",
+                            "source": "sync",
+                            "log_entry_id": entry.id,
+                        }
+                    )
                 else:  # sync_complete
-                    recent_items.append({
-                        "title": "Sync Operation",
-                        "status": "available",
-                        "status_text": "Completed",
-                        "timestamp": entry.timestamp,
-                        "position": 0,
-                        "total": 0,
-                        "media_type": "system",
-                        "source": "sync",
-                        "log_entry_id": entry.id,
-                    })
+                    recent_items.append(
+                        {
+                            "title": "Sync Operation",
+                            "status": "available",
+                            "status_text": "Completed",
+                            "timestamp": entry.timestamp,
+                            "position": 0,
+                            "total": 0,
+                            "media_type": "system",
+                            "source": "sync",
+                            "log_entry_id": entry.id,
+                        }
+                    )
 
         # Sort by timestamp (most recent first)
         recent_items.sort(key=lambda x: x["timestamp"], reverse=True)
@@ -6618,8 +7031,10 @@ def parse_recent_activity_from_structured_log(limit: int = 50) -> list[dict[str,
     except Exception as e:
         print(f"Error parsing recent activity from structured log: {e}")
         import traceback
+
         traceback.print_exc()
         return []
+
 
 @app.get("/api/recent-activity")
 async def get_recent_activity(
@@ -6655,20 +7070,21 @@ async def get_recent_activity(
             mapped_status = status_mapping.get(item["status"], item["status"])
             mapped_status_text = status_text_mapping.get(item["status"], item.get("action", "Unknown"))
 
-            formatted_items.append({
-                "title": item["title"],
-                "status": mapped_status,
-                "status_text": mapped_status_text,
-                "timestamp": item["last_synced"],
-                "position": item.get("item_number", 0),
-                "total": item.get("total_items", 0),
-            })
+            formatted_items.append(
+                {
+                    "title": item["title"],
+                    "status": mapped_status,
+                    "status_text": mapped_status_text,
+                    "timestamp": item["last_synced"],
+                    "position": item.get("item_number", 0),
+                    "total": item.get("total_items", 0),
+                }
+            )
 
         # Filter to only media items if requested (items with position/total info)
         if media_only:
             formatted_items = [
-                item for item in formatted_items
-                if item.get("position", 0) > 0 and item.get("total", 0) > 0
+                item for item in formatted_items if item.get("position", 0) > 0 and item.get("total", 0) > 0
             ]
 
         if not formatted_items:
@@ -6715,6 +7131,7 @@ async def get_recent_activity(
             "has_prev": False,
             "error": f"Failed to parse log files: {e!s}",
         }
+
 
 @app.get("/api/sync/status/live")
 async def get_live_sync_status():
@@ -6773,6 +7190,7 @@ async def get_live_sync_status():
     except Exception as e:
         print(f"Error getting live sync status: {e}")
         import traceback
+
         traceback.print_exc()
         return {
             "is_running": False,
@@ -6780,6 +7198,7 @@ async def get_live_sync_status():
             "error": str(e),
             "timestamp": datetime.now().isoformat(),
         }
+
 
 @app.get("/api/overseerr/config")
 async def get_overseerr_config():
@@ -6810,6 +7229,7 @@ async def get_overseerr_config():
             "base_url": None,
             "error": f"Configuration error: {e!s}",
         }
+
 
 @app.get("/api/settings/config")
 async def get_settings():
@@ -6887,27 +7307,22 @@ async def get_settings():
             "overseerr_api_key": seerr_api_key or "",
             "overseerr_user_id": user_id or "1",
             "overseerr_4k": is_4k,
-
             # Sync Settings
             "sync_interval": sync_interval,
             "auto_sync": automated_mode,
             "timezone": timezone,
-
             # Notifications
             "discord_webhook": discord_webhook,
             "discord_enabled": bool(discord_webhook),
             "gotify_url": gotify_url or "",
             "gotify_token": gotify_token or "",
             "gotify_enabled": bool(gotify_url),
-
             # Trakt API
             "trakt_client_id": trakt_client_id,
-
             # Service Endpoints
             "frontend_domain": frontend_domain,
             "backend_domain": backend_domain,
             "nuxt_public_api_url": nuxt_public_api_url,
-
             # Content Sources
             "imdb_lists": imdb_lists,
             "trakt_lists": trakt_lists,
@@ -6930,27 +7345,22 @@ async def get_settings():
             "overseerr_api_key": "",
             "overseerr_user_id": "1",
             "overseerr_4k": False,
-
             # Sync Settings
             "sync_interval": 24,
             "auto_sync": True,
             "timezone": "UTC",
-
             # Notifications
             "discord_webhook": "",
             "discord_enabled": False,
             "gotify_url": "",
             "gotify_token": "",
             "gotify_enabled": False,
-
             # Trakt API
             "trakt_client_id": "",
-
             # Service Endpoints
             "frontend_domain": "http://localhost:3222",
             "backend_domain": "http://localhost:4222",
             "nuxt_public_api_url": "http://localhost:4222",
-
             # Content Sources
             "imdb_lists": "",
             "trakt_lists": "",
@@ -6966,12 +7376,13 @@ async def get_settings():
             "simkl_lists": "",
         }
 
+
 @app.post("/api/settings/config")
 async def update_settings(settings: dict):
     """
     Update application settings - saves to database with encryption for sensitive fields.
     Changes take effect immediately (no restart required).
-    
+
     Note: Masked values (****...) from sensitive fields are automatically detected
     and skipped to preserve existing encrypted values in the database.
     """
@@ -6992,8 +7403,7 @@ async def update_settings(settings: dict):
         # it below, so validating it would reject the mask rather than the value
         # actually in the database.
         changing = {
-            key: value for key, value in settings.items()
-            if not (should_encrypt(key) and is_masked_value(str(value)))
+            key: value for key, value in settings.items() if not (should_encrypt(key) and is_masked_value(str(value)))
         }
         errors = validate_settings(changing)
         if errors:
@@ -7031,6 +7441,7 @@ async def update_settings(settings: dict):
         logging.exception(f"Error updating settings: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 @app.post("/api/notifications/test")
 async def test_notification(payload: dict = None):
     """Send a test notification to verify webhook configuration (Discord or Gotify)"""
@@ -7064,18 +7475,25 @@ async def test_notification(payload: dict = None):
                 raise HTTPException(status_code=400, detail=gotify_error)
 
             from datetime import datetime
+
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             try:
                 response = requests.post(
                     f"{url.rstrip('/')}/message",
                     params={"token": token},
-                    json={"title": "🧪 Gotify Integration Test",
-                          "message": "If you see this message, Gotify notifications are working correctly! ✅",
-                          "priority": 0},
+                    json={
+                        "title": "🧪 Gotify Integration Test",
+                        "message": "If you see this message, Gotify notifications are working correctly! ✅",
+                        "priority": 0,
+                    },
                     timeout=10,
                 )
                 response.raise_for_status()
-                return {"success": True, "message": "Test notification sent successfully! Check your Gotify server.", "timestamp": current_time}
+                return {
+                    "success": True,
+                    "message": "Test notification sent successfully! Check your Gotify server.",
+                    "timestamp": current_time,
+                }
             except requests.exceptions.Timeout:
                 raise HTTPException(status_code=504, detail="Gotify request timed out")
             except requests.exceptions.RequestException as e:
@@ -7155,31 +7573,34 @@ async def test_notification(payload: dict = None):
         except ImportError:
             # Fallback to using requests directly
             from datetime import datetime
+
             current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
             # Only send embed, no content to avoid duplicate messages
             payload = {
-                "embeds": [{
-                    "title": "🧪 Discord Integration Test",
-                    "description": "If you see this message, Discord notifications are working correctly! ✅",
-                    "color": 10181046,
-                    "fields": [
-                        {
-                            "name": "Test Time",
-                            "value": current_time,
-                            "inline": True,
+                "embeds": [
+                    {
+                        "title": "🧪 Discord Integration Test",
+                        "description": "If you see this message, Discord notifications are working correctly! ✅",
+                        "color": 10181046,
+                        "fields": [
+                            {
+                                "name": "Test Time",
+                                "value": current_time,
+                                "inline": True,
+                            },
+                            {
+                                "name": "Status",
+                                "value": "✅ Connected",
+                                "inline": True,
+                            },
+                        ],
+                        "footer": {
+                            "text": "ListSync Notification System",
                         },
-                        {
-                            "name": "Status",
-                            "value": "✅ Connected",
-                            "inline": True,
-                        },
-                    ],
-                    "footer": {
-                        "text": "ListSync Notification System",
-                    },
-                    "timestamp": datetime.utcnow().isoformat(),
-                }],
+                        "timestamp": datetime.utcnow().isoformat(),
+                    }
+                ],
             }
 
             response = requests.post(webhook_url, json=payload, timeout=10)
@@ -7203,9 +7624,11 @@ async def test_notification(payload: dict = None):
         raise
     except Exception as e:
         import traceback
+
         error_detail = f"Failed to send test notification: {e!s}\n{traceback.format_exc()}"
         logging.exception(error_detail)
         raise HTTPException(status_code=500, detail=f"Failed to send test notification: {e!s}")
+
 
 def enrich_historic_data_with_database(historic_items):
     """Enrich historic log data with database fields (overseerr_id, imdb_id, year, media_type)"""
@@ -7218,7 +7641,9 @@ def enrich_historic_data_with_database(historic_items):
 
         # Get all database items with their IDs, year, and source list info
         try:
-            cursor.execute("SELECT title, media_type, imdb_id, overseerr_id, status, year, source_list_type, source_list_id FROM synced_items")
+            cursor.execute(
+                "SELECT title, media_type, imdb_id, overseerr_id, status, year, source_list_type, source_list_id FROM synced_items"
+            )
             db_items = cursor.fetchall()
         except sqlite3.OperationalError as e:
             # If year or source list columns don't exist, try without them
@@ -7227,15 +7652,19 @@ def enrich_historic_data_with_database(historic_items):
                 cursor.execute("SELECT title, media_type, imdb_id, overseerr_id, status, year FROM synced_items")
                 db_items_without_source = cursor.fetchall()
                 # Convert to format with source_list_type and source_list_id as None
-                db_items = [(title, media_type, imdb_id, overseerr_id, status, year, None, None)
-                           for title, media_type, imdb_id, overseerr_id, status, year in db_items_without_source]
+                db_items = [
+                    (title, media_type, imdb_id, overseerr_id, status, year, None, None)
+                    for title, media_type, imdb_id, overseerr_id, status, year in db_items_without_source
+                ]
             except sqlite3.OperationalError:
                 # If year column also doesn't exist
                 cursor.execute("SELECT title, media_type, imdb_id, overseerr_id, status FROM synced_items")
                 db_items_minimal = cursor.fetchall()
                 # Convert to format with year, source_list_type and source_list_id as None
-                db_items = [(title, media_type, imdb_id, overseerr_id, status, None, None, None)
-                           for title, media_type, imdb_id, overseerr_id, status in db_items_minimal]
+                db_items = [
+                    (title, media_type, imdb_id, overseerr_id, status, None, None, None)
+                    for title, media_type, imdb_id, overseerr_id, status in db_items_minimal
+                ]
 
         conn.close()
 
@@ -7271,7 +7700,9 @@ def enrich_historic_data_with_database(historic_items):
                     "source_list_id": source_list_id,
                 }
 
-        print(f"DEBUG: Loaded {len(db_lookup)} items from database, sample years: {[v['year'] for v in list(db_lookup.values())[:5]]}")
+        print(
+            f"DEBUG: Loaded {len(db_lookup)} items from database, sample years: {[v['year'] for v in list(db_lookup.values())[:5]]}"
+        )
 
         # Enrich historic items with database information
         for item in historic_items:
@@ -7286,7 +7717,9 @@ def enrich_historic_data_with_database(historic_items):
             # Fallback to title-only match (media_type might be wrong from log parsing)
             elif title_only_key in db_lookup_by_title:
                 db_data = db_lookup_by_title[title_only_key]
-                print(f"DEBUG: Using title-only match for '{item['title']}': log={item['media_type']}, db={db_data['media_type']}")
+                print(
+                    f"DEBUG: Using title-only match for '{item['title']}': log={item['media_type']}, db={db_data['media_type']}"
+                )
 
             if db_data:
                 # Use database media_type as the authoritative source
@@ -7312,6 +7745,7 @@ def enrich_historic_data_with_database(historic_items):
     except Exception as e:
         print(f"Error enriching historic data with database: {e}")
         import traceback
+
         traceback.print_exc()
         # Return original data if enrichment fails
         for item in historic_items:
@@ -7340,6 +7774,7 @@ class SyncType(Enum):
     FULL = "full"
     SINGLE = "single"
 
+
 class ItemStatus(Enum):
     REQUESTED = "requested"
     ALREADY_AVAILABLE = "already_available"
@@ -7348,17 +7783,21 @@ class ItemStatus(Enum):
     NOT_FOUND = "not_found"
     ERROR = "error"
 
+
 @dataclass
 class SyncList:
     """Represents a list that was synced."""
+
     type: str
     id: str
     url: str | None = None
     item_count: int = 0
 
+
 @dataclass
 class SyncItem:
     """Represents an individual item processed during sync."""
+
     title: str
     status: str
     progress_number: int
@@ -7368,9 +7807,11 @@ class SyncItem:
     media_type: str = "movie"
     error_details: str | None = None
 
+
 @dataclass
 class SyncResults:
     """Results summary for a sync session."""
+
     requested: int = 0
     already_available: int = 0
     already_requested: int = 0
@@ -7378,9 +7819,11 @@ class SyncResults:
     not_found: int = 0
     error: int = 0
 
+
 @dataclass
 class SyncSession:
     """Complete sync session data."""
+
     id: str
     type: SyncType
     start_timestamp: str
@@ -7403,6 +7846,7 @@ class SyncSession:
         data = asdict(self)
         data["type"] = self.type.value
         return data
+
 
 class SyncLogParser:
     """Parser for sync log files."""
@@ -7532,8 +7976,7 @@ class SyncLogParser:
         if re.search(self.SYNC_COMPLETE_PATTERN, line):
             return True
         # Fallback to old patterns: "Soluify - List Sync Summary" or the dashed line separator
-        return bool(re.search(self.SYNC_SUMMARY_START, line) or
-                   re.search(self.SYNC_SUMMARY_DASHES, line))
+        return bool(re.search(self.SYNC_SUMMARY_START, line) or re.search(self.SYNC_SUMMARY_DASHES, line))
 
     def parse_list_fetch(self, line: str) -> tuple | None:
         """Parse list fetching line."""
@@ -7552,7 +7995,6 @@ class SyncLogParser:
             return (success_match.group(2), success_match.group(3), int(success_match.group(1)))
 
         return None
-
 
     def parse_item_status(self, line: str, timestamp: str) -> SyncItem | None:
         """Parse an item processing line."""
@@ -7743,11 +8185,13 @@ class SyncLogParser:
                     current_session.results.not_found += 1
                 elif item.status == ItemStatus.ERROR.value:
                     current_session.results.error += 1
-                    current_session.errors.append({
-                        "title": item.title,
-                        "error": item.error_details or "Unknown error",
-                        "timestamp": item.timestamp,
-                    })
+                    current_session.errors.append(
+                        {
+                            "title": item.title,
+                            "error": item.error_details or "Unknown error",
+                            "timestamp": item.timestamp,
+                        }
+                    )
             # Item parsing completed
 
             # Detect summary section start
@@ -7758,7 +8202,6 @@ class SyncLogParser:
 
             if in_summary:
                 summary_lines.append(line_content)
-
 
             # Detect session end
             if self.detect_session_end(line_content, current_session.type):
@@ -7815,10 +8258,12 @@ class SyncLogParser:
                     # If session has results tallied (indicating summary was parsed)
                     # OR it's been more than 10 minutes and we have items processed
                     # consider it completed
-                    has_results = (current_session.results.requested > 0 or
-                                 current_session.results.already_available > 0 or
-                                 current_session.results.skipped > 0 or
-                                 current_session.results.not_found > 0)
+                    has_results = (
+                        current_session.results.requested > 0
+                        or current_session.results.already_available > 0
+                        or current_session.results.skipped > 0
+                        or current_session.results.not_found > 0
+                    )
 
                     if has_results or time_since_start > 600:
                         current_session.status = "completed"
@@ -7840,6 +8285,7 @@ class SyncLogParser:
 # SYNC HISTORY - API Endpoints
 # ==========================================
 
+
 @app.get("/api/sync-history")
 async def get_sync_history(
     limit: int = Query(50, ge=1, le=100),
@@ -7850,7 +8296,7 @@ async def get_sync_history(
 ):
     """
     Get list of sync sessions with filtering and pagination.
-    
+
     Parameters:
     - limit: Maximum number of sessions to return (1-100, default 50)
     - offset: Pagination offset (default 0)
@@ -7907,12 +8353,14 @@ async def get_sync_history(
         # Session is valid if it has lists, items, or results
         has_lists = session.lists and len(session.lists) > 0
         has_items = len(session.items) > 0
-        has_results = (session.results.requested > 0 or
-                      session.results.already_available > 0 or
-                      session.results.already_requested > 0 or
-                      session.results.skipped > 0 or
-                      session.results.not_found > 0 or
-                      session.results.error > 0)
+        has_results = (
+            session.results.requested > 0
+            or session.results.already_available > 0
+            or session.results.already_requested > 0
+            or session.results.skipped > 0
+            or session.results.not_found > 0
+            or session.results.error > 0
+        )
         return has_lists or has_items or has_results
 
     sessions = [s for s in sessions if is_valid_session(s)]
@@ -7922,7 +8370,7 @@ async def get_sync_history(
 
     # Pagination
     total = len(sessions)
-    sessions = sessions[offset:offset + limit]
+    sessions = sessions[offset : offset + limit]
 
     return {
         "sessions": [s.to_dict() for s in sessions],
@@ -7961,12 +8409,14 @@ async def get_sync_history_stats():
     def is_valid_session(session):
         has_lists = session.lists and len(session.lists) > 0
         has_items = len(session.items) > 0
-        has_results = (session.results.requested > 0 or
-                      session.results.already_available > 0 or
-                      session.results.already_requested > 0 or
-                      session.results.skipped > 0 or
-                      session.results.not_found > 0 or
-                      session.results.error > 0)
+        has_results = (
+            session.results.requested > 0
+            or session.results.already_available > 0
+            or session.results.already_requested > 0
+            or session.results.skipped > 0
+            or session.results.not_found > 0
+            or session.results.error > 0
+        )
         return has_lists or has_items or has_results
 
     sessions = [s for s in sessions if is_valid_session(s)]
@@ -7991,6 +8441,7 @@ async def get_sync_history_stats():
 
     # Recent syncs (last 24h, 7d, 30d) - use timedelta for accurate time comparison
     from datetime import timedelta
+
     now = datetime.now()
     last_24h = [s for s in sessions if (now - datetime.fromisoformat(s.start_timestamp)) < timedelta(days=1)]
     last_7d = [s for s in sessions if (now - datetime.fromisoformat(s.start_timestamp)) < timedelta(days=7)]
@@ -8035,9 +8486,7 @@ async def get_sync_history_stats():
             "last_7d": len(last_7d),
             "last_30d": len(last_30d),
         },
-        "most_synced_lists": [
-            {"list": lst, "count": count} for lst, count in most_synced
-        ],
+        "most_synced_lists": [{"list": lst, "count": count} for lst, count in most_synced],
     }
 
 
@@ -8381,7 +8830,7 @@ async def proxy_image(url: str = Query(..., description="Image URL to proxy/cach
     Proxy and cache images from external sources (Trakt, TMDB, etc.).
     This ensures compliance with Trakt's image caching requirements.
     Images are stored in data/images/ folder and served from filesystem.
-    
+
     FLOW:
     1. Check if image is cached in database
     2. If cached, verify file exists and serve from filesystem
@@ -8458,9 +8907,14 @@ async def proxy_image(url: str = Query(..., description="Image URL to proxy/cach
         # Redirects are not followed: a permitted public URL is free to answer
         # with a 302 to a private address, which would defeat the check above.
         logging.info(f"Downloading image from source: {url}")
-        response = requests.get(url, timeout=30, allow_redirects=False, headers={
-            "User-Agent": "ListSync/1.0.0",
-        })
+        response = requests.get(
+            url,
+            timeout=30,
+            allow_redirects=False,
+            headers={
+                "User-Agent": "ListSync/1.0.0",
+            },
+        )
 
         if response.status_code in (301, 302, 303, 307, 308):
             redirect_target = response.headers.get("Location", "")
@@ -8469,9 +8923,14 @@ async def proxy_image(url: str = Query(..., description="Image URL to proxy/cach
                 logging.warning(f"Blocked image proxy redirect to {redirect_target}: {reason}")
                 raise HTTPException(status_code=400, detail=f"Unsafe redirect: {reason}")
             logging.info(f"Following image redirect to: {redirect_target}")
-            response = requests.get(redirect_target, timeout=30, allow_redirects=False, headers={
-                "User-Agent": "ListSync/1.0.0",
-            })
+            response = requests.get(
+                redirect_target,
+                timeout=30,
+                allow_redirects=False,
+                headers={
+                    "User-Agent": "ListSync/1.0.0",
+                },
+            )
 
         if response.status_code != 200:
             raise HTTPException(
@@ -8583,7 +9042,7 @@ async def proxy_image(url: str = Query(..., description="Image URL to proxy/cach
 async def get_image_cache_stats():
     """
     Get statistics about cached images.
-    
+
     Returns:
         dict: Statistics including total images, size, breakdown by source
     """
@@ -8602,10 +9061,10 @@ async def cleanup_image_cache(hours: int = Query(720, description="Remove images
     """
     Clean up expired cached images.
     Removes both database records and files from filesystem.
-    
+
     Args:
         hours: Remove images not accessed in this many hours (default: 720 = 30 days)
-    
+
     Returns:
         dict: Cleanup results
     """
@@ -8656,12 +9115,15 @@ async def list_cached_images(limit: int = Query(50, ge=1, le=1000)):
         with sqlite3.connect(DB_FILE) as conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
-            cursor.execute("""
+            cursor.execute(
+                """
                 SELECT id, image_url, mime_type, file_size, cached_at, last_accessed, source
                 FROM cached_images
                 ORDER BY last_accessed DESC
                 LIMIT ?
-            """, (limit,))
+            """,
+                (limit,),
+            )
             images = [dict(row) for row in cursor.fetchall()]
 
         return {"images": images, "total": len(images)}

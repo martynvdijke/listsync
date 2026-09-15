@@ -21,7 +21,9 @@ SIMKL_USER_TOKEN = os.getenv("SIMKL_USER_TOKEN")
 def get_simkl_headers() -> dict[str, str]:
     """Get headers for SIMKL API requests."""
     if not SIMKL_CLIENT_ID or not SIMKL_USER_TOKEN:
-        raise ValueError("SIMKL_CLIENT_ID and SIMKL_USER_TOKEN required. Get credentials at https://simkl.com/settings/developer/")
+        raise ValueError(
+            "SIMKL_CLIENT_ID and SIMKL_USER_TOKEN required. Get credentials at https://simkl.com/settings/developer/"
+        )
 
     return {
         "Content-Type": "application/json",
@@ -33,15 +35,17 @@ def get_simkl_headers() -> dict[str, str]:
 def fetch_simkl_watchlist(media_type: str) -> list[dict[str, Any]]:
     """
     Fetch user's watchlist from SIMKL API.
-    
+
     Args:
         media_type (str): Type of media to fetch ('movies', 'shows', 'anime')
-        
+
     Returns:
         List[Dict[str, Any]]: List of media items from watchlist
     """
     if not SIMKL_CLIENT_ID or not SIMKL_USER_TOKEN:
-        logging.error("SIMKL_CLIENT_ID and SIMKL_USER_TOKEN required. Get credentials at https://simkl.com/settings/developer/")
+        logging.error(
+            "SIMKL_CLIENT_ID and SIMKL_USER_TOKEN required. Get credentials at https://simkl.com/settings/developer/"
+        )
         return []
 
     url = f"{SIMKL_API_BASE}/sync/all-items/{media_type}"
@@ -74,15 +78,17 @@ def fetch_simkl_watchlist(media_type: str) -> list[dict[str, Any]]:
             # Map SIMKL status to our format
             status = item.get("status", "")
             if status in ["watching", "plantowatch", "completed", "hold", "dropped"]:
-                media_items.append({
-                    "title": title,
-                    "media_type": "movie" if media_type == "movies" else "show",
-                    "year": year,
-                    "tmdb_id": tmdb_id,
-                    "imdb_id": imdb_id,
-                    "tvdb_id": tvdb_id,
-                    "status": status,
-                })
+                media_items.append(
+                    {
+                        "title": title,
+                        "media_type": "movie" if media_type == "movies" else "show",
+                        "year": year,
+                        "tmdb_id": tmdb_id,
+                        "imdb_id": imdb_id,
+                        "tvdb_id": tvdb_id,
+                        "status": status,
+                    }
+                )
 
         logging.info(f"✅ SIMKL API: Fetched {len(media_items)} {media_type} items")
         return media_items
@@ -105,10 +111,10 @@ def fetch_simkl_list(list_id: str) -> list[dict[str, Any]]:
     """
     SIMKL provider is temporarily disabled.
     Waiting for SIMKL API to support custom public lists.
-    
+
     Args:
         list_id (str): List identifier (ignored)
-        
+
     Returns:
         List[Dict[str, Any]]: Empty list with warning message
     """
@@ -128,12 +134,12 @@ def fetch_simkl_list(list_id: str) -> list[dict[str, Any]]:
 def search_simkl_by_title(title: str, year: int | None = None, media_type: str = "movie") -> dict[str, Any] | None:
     """
     Search SIMKL by title and year to get IDs.
-    
+
     Args:
         title (str): Media title
         year (int, optional): Release year
         media_type (str): Type of media ('movie' or 'show')
-        
+
     Returns:
         Optional[Dict[str, Any]]: Media information with IDs, or None if not found
     """

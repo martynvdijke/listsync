@@ -11,13 +11,14 @@ from ..utils.helpers import color_gradient
 # Initialize colorama for cross-platform colored terminal output
 init(autoreset=True)
 
+
 class SyncResults:
     """Class to track sync operation results and statistics."""
 
     def __init__(self):
         self.start_time = time.time()
         self.not_found_items = []  # For #1
-        self.error_items = []      # For #4
+        self.error_items = []  # For #4
         self.media_type_counts = {"movie": 0, "tv": 0}  # For #5
         self.year_distribution = {
             "pre-1980": 0,
@@ -59,7 +60,9 @@ class SyncResults:
         summary += f"⏭️ Skipped: {self.results['skipped']}\n\n"
         summary += "Media Types\n"
         summary += "──────────\n"
-        summary += f"Movies: {self.media_type_counts['movie']} ({self.media_type_counts['movie']/total_items*100:.1f}%)\n"
+        summary += (
+            f"Movies: {self.media_type_counts['movie']} ({self.media_type_counts['movie']/total_items*100:.1f}%)\n"
+        )
         summary += f"TV Shows: {self.media_type_counts['tv']} ({self.media_type_counts['tv']/total_items*100:.1f}%)\n\n"
 
         # Synced Lists section
@@ -92,6 +95,7 @@ class SyncResults:
 
         return summary
 
+
 def display_ascii_art():
     """Display the ASCII art splash screen."""
     ascii_art = r"""
@@ -107,6 +111,7 @@ def display_ascii_art():
         time.sleep(0.1)
     print(Style.RESET_ALL)
 
+
 def display_banner():
     """Display the application banner."""
     banner = """
@@ -115,6 +120,7 @@ Soluify - {servarr-tools_list-sync_v0.6.7}
 ==============================================================
 """
     print(color_gradient(banner, "#00aaff", "#00ffaa"))
+
 
 def display_menu():
     """Display the main menu."""
@@ -133,6 +139,7 @@ def display_menu():
 """
     print(color_gradient(menu, "#00aaff", "#00ffaa") + Style.RESET_ALL)
 
+
 def display_lists(lists: list[dict[str, str]]):
     """Display a list of saved lists."""
     if not lists:
@@ -143,6 +150,7 @@ def display_lists(lists: list[dict[str, str]]):
     for idx, list_info in enumerate(lists, 1):
         print(color_gradient(f"{idx}. {list_info['type'].upper()}: {list_info['id']}", "#ffaa00", "#ff5500"))
 
+
 def display_manage_lists_menu():
     """Display the manage lists submenu."""
     print(color_gradient("\n📋 Manage Lists:", "#00aaff", "#00ffaa"))
@@ -152,10 +160,16 @@ def display_manage_lists_menu():
     print(color_gradient("4. Edit Lists", "#ffaa00", "#ff5500"))
     print(color_gradient("5. Return to Previous Menu", "#ffaa00", "#ff5500"))
 
+
 def display_item_status(result: dict, current_item: int, total_items: int, dry_run: bool = False):
     """Display the status of a processed item."""
     if dry_run:
-        print(color_gradient(f"🔍 {result['title']}: Would be synced ({current_item}/{total_items})", "#ffaa00", "#ff5500") + "\n")
+        print(
+            color_gradient(
+                f"🔍 {result['title']}: Would be synced ({current_item}/{total_items})", "#ffaa00", "#ff5500"
+            )
+            + "\n"
+        )
     else:
         status_info = {
             "requested": ("✅", "Successfully Requested", "#4CAF50", "#45a049"),
@@ -173,7 +187,9 @@ def display_item_status(result: dict, current_item: int, total_items: int, dry_r
         # If there's an error message, log it too for the failures page to pick up
         if result.get("status") in ["error", "not_found"] and result.get("error_message"):
             import logging
+
             logging.info(f"    └─ {result['error_message']}")
+
 
 def display_summary(sync_results: SyncResults):
     """Display sync results in a formatted summary."""
@@ -237,9 +253,11 @@ def display_summary(sync_results: SyncResults):
 
     print(color_gradient(summary, "#9400D3", "#00FF00") + Style.RESET_ALL)
 
+
 def display_welcome_message():
     """Display the welcome message."""
     print(color_gradient("👋  Welcome to the List to Seerr Sync Tool!", "#00aaff", "#00ffaa") + "\n")
+
 
 def display_config_message(source: str):
     """Display configuration source message."""
@@ -249,6 +267,7 @@ def display_config_message(source: str):
         print(color_gradient("📝 Using configuration from .env file", "#00aaff", "#00ffaa"))
     elif source == "setup":
         print(color_gradient("\n🔧 First-time setup required", "#ffaa00", "#ff5500"))
+
 
 def display_automated_mode_message(sync_interval: float):
     """Display automated mode startup message."""
@@ -264,21 +283,26 @@ def display_automated_mode_message(sync_interval: float):
 
     print(color_gradient(f"\n⚙️  Starting automated sync mode (interval: {interval_text})...", "#00aaff", "#00ffaa"))
 
+
 def display_lists_loaded_message():
     """Display message when lists are loaded from environment."""
     print(color_gradient("📋 Lists loaded from environment variables", "#00aaff", "#00ffaa"))
+
 
 def display_exit_message():
     """Display exit message."""
     print("\n👋 Exiting. Goodbye!")
 
+
 def display_error_message(message: str):
     """Display an error message."""
     print(color_gradient(f"\n❌ {message}", "#ff0000", "#aa0000"))
 
+
 def display_success_message(message: str):
     """Display a success message."""
     print(color_gradient(f"\n✅ {message}", "#00ff00", "#00aa00"))
+
 
 def display_warning_message(message: str):
     """Display a warning message."""

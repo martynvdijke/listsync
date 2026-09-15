@@ -120,12 +120,10 @@ ENV POETRY_NO_INTERACTION=1 \
 # Build virtual environment with core dependencies only
 RUN --mount=type=cache,target=/tmp/poetry_cache poetry install --only main --no-root
 
-# Copy only the core application files
+# Copy only the core application files. Dependencies come entirely from the
+# `poetry install --only main` above (pyproject.toml); there is no separate
+# requirements.txt to install afterwards.
 COPY list_sync/ ./list_sync/
-COPY requirements.txt ./
-
-# Install any additional core requirements
-RUN .venv/bin/pip install -r requirements.txt
 
 # "activate" Python venv
 ENV PATH="/usr/src/app/.venv/bin:$PATH"

@@ -4,7 +4,6 @@ ListSync Web UI API Server Startup Script
 """
 
 import os
-import subprocess
 import sys
 from pathlib import Path
 
@@ -27,14 +26,10 @@ def check_dependencies():
         return True
     except ImportError as e:
         print(f"❌ Missing dependency: {e}")
-        print("📦 Installing dependencies...")
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-r", "api_requirements.txt"])
-            print("✅ Dependencies installed successfully")
-            return True
-        except subprocess.CalledProcessError:
-            print("❌ Failed to install dependencies")
-            return False
+        # pyproject.toml is the single dependency manifest; the API server's
+        # dependencies live in the `api` group (see [tool.poetry.group.api]).
+        print("📦 Install them with: poetry install --only main,api")
+        return False
 
 
 def check_listsync_data():

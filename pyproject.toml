@@ -33,6 +33,23 @@ halo = ">=0.0.31"
 # what makes "enabled" mean the same thing everywhere.
 ruff = "0.6.7"
 
+# The FastAPI backend's own dependencies. Kept in a separate group so the
+# core-only image (`poetry install --only main`, see Dockerfile.core) does not
+# carry a web server it never starts. The full image installs
+# `--only main,api` (see Dockerfile); a local checkout uses
+# `poetry install --only main,api` as well.
+[tool.poetry.group.api]
+optional = true
+
+[tool.poetry.group.api.dependencies]
+# fastapi 0.115.3 is the first release requiring starlette >= 0.40, where the
+# unbounded multipart parsing (CVE-2024-47874) was fixed. Floors only - the
+# lockfile decides the version.
+fastapi = ">=0.115.3"
+uvicorn = { version = ">=0.30.0", extras = ["standard"] }
+pydantic = ">=2.9.0"
+psutil = ">=5.9.0"
+
 [tool.ruff]
 line-length = 120
 target-version = "py312"
@@ -51,18 +68,6 @@ ignore = ["S101", "T201", "T203", "PLR0913", "PLR0915", "S603", "S607", "FBT002"
 # shrink. Adding an entry is an explicit, reviewable decision.
 [tool.ruff.lint.per-file-ignores]
 "api_server.py" = ["A002", "ARG001", "B007", "B008", "B904", "BLE001", "C401", "DTZ003", "DTZ005", "DTZ006", "DTZ007", "E402", "E501", "E722", "ERA001", "EXE001", "F811", "F841", "FBT003", "G004", "G201", "PERF401", "PLW0603", "PLW2901", "PTH103", "PTH107", "PTH108", "PTH110", "PTH116", "PTH204", "RET504", "RUF005", "RUF012", "RUF013", "S104", "S110", "S608", "SIM102", "SIM401", "SLF001", "TRY300", "TRY301", "TRY401", "UP038", "W291"]
-"development-files/analysis/analyze_database.py" = ["E501", "EXE001", "PLR1722", "PTH109", "PTH110", "PTH118", "PTH120", "SIM118", "W291"]
-"development-files/analysis/analyze_listsync.py" = ["BLE001", "DTZ005", "DTZ006", "DTZ007", "INP001", "PTH110", "TRY300"]
-"development-files/analysis/examine_db.py" = ["INP001", "PTH110", "PTH202", "S608"]
-"development-files/analysis/generate_sample_api_response.py" = ["INP001", "PTH100", "PTH110", "PTH120"]
-"development-files/analysis/sync_log_parser_prototype.py" = ["B007", "BLE001", "DTZ005", "DTZ007", "E722", "F841", "INP001", "PLW2901", "RUF012", "S110"]
-"development-files/scripts/analyze_anime_collections.py" = ["BLE001", "EXE001"]
-"development-files/scripts/analyze_db.py" = ["BLE001", "E501", "INP001", "PTH118", "S608"]
-"development-files/scripts/check_db.py" = ["E501", "INP001"]
-"development-files/scripts/diagnose_list_users.py" = ["BLE001", "PTH110", "S310"]
-"development-files/scripts/test_full_image_flow.py" = ["BLE001", "EXE001", "TRY300"]
-"development-files/scripts/test_image_caching.py" = ["BLE001", "EXE001", "PTH118", "TRY300"]
-"development-files/scripts/validate_collections.py" = ["BLE001", "C414", "DTZ005", "E501", "E741", "EXE001", "RUF001", "SIM117", "TRY300"]
 "list_sync/api/seerr.py" = ["B904", "C416", "E501", "EM102", "G004", "RUF013", "S113", "TID252", "TRY003", "TRY300", "TRY401"]
 "list_sync/api/tmdb.py" = ["G004", "TID252"]
 "list_sync/config.py" = ["BLE001", "C416", "E501", "E722", "E731", "E741", "G004", "PLW2901", "PTH107", "PTH110", "PTH118", "RUF013", "S113", "SIM102", "TRY300", "TRY401"]

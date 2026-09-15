@@ -134,14 +134,14 @@ docker-compose -f docker-compose.core.yml logs -f
 <summary>🍿 <strong>Option 3: Running ListSync Locally (Without Docker)</strong></summary>
 
 ### **Prerequisites**
-- Python 3.9+, Node.js 18+, Chrome/Chromium, Git
+- Python 3.12+, Node.js 18+, Chrome/Chromium, Git, [Poetry](https://python-poetry.org/)
 
 ### **Setup**
 
 ```bash
-# Clone and install dependencies
+# Clone and install dependencies (pyproject.toml is the only dependency manifest)
 git clone https://github.com/Woahai321/list-sync.git && cd list-sync
-pip install -r requirements.txt -r api_requirements.txt
+poetry install --only main,api
 cd listsync-nuxt && npm install && cd ..
 ```
 

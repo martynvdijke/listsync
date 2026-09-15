@@ -29,12 +29,10 @@ ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_CREATE=true \
     POETRY_CACHE_DIR=/tmp/poetry_cache
 
-# Build virtual environment with dependencies
-RUN --mount=type=cache,target=/tmp/poetry_cache poetry install --only main --no-root
-
-# Install additional API dependencies
-COPY api_requirements.txt ./
-RUN .venv/bin/pip install -r api_requirements.txt
+# Build virtual environment with dependencies. The `api` group (FastAPI, uvicorn,
+# pydantic, psutil) is installed here and only here: pyproject.toml is the single
+# dependency manifest, so there is no api_requirements.txt to keep in sync.
+RUN --mount=type=cache,target=/tmp/poetry_cache poetry install --only main,api --no-root
 
 # Stage 2: Node.js Builder (Frontend)
 FROM node:${NODE_VERSION}-slim AS node-builder

@@ -1,3 +1,8 @@
+# Full deployment built from local source (Dockerfile).
+# Mode: full web UI + API + core sync, built on this machine.
+#   Run:  docker compose -f docker-compose.local.yml up -d --build
+# Published image (no build): docker-compose.yml
+# Core-only (no web UI/API):  docker-compose.core.yml
 services:
   listsync-full:
     build:

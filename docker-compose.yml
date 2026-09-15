@@ -1,3 +1,8 @@
+# Full deployment from the published image (ghcr.io/woahai321/list-sync:main).
+# Mode: full web UI + API + core sync, no local build.
+#   Run:  docker compose up -d
+# Local source build of the same mode: docker-compose.local.yml
+# Core-only (no web UI/API):        docker-compose.core.yml
 services:
   listsync-full:
     image: ghcr.io/woahai321/list-sync:main

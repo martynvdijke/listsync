@@ -1,3 +1,7 @@
+# Core-only deployment built from local source (Dockerfile.core).
+# Mode: headless sync engine only - no web UI, no API server.
+#   Run:  docker compose -f docker-compose.core.yml up -d --build
+# Full deployments: docker-compose.yml (published) or docker-compose.local.yml (local build)
 services:
   listsync-core:
     build:

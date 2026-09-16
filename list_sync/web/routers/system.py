@@ -1,27 +1,24 @@
 """routers.system — moved verbatim from api_server.py (modularize-api-server)."""
 
-from fastapi import APIRouter
-
-from datetime import datetime
 import logging
 import os
+from datetime import datetime
 
-from fastapi import HTTPException
 import requests
+from fastapi import APIRouter, HTTPException
 
 from list_sync.config import load_env_config
-from list_sync.database import DB_FILE
-from list_sync.database import check_database_connection
-from list_sync.database import configure_sync_interval
-from list_sync.database import load_sync_interval
-from list_sync.utils.timezone_utils import get_current_timezone_info
-from list_sync.utils.timezone_utils import list_supported_abbreviations
-from list_sync.utils.timezone_utils import normalize_timezone_input
-from list_sync.web.common import SystemStatus
-from list_sync.web.common import build_log_info
-from list_sync.web.common import find_listsync_processes
+from list_sync.database import DB_FILE, check_database_connection, configure_sync_interval, load_sync_interval
+from list_sync.utils.timezone_utils import (
+    get_current_timezone_info,
+    list_supported_abbreviations,
+    normalize_timezone_input,
+)
+from list_sync.web.common import SyncIntervalUpdate, SystemStatus, build_log_info, find_listsync_processes
 
 router = APIRouter()
+
+
 @router.get("/api/system/status")
 async def get_system_status():
     """Comprehensive system health check"""

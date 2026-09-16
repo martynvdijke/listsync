@@ -1,17 +1,16 @@
 """routers.settings — moved verbatim from api_server.py (modularize-api-server)."""
 
-from fastapi import APIRouter
-
 import logging
 import os
 
-from fastapi import HTTPException
 import requests
+from fastapi import APIRouter, HTTPException
 
-from list_sync.database import DatabaseError
-from list_sync.database import configure_sync_interval
+from list_sync.database import DatabaseError, configure_sync_interval
 
 router = APIRouter()
+
+
 @router.get("/api/settings/config")
 async def get_settings():
     """Get all application settings for the settings page (reads from database or .env)"""

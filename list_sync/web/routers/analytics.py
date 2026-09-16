@@ -1,28 +1,31 @@
 """routers.analytics — moved verbatim from api_server.py (modularize-api-server)."""
 
-from fastapi import APIRouter
-
 import logging
 import os
 
-from fastapi import HTTPException
-from fastapi import Query
+from fastapi import APIRouter, HTTPException, Query
 
 from list_sync.config import load_env_config
-from list_sync.database import DB_FILE
-from list_sync.database import get_duplicate_count
-from list_sync.database import get_recent_sync_items
-from list_sync.database import normalize_list_id
-from list_sync.database import query_requested_items
-from list_sync.database import query_sync_items
-from list_sync.web.common import REPORTING_FAILURE_STATUSES
-from list_sync.web.common import REPORTING_SUCCESS_STATUSES
-from list_sync.web.common import analyze_data_quality
-from list_sync.web.common import build_log_info
-from list_sync.web.common import get_deduplicated_items
+from list_sync.database import (
+    DB_FILE,
+    get_duplicate_count,
+    get_recent_sync_items,
+    normalize_list_id,
+    query_requested_items,
+    query_sync_items,
+)
+from list_sync.web.common import (
+    REPORTING_FAILURE_STATUSES,
+    REPORTING_SUCCESS_STATUSES,
+    analyze_data_quality,
+    build_log_info,
+    get_deduplicated_items,
+)
 from list_sync.web.services.analytics import process_analytics_data
 
 router = APIRouter()
+
+
 @router.get("/api/stats/sync")
 async def get_sync_stats():
     """Get deduplicated sync statistics"""

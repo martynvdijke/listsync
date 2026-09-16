@@ -1,31 +1,36 @@
 """routers.lists — moved verbatim from api_server.py (modularize-api-server)."""
 
-from fastapi import APIRouter
-
-from datetime import UTC
 import logging
+from datetime import UTC
 
-from fastapi import HTTPException
-from fastapi import Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from list_sync.config import load_env_config
-from list_sync.database import count_item_lists
-from list_sync.database import delete_list
-from list_sync.database import get_item_lists_for_items
-from list_sync.database import get_item_tmdb_and_posters
-from list_sync.database import get_list_items
-from list_sync.database import get_poster_urls
-from list_sync.database import get_raw_lists
-from list_sync.database import load_list_ids
-from list_sync.database import normalize_list_id
-from list_sync.database import save_list_id
-from list_sync.database import update_list_user_id
-from list_sync.web.common import _describe_overseerr_user
-from list_sync.web.common import _overseerr_user_names
-from list_sync.web.common import _validate_overseerr_user
-from list_sync.web.common import get_deduplicated_items
+from list_sync.database import (
+    count_item_lists,
+    delete_list,
+    get_item_lists_for_items,
+    get_item_tmdb_and_posters,
+    get_list_items,
+    get_poster_urls,
+    get_raw_lists,
+    load_list_ids,
+    normalize_list_id,
+    save_list_id,
+    update_list_user_id,
+)
+from list_sync.web.common import (
+    ListAdd,
+    ListUserUpdate,
+    _describe_overseerr_user,
+    _overseerr_user_names,
+    _validate_overseerr_user,
+    get_deduplicated_items,
+)
 
 router = APIRouter()
+
+
 @router.get("/api/lists")
 async def get_lists():
     """Get all configured lists"""

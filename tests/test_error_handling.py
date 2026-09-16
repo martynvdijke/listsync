@@ -79,6 +79,7 @@ logging.disable(logging.CRITICAL)
 from starlette.requests import Request
 
 import api_server
+import list_sync.web.app as web_app
 
 scope = {
     "type": "http",
@@ -94,9 +95,10 @@ response = asyncio.run(api_server.unhandled_exception_handler(Request(scope), Ru
 check("unhandled error -> 500", response.status_code, 500)
 
 # --- startup fails loudly when a required resource cannot be initialized ---
-api_server.init_database = lambda: (_ for _ in ()).throw(RuntimeError("db down"))
+# startup_event lives in the app factory module now; patch its own global.
+web_app.init_database = lambda: (_ for _ in ()).throw(RuntimeError("db down"))
 try:
-    asyncio.run(api_server.startup_event())
+    asyncio.run(web_app.startup_event())
     outcome = "returned"
 except RuntimeError:
     outcome = "raised"

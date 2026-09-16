@@ -1,18 +1,17 @@
 """routers.sync — moved verbatim from api_server.py (modularize-api-server)."""
 
-from fastapi import APIRouter
-
-from datetime import UTC
-from datetime import datetime
 import logging
 import signal
+from datetime import UTC, datetime
 
-from fastapi import HTTPException
 import psutil
+from fastapi import APIRouter, HTTPException
 
 from list_sync.web.common import find_listsync_processes
 
 router = APIRouter()
+
+
 @router.post("/api/sync/trigger")
 async def trigger_manual_sync(sync_request: dict = None):
     """Trigger a manual sync by sending SIGUSR1 signal to ListSync process"""

@@ -1,14 +1,16 @@
 """services.sync_runner — moved verbatim from api_server.py (modularize-api-server)."""
 
-from datetime import datetime
 import asyncio
 import json
 import logging
 import multiprocessing
 import os
 import signal
+from datetime import datetime
 
 from fastapi import HTTPException
+
+
 def _close_running_sync_record(status: str, message: str, pid: int | None = None) -> None:
     """
     Close out the in-progress sync record after killing the process running it.

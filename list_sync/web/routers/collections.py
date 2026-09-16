@@ -1,17 +1,16 @@
 """routers.collections — moved verbatim from api_server.py (modularize-api-server)."""
 
-from fastapi import APIRouter
-
 import asyncio
 import logging
 import multiprocessing
 
-from fastapi import HTTPException
-from fastapi import Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from list_sync.web.services.sync_runner import _run_collection_sync_in_subprocess
 
 router = APIRouter()
+
+
 @router.get("/api/collections")
 async def get_collections(
     page: int = Query(1, ge=1),

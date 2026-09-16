@@ -1,19 +1,17 @@
 """routers.images — moved verbatim from api_server.py (modularize-api-server)."""
 
-from fastapi import APIRouter
-
-from datetime import datetime
 import logging
+from datetime import datetime
 
-from fastapi import HTTPException
-from fastapi import Query
-from fastapi import Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 
 from list_sync.database import fetch_cached_images
 from list_sync.web.services.images import sniff_image_type
 
 router = APIRouter()
+
+
 @router.get("/api/images/proxy")
 async def proxy_image(url: str = Query(..., description="Image URL to proxy/cache")):
     """

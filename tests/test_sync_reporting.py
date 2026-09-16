@@ -267,9 +267,13 @@ for name in FORBIDDEN:
     hits = [f.relative_to(REPO) for f in scan_files if name in f.read_text(errors="ignore")]
     check(f"forbidden parser gone: {name}", hits, [])
 
-api_text = (REPO / "api_server.py").read_text(errors="ignore")
-check("single live-tail reader", api_text.count("def get_log_entries("), 1)
-check_true("live-tail reader still used by SSE", "get_log_entries(" in api_text)
+# The single log reader now lives under list_sync/web (the shim holds no logic).
+app_text = "\n".join(f.read_text(errors="ignore") for f in scan_files)
+check("single live-tail reader", app_text.count("def get_log_entries("), 1)
+check_true(
+    "live-tail reader reachable from the SSE/log routes",
+    "get_log_entries(" in (REPO / "list_sync/web/routers/logs.py").read_text(errors="ignore"),
+)
 
 main_text = (REPO / "list_sync" / "main.py").read_text(errors="ignore")
 check_true("sync pipeline persists sync_items", "add_item_to_sync(" in main_text)

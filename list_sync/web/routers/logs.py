@@ -1,20 +1,17 @@
 """routers.logs — moved verbatim from api_server.py (modularize-api-server)."""
 
-from fastapi import APIRouter
-
-from datetime import datetime
-from datetime import timedelta
 import logging
 import os
+from datetime import datetime, timedelta
 
-from fastapi import HTTPException
-from fastapi import Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
-from list_sync.web.services.logs import get_log_entries
-from list_sync.web.services.logs import stream_log_updates
+from list_sync.web.services.logs import get_log_entries, stream_log_updates
 
 router = APIRouter()
+
+
 @router.get("/api/logs/entries")
 async def get_log_entries_endpoint(
     page: int = Query(1, ge=1),

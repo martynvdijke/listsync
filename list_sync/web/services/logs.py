@@ -1,16 +1,15 @@
 """services.logs — moved verbatim from api_server.py (modularize-api-server)."""
 
-from collections.abc import AsyncGenerator
-from datetime import datetime
 import asyncio
 import json
 import logging
 import os
+from collections.abc import AsyncGenerator
+from datetime import datetime
 
-from list_sync.web.common import LogEntry
-from list_sync.web.common import LogStreamResponse
-from list_sync.web.common import _LOG_CATEGORY_KEYWORDS
-from list_sync.web.common import _LOG_LINE_RE
+from list_sync.web.common import _LOG_CATEGORY_KEYWORDS, _LOG_LINE_RE, LogEntry, LogStreamResponse
+
+
 def get_line_number(entry):
     """Extract line number from log entry ID for secondary sorting"""
     try:

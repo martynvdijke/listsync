@@ -1,4 +1,5 @@
 """services.images — moved verbatim from api_server.py (modularize-api-server)."""
+
 _IMAGE_SIGNATURES = (
     (b"\xff\xd8\xff", "jpeg"),
     (b"\x89PNG\r\n\x1a\n", "png"),

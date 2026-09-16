@@ -1,19 +1,18 @@
 """common — moved verbatim from api_server.py (modularize-api-server)."""
 
-from collections import Counter
-from datetime import datetime
-from typing import Any
 import logging
 import os
 import re
+from collections import Counter
+from datetime import datetime
+from typing import Any
 
-from pydantic import BaseModel
 import psutil
+from pydantic import BaseModel
 
-from list_sync.database import DB_FILE
-from list_sync.database import get_all_synced_items
-from list_sync.database import get_sync_info
-from list_sync.database import get_synced_items_quality_rows
+from list_sync.database import DB_FILE, get_all_synced_items, get_sync_info, get_synced_items_quality_rows
+
+
 class SyncIntervalUpdate(BaseModel):
     interval_hours: float
 

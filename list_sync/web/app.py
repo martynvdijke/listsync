@@ -82,7 +82,7 @@ def create_app() -> FastAPI:
     """
     # Imported inside the factory so the routers (and their service dependencies)
     # are only loaded when an app is actually built.
-    from list_sync.web.routers import (  # noqa: PLC0415
+    from list_sync.web.routers import (
         analytics,
         collections,
         images,
@@ -108,7 +108,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.add_exception_handler(Exception, unhandled_exception_handler)
-    app.add_event_handler("startup", startup_event)
+    app.on_event("startup")(startup_event)
 
     # Registration order mirrors the original single-module decorator order so
     # route precedence is unchanged.

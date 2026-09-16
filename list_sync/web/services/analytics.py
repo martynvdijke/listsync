@@ -1,13 +1,13 @@
 """services.analytics — moved verbatim from api_server.py (modularize-api-server)."""
 
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
 import logging
+from datetime import UTC, datetime, timedelta
 
 from pydantic import BaseModel
 
 from list_sync.database import get_analytics_payload
+
+
 class AnalyticsOverview(BaseModel):
     total_items: int
     success_rate: float

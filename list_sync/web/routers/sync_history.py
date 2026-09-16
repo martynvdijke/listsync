@@ -1,19 +1,17 @@
 """routers.sync_history — moved verbatim from api_server.py (modularize-api-server)."""
 
-from fastapi import APIRouter
-
-from datetime import datetime
 import logging
+from datetime import datetime
 
-from fastapi import HTTPException
-from fastapi import Query
+from fastapi import APIRouter, HTTPException, Query
 
 from list_sync.database import get_sync_history_stats as query_sync_history_stats
-from list_sync.database import get_sync_session_by_id
-from list_sync.database import get_sync_sessions
+from list_sync.database import get_sync_session_by_id, get_sync_sessions
 from list_sync.web.services.logs import get_log_entries
 
 router = APIRouter()
+
+
 @router.get("/api/sync-history")
 async def get_sync_history(
     limit: int = Query(50, ge=1, le=100),

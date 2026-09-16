@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/martynvdijke/listsync/compare/v1.2.0...v1.3.0) (2026-09-16)
+
+
+### Features
+
+* **api:** publish response schemas for the frontend contract ([2d8105c](https://github.com/martynvdijke/listsync/commit/2d8105cf8890458b674dfc1bf386465774793c21))
+
 # [1.2.0](https://github.com/martynvdijke/listsync/compare/v1.1.1...v1.2.0) (2026-09-16)
 
 

@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/martynvdijke/listsync/compare/v1.1.1...v1.2.0) (2026-09-16)
+
+
+### Features
+
+* **api:** generate a drift-checked TS contract from OpenAPI ([1c99ad1](https://github.com/martynvdijke/listsync/commit/1c99ad10e751025d233aff866476b66d8f976a4f))
+
 ## [1.1.1](https://github.com/martynvdijke/listsync/compare/v1.1.0...v1.1.1) (2026-09-15)
 
 # [1.1.0](https://github.com/martynvdijke/listsync/compare/v1.0.0...v1.1.0) (2026-09-14)

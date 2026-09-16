@@ -1,4 +1,14 @@
 // Core types for ListSync Nuxt Frontend
+//
+// `./api` is generated from the backend OpenAPI schema by `npm run openapi`.
+// It is re-exported here so app code can adopt it incrementally; the
+// hand-written interfaces below predate it and remain the app-facing shapes
+// where the schema publishes no response model (see the generated API
+// contract section at the bottom).
+
+import type { components, paths } from './api'
+
+export type { components, operations, paths } from './api'
 
 export interface SyncStats {
   total_processed: number      // Total items processed after deduplication
@@ -475,3 +485,56 @@ export interface CollectionSyncResponse {
   }
 }
 
+// ==========================================
+// Generated API contract
+// ==========================================
+
+/**
+ * Use the OpenAPI-derived type once it is meaningful.
+ *
+ * Most backend routes return `Dict[str, Any]`, so their 200 response resolves
+ * to `unknown` in the generated contract. Until a route publishes a response
+ * model the hand-written interface is kept; when one lands the generated shape
+ * takes over automatically.
+ */
+export type GeneratedOr<Generated, Handwritten> = [unknown] extends [Generated] ? Handwritten : Generated
+
+/** Response of `GET /api/stats/sync`. */
+export type ApiStatsResponse = GeneratedOr<
+  paths['/api/stats/sync']['get']['responses'][200]['content']['application/json'],
+  SyncStats
+>
+
+/** Response of `GET /api/system/health`. */
+export type ApiSystemHealthResponse = GeneratedOr<
+  paths['/api/system/health']['get']['responses'][200]['content']['application/json'],
+  SystemHealth
+>
+
+/** Response of `GET /api/sync/status`. */
+export type ApiSyncStatusResponse = GeneratedOr<
+  paths['/api/sync/status']['get']['responses'][200]['content']['application/json'],
+  SyncProcessStatus
+>
+
+/** Response of `GET /api/sync/status/live`. */
+export type ApiLiveSyncStatusResponse = GeneratedOr<
+  paths['/api/sync/status/live']['get']['responses'][200]['content']['application/json'],
+  LiveSyncStatus
+>
+
+/** Request body of `POST /api/lists`. */
+export type ApiListAddRequest = components['schemas']['ListAdd']
+
+/**
+ * `ListAdd` marks `user_id` required because the schema gives it a default;
+ * the API accepts it omitted and applies that default, so callers may leave it
+ * out.
+ */
+export type ApiListAddInput = Omit<ApiListAddRequest, 'user_id'> & Partial<Pick<ApiListAddRequest, 'user_id'>>
+
+/** Request body of `PATCH /api/lists/{list_type}/{list_id}/user`. */
+export type ApiListUserUpdateRequest = components['schemas']['ListUserUpdate']
+
+/** Request body of `PUT /api/sync-interval`. */
+export type ApiSyncIntervalUpdateRequest = components['schemas']['SyncIntervalUpdate']

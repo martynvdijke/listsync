@@ -3,7 +3,7 @@
  */
 
 import { defineStore } from 'pinia'
-import type { LiveSyncStatus, SyncInterval } from '~/types'
+import type { ApiLiveSyncStatusResponse, SyncInterval } from '~/types'
 
 export const useSyncStore = defineStore('sync', {
   state: () => ({
@@ -16,7 +16,7 @@ export const useSyncStore = defineStore('sync', {
     totalItems: 0,
     
     // Live sync data
-    liveSyncStatus: null as LiveSyncStatus | null,
+    liveSyncStatus: null as ApiLiveSyncStatusResponse | null,
     
     // Timing
     lastSync: null as string | null,

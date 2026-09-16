@@ -100,3 +100,42 @@ jobs:
 
       - name: Check formatting
         run: ruff format --check .
+
+  # Regenerates types/api.ts from the backend OpenAPI schema and fails if it
+  # differs from what is committed, so a schema change without a regenerated
+  # contract is caught in review rather than at runtime.
+  openapi-contract:
+    name: OpenAPI contract
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: listsync-nuxt/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # The generator imports the FastAPI app bootless, so it needs the same
+      # backend dependencies the suites use (seleniumbase/bs4/halo are stubbed).
+      - name: Install schema export dependencies
+        run: pip install -r tests/requirements.txt
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: listsync-nuxt
+
+      - name: Regenerate the API contract
+        run: npm run openapi
+        working-directory: listsync-nuxt
+
+      - name: Fail on drift
+        run: git diff --exit-code -- types/api.ts
+        working-directory: listsync-nuxt

@@ -1,0 +1,15 @@
+{
+  "//": [
+    "Scoped typecheck for the generated API contract.",
+    "The full Nuxt app has pre-existing type errors (run `npm run typecheck:full`",
+    "to see them), and Nuxt's auto-import declaration files pull in every",
+    "composable/store, so this gates exactly the files the contract owns: the",
+    "generated types and the re-export/derivation layer that app code imports.",
+    "A renamed or removed generated path/schema fails here."
+  ],
+  "extends": "./.nuxt/tsconfig.app.json",
+  "include": [
+    "types/api.ts",
+    "types/index.ts"
+  ]
+}

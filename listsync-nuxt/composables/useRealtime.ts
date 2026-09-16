@@ -4,9 +4,12 @@
  */
 
 /**
- * Server-Sent Events (SSE) composable
+ * Server-Sent Events (SSE) composable.
+ *
+ * Defaults to the backend log stream (`/api/logs/stream`, a real SSE endpoint);
+ * pass a different path for other streams.
  */
-export function useSSE(endpoint: string) {
+export function useSSE(endpoint: string = '/logs/stream') {
   const config = useRuntimeConfig()
   const baseURL = `${config.public.apiUrl}${config.public.apiBase}`
   
@@ -75,14 +78,11 @@ export function useSSE(endpoint: string) {
     setTimeout(connect, 1000)
   }
 
-  // Auto-connect on mount
-  // DISABLED: Endpoint doesn't support SSE yet, returns JSON instead
-  // TODO: Enable when backend implements SSE endpoint
+  // Auto-connect on mount (client-side only)
   onMounted(() => {
-    // Disabled until backend supports SSE
-    // if (process.client) {
-    //   connect()
-    // }
+    if (process.client) {
+      connect()
+    }
   })
 
   // Auto-disconnect on unmount

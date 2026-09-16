@@ -33,3 +33,9 @@ node_modules
 # Temp files
 *.tmp
 .temp
+
+# Transient OpenAPI schema (types/api.ts is the committed artifact)
+openapi.json
+
+# TypeScript incremental build info
+*.tsbuildinfo

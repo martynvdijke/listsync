@@ -3,11 +3,11 @@
  */
 
 import { defineStore } from 'pinia'
-import type { SyncStats } from '~/types'
+import type { ApiStatsResponse } from '~/types'
 
 export const useStatsStore = defineStore('stats', {
   state: () => ({
-    syncStats: null as SyncStats | null,
+    syncStats: null as ApiStatsResponse | null,
     loading: false,
     error: null as string | null,
     lastFetched: null as Date | null,

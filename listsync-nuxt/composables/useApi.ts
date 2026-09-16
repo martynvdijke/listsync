@@ -4,6 +4,25 @@
  */
 
 import type { UseFetchOptions } from 'nuxt/app'
+import type { paths } from '~/types'
+
+/** HTTP methods that appear as keys on a generated path item. */
+type PathMethod<Path extends keyof paths> = Extract<
+  keyof paths[Path],
+  'get' | 'post' | 'put' | 'patch' | 'delete'
+>
+
+/**
+ * Success JSON body for a generated path+method, so callers can type a call
+ * from the OpenAPI contract instead of a hand-written shape. Resolves to
+ * `unknown` where the backend publishes no response model for the operation.
+ */
+export type ApiResponse<Path extends keyof paths, Method extends PathMethod<Path>> =
+  paths[Path][Method] extends {
+    responses: { 200: { content: { 'application/json': infer Body } } }
+  }
+    ? Body
+    : unknown
 
 /**
  * Generic API call composable with automatic loading and error handling

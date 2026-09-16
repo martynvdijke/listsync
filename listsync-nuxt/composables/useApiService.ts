@@ -3,7 +3,17 @@
  * Uses relative URLs to work with Nitro proxy in Docker
  */
 
-import type { FailedItemsResponse, FailedItem } from '~/types'
+import type {
+  FailedItemsResponse,
+  FailedItem,
+  ApiStatsResponse,
+  ApiSystemHealthResponse,
+  ApiSyncStatusResponse,
+  ApiLiveSyncStatusResponse,
+  ApiListAddInput,
+  ApiListUserUpdateRequest,
+  ApiSyncIntervalUpdateRequest,
+} from '~/types'
 
 export function useApiService() {
   // Use relative URLs - Nitro proxy will handle routing
@@ -69,12 +79,12 @@ export function useApiService() {
 
   return {
     // Dashboard & Statistics
-    async getStats() {
-      return apiCall(`${baseURL}/stats/sync`)
+    async getStats(): Promise<ApiStatsResponse> {
+      return apiCall<ApiStatsResponse>(`${baseURL}/stats/sync`)
     },
 
-    async getSystemHealth() {
-      return apiCall(`${baseURL}/system/health`)
+    async getSystemHealth(): Promise<ApiSystemHealthResponse> {
+      return apiCall<ApiSystemHealthResponse>(`${baseURL}/system/health`)
     },
 
     async getDataQuality() {
@@ -95,7 +105,7 @@ export function useApiService() {
       return apiCall(`${baseURL}/lists/${listType}/${encodedListId}/items?limit=${limit}`)
     },
 
-    async addList(list: any) {
+    async addList(list: ApiListAddInput) {
       return apiCall(`${baseURL}/lists`, {
         method: 'POST',
         body: list,
@@ -109,9 +119,10 @@ export function useApiService() {
     },
 
     async updateListUser(listType: string, listId: string, userId: string) {
+      const body: ApiListUserUpdateRequest = { user_id: userId }
       return apiCall(`${baseURL}/lists/${listType}/${encodeURIComponent(listId)}/user`, {
         method: 'PATCH',
-        body: { user_id: userId },
+        body,
       })
     },
 
@@ -151,12 +162,12 @@ export function useApiService() {
       })
     },
 
-    async getSyncStatus() {
-      return apiCall(`${baseURL}/sync/status`)
+    async getSyncStatus(): Promise<ApiSyncStatusResponse> {
+      return apiCall<ApiSyncStatusResponse>(`${baseURL}/sync/status`)
     },
 
-    async getLiveSyncStatus() {
-      return apiCall(`${baseURL}/sync/status/live`)
+    async getLiveSyncStatus(): Promise<ApiLiveSyncStatusResponse> {
+      return apiCall<ApiLiveSyncStatusResponse>(`${baseURL}/sync/status/live`)
     },
 
     async cancelSync(jobId: string) {
@@ -171,9 +182,10 @@ export function useApiService() {
     },
 
     async updateSyncInterval(intervalHours: number) {
+      const body: ApiSyncIntervalUpdateRequest = { interval_hours: intervalHours }
       return apiCall(`${baseURL}/sync-interval`, {
         method: 'PUT',
-        body: { interval_hours: intervalHours },
+        body,
       })
     },
 

@@ -3,11 +3,11 @@
  */
 
 import { defineStore } from 'pinia'
-import type { SystemHealth, OverseerrStatus } from '~/types'
+import type { ApiSystemHealthResponse, OverseerrStatus } from '~/types'
 
 export const useSystemStore = defineStore('system', {
   state: () => ({
-    health: null as SystemHealth | null,
+    health: null as ApiSystemHealthResponse | null,
     overseerrStatus: null as OverseerrStatus | null,
     loading: false,
     error: null as string | null,

@@ -7,7 +7,12 @@
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare"
+    "postinstall": "nuxt prepare",
+    "openapi:export": "python3 ../scripts/export_openapi.py",
+    "openapi:types": "openapi-typescript openapi.json -o types/api.ts",
+    "openapi": "npm run openapi:export && npm run openapi:types",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.contract.json",
+    "typecheck:full": "vue-tsc --noEmit -p .nuxt/tsconfig.app.json"
   },
   "dependencies": {
     "@nuxtjs/color-mode": "^3.5.2",
@@ -24,6 +29,8 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/node": "^22.10.5"
+    "@types/node": "^22.10.5",
+    "openapi-typescript": "^7.13.0",
+    "vue-tsc": "^3.3.11"
   }
 }

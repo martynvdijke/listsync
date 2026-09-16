@@ -1,9 +1,14 @@
 /**
- * SSE-based sync monitoring composable
- * Connects to the backend SSE endpoint for real-time sync updates
+ * Sync monitoring composable
+ *
+ * Polls the backend live sync status endpoint (`/api/sync/status/live`). That
+ * endpoint returns JSON, not an SSE stream, so `useSmartPolling` is used and
+ * each response is pushed into the event feed and the sync store.
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
+import type { ApiLiveSyncStatusResponse } from '~/types'
+import { useSmartPolling } from './useRealtime'
 
 export interface SyncEvent {
   type: 'log' | 'progress' | 'status' | 'error'
@@ -11,154 +16,65 @@ export interface SyncEvent {
   timestamp: string
 }
 
-export const useSyncMonitor = () => {
+export const useSyncMonitor = (intervalMs: number = 5000) => {
   const isConnected = ref(false)
   const lastEvent = ref<SyncEvent | null>(null)
   const events = ref<SyncEvent[]>([])
   const error = ref<string | null>(null)
-  
-  let eventSource: EventSource | null = null
-  let reconnectTimeout: NodeJS.Timeout | null = null
-  const maxReconnectAttempts = 5
-  let reconnectAttempts = 0
 
-  const connect = () => {
-    if (!process.client) return
-
-    // Clean up existing connection
-    disconnect()
-
+  const poll = async () => {
     const config = useRuntimeConfig()
     const apiUrl = config.public.apiUrl || 'http://localhost:4222'
-    
+    const apiBase = config.public.apiBase || '/api'
+
     try {
-      // Note: SSE endpoint may not exist yet in the backend
-      // This is a placeholder for when it's implemented
-      eventSource = new EventSource(`${apiUrl}/api/sync/status/live`)
+      const data = await $fetch<ApiLiveSyncStatusResponse>(`${apiUrl}${apiBase}/sync/status/live`)
+      isConnected.value = true
+      error.value = null
 
-      eventSource.onopen = () => {
-        isConnected.value = true
-        error.value = null
-        reconnectAttempts = 0
-        console.log('[SSE] Connected to sync monitor')
+      const syncEvent: SyncEvent = {
+        type: 'status',
+        data,
+        timestamp: new Date().toISOString(),
       }
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          const syncEvent: SyncEvent = {
-            type: data.type || 'log',
-            data: data,
-            timestamp: new Date().toISOString(),
-          }
-
-          lastEvent.value = syncEvent
-          events.value.push(syncEvent)
-
-          // Keep only last 100 events
-          if (events.value.length > 100) {
-            events.value.shift()
-          }
-
-          // Update sync store based on event type
-          const syncStore = useSyncStore()
-          
-          if (syncEvent.type === 'status') {
-            syncStore.isSyncing = data.is_syncing || false
-            syncStore.syncStatus = data.status || 'idle'
-          }
-        } catch (err) {
-          console.error('[SSE] Failed to parse event:', err)
-        }
+      lastEvent.value = syncEvent
+      events.value.push(syncEvent)
+      if (events.value.length > 100) {
+        events.value.shift()
       }
 
-      // Event types
-      eventSource.addEventListener('log', (event: any) => {
-        const data = JSON.parse(event.data)
-        const syncEvent: SyncEvent = {
-          type: 'log',
-          data,
-          timestamp: new Date().toISOString(),
-        }
-        lastEvent.value = syncEvent
-        events.value.push(syncEvent)
-      })
-
-      eventSource.addEventListener('progress', (event: any) => {
-        const data = JSON.parse(event.data)
-        const syncEvent: SyncEvent = {
-          type: 'progress',
-          data,
-          timestamp: new Date().toISOString(),
-        }
-        lastEvent.value = syncEvent
-      })
-
-      eventSource.onerror = (err) => {
-        console.error('[SSE] Connection error:', err)
-        isConnected.value = false
-        error.value = 'Connection lost'
-
-        // Attempt to reconnect
-        if (reconnectAttempts < maxReconnectAttempts) {
-          reconnectAttempts++
-          const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000)
-          console.log(`[SSE] Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`)
-          
-          reconnectTimeout = setTimeout(() => {
-            connect()
-          }, delay)
-        } else {
-          error.value = 'Failed to connect after multiple attempts'
-          eventSource?.close()
-        }
-      }
+      const syncStore = useSyncStore()
+      syncStore.isRunning = data.is_running || false
+      syncStore.status = data.status || 'idle'
+      syncStore.liveSyncStatus = data
     } catch (err) {
-      console.error('[SSE] Failed to create EventSource:', err)
-      error.value = 'Failed to establish connection'
       isConnected.value = false
+      error.value = 'Connection lost'
+      console.error('[SyncMonitor] Failed to poll sync status:', err)
     }
   }
 
+  const { startPolling, stopPolling, resume } = useSmartPolling(poll, intervalMs)
+
+  const connect = () => {
+    startPolling()
+  }
+
   const disconnect = () => {
-    if (reconnectTimeout) {
-      clearTimeout(reconnectTimeout)
-      reconnectTimeout = null
-    }
-
-    if (eventSource) {
-      eventSource.close()
-      eventSource = null
-    }
-
+    stopPolling()
     isConnected.value = false
   }
 
   const retry = () => {
-    reconnectAttempts = 0
-    connect()
+    resume()
+    startPolling()
   }
 
   const clearEvents = () => {
     events.value = []
     lastEvent.value = null
   }
-
-  // Auto-connect on mount (client-side only)
-  // DISABLED: Endpoint doesn't support SSE yet, returns JSON instead
-  // TODO: Enable when backend implements SSE endpoint
-  onMounted(() => {
-    // Disabled until backend supports SSE
-    // if (process.client) {
-    //   // Try to connect, but don't fail if SSE endpoint doesn't exist
-    //   connect()
-    // }
-  })
-
-  // Cleanup on unmount
-  onUnmounted(() => {
-    disconnect()
-  })
 
   return {
     isConnected,
@@ -171,4 +87,3 @@ export const useSyncMonitor = () => {
     clearEvents,
   }
 }
-

@@ -6,12 +6,20 @@ import multiprocessing
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
+from list_sync.web.schemas import (
+    CollectionDetail,
+    CollectionMoviesResponse,
+    CollectionPosterResponse,
+    CollectionsResponse,
+    PopularCollectionsResponse,
+    response,
+)
 from list_sync.web.services.sync_runner import _run_collection_sync_in_subprocess
 
 router = APIRouter()
 
 
-@router.get("/api/collections")
+@router.get("/api/collections", responses=response(CollectionsResponse))
 async def get_collections(
     page: int = Query(1, ge=1),
     limit: int = Query(50, ge=1, le=100),
@@ -139,7 +147,7 @@ async def get_random_collections(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/api/collections/popular")
+@router.get("/api/collections/popular", responses=response(PopularCollectionsResponse))
 async def get_popular_collections():
     """Get top 20 collections by total votes (quality content first)"""
     try:
@@ -204,7 +212,7 @@ async def get_synced_collections_info():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/api/collections/{franchise_name}")
+@router.get("/api/collections/{franchise_name}", responses=response(CollectionDetail))
 async def get_collection_details(franchise_name: str):
     """Get specific collection details by franchise name"""
     try:
@@ -228,7 +236,7 @@ async def get_collection_details(franchise_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/api/collections/{franchise_name}/movies")
+@router.get("/api/collections/{franchise_name}/movies", responses=response(CollectionMoviesResponse))
 async def get_collection_movies(franchise_name: str):
     """Get movies in a collection with full details"""
     try:
@@ -265,7 +273,7 @@ async def get_collection_movies(franchise_name: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/api/collections/{franchise_name}/poster")
+@router.get("/api/collections/{franchise_name}/poster", responses=response(CollectionPosterResponse))
 async def get_collection_poster(franchise_name: str):
     """Get poster URL for collection (uses most voted movie's poster from Trakt)"""
     try:

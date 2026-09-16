@@ -1809,6 +1809,182 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AddListResponse */
+        AddListResponse: {
+            /** Item Count */
+            item_count: number;
+            /** List Url */
+            list_url: string;
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
+            /** User Display Name */
+            user_display_name?: string | null;
+            /** User Id */
+            user_id: string;
+        };
+        /** CancelSyncResponse */
+        CancelSyncResponse: {
+            /** Job Id */
+            job_id: string;
+            /** Message */
+            message: string;
+            /** Pause Until */
+            pause_until?: string | null;
+            /** Session Id */
+            session_id?: string | null;
+            /** Success */
+            success: boolean;
+            /** Target Pid */
+            target_pid?: number | null;
+            /** Terminated */
+            terminated?: boolean | null;
+            /** Termination Method */
+            termination_method?: string | null;
+            /** Timestamp */
+            timestamp: string;
+        };
+        /** CollectionDetail */
+        CollectionDetail: {
+            _synced_info?: components["schemas"]["CollectionSyncedInfo"] | null;
+            /**
+             * Averagerating
+             * @default 0
+             */
+            averageRating: number;
+            /** Backdrop Path */
+            backdrop_path?: string | null;
+            /** Collectionid */
+            collectionId?: number | null;
+            /** Franchise */
+            franchise: string;
+            highestRatedMovie?: components["schemas"]["CollectionRatingEntry"] | null;
+            lowestRatedMovie?: components["schemas"]["CollectionRatingEntry"] | null;
+            /** Movieids */
+            movieIds?: number[] | null;
+            /** Movieratings */
+            movieRatings?: components["schemas"]["CollectionMovie"][] | null;
+            /** Overview */
+            overview?: string | null;
+            /**
+             * Popularityscore
+             * @default 0
+             */
+            popularityScore: number;
+            /** Poster Path */
+            poster_path?: string | null;
+            /** Poster Url */
+            poster_url?: string | null;
+            /**
+             * Totalmovies
+             * @default 0
+             */
+            totalMovies: number;
+            /**
+             * Totalvotes
+             * @default 0
+             */
+            totalVotes: number;
+        };
+        /** CollectionMovie */
+        CollectionMovie: {
+            /** Backdrop Path */
+            backdrop_path?: string | null;
+            /** Budget */
+            budget?: number | null;
+            /** Genres */
+            genres?: string[] | null;
+            /** Id */
+            id: number;
+            /** Imdb Id */
+            imdb_id?: string | null;
+            /** Original Language */
+            original_language?: string | null;
+            /** Original Title */
+            original_title?: string | null;
+            /** Overview */
+            overview?: string | null;
+            /** Popularity */
+            popularity?: number | null;
+            /** Poster Path */
+            poster_path?: string | null;
+            /** Production Countries */
+            production_countries?: string[] | null;
+            /** Rating */
+            rating?: number | null;
+            /** Releasedate */
+            releaseDate?: string | null;
+            /** Revenue */
+            revenue?: number | null;
+            /** Runtime */
+            runtime?: number | null;
+            /** Spoken Languages */
+            spoken_languages?: string[] | null;
+            /** Status */
+            status?: string | null;
+            /** Tagline */
+            tagline?: string | null;
+            /** Title */
+            title: string;
+            /** Votecount */
+            voteCount?: number | null;
+        };
+        /** CollectionMoviesResponse */
+        CollectionMoviesResponse: {
+            /** Franchise */
+            franchise: string;
+            /** Movies */
+            movies: components["schemas"]["CollectionMovie"][];
+            /** Total */
+            total: number;
+        };
+        /** CollectionPosterResponse */
+        CollectionPosterResponse: {
+            /** Movie Id */
+            movie_id?: number | null;
+            /** Poster Url */
+            poster_url?: string | null;
+        };
+        /** CollectionRatingEntry */
+        CollectionRatingEntry: {
+            /** Id */
+            id: number;
+            /** Rating */
+            rating: number;
+            /** Title */
+            title: string;
+        };
+        /** CollectionSyncedInfo */
+        CollectionSyncedInfo: {
+            /**
+             * Item Count
+             * @default 0
+             */
+            item_count: number;
+            /** Last Synced */
+            last_synced?: string | null;
+        };
+        /** CollectionsResponse */
+        CollectionsResponse: {
+            /** Collections */
+            collections: components["schemas"]["CollectionDetail"][];
+            /** Limit */
+            limit: number;
+            /** Page */
+            page: number;
+            /** Total */
+            total: number;
+            /** Total Pages */
+            total_pages: number;
+        };
+        /** DeleteListResponse */
+        DeleteListResponse: {
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -1826,15 +2002,301 @@ export interface components {
              */
             user_id: string;
         };
+        /** ListItemsResponse */
+        ListItemsResponse: {
+            /** Has More */
+            has_more: boolean;
+            /** Items */
+            items: {
+                [key: string]: unknown;
+            }[];
+            /** Limit */
+            limit: number;
+            /** Total */
+            total: number;
+        };
+        /** ListSummary */
+        ListSummary: {
+            /** Display Name */
+            display_name: string;
+            /** Id */
+            id?: number | null;
+            /**
+             * Item Count
+             * @default 0
+             */
+            item_count: number;
+            /** Last Synced */
+            last_synced?: string | null;
+            /** List Id */
+            list_id: string;
+            /** List Type */
+            list_type: string;
+            /** List Url */
+            list_url?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Url */
+            url?: string | null;
+            /** User Display Name */
+            user_display_name?: string | null;
+            /**
+             * User Id
+             * @default 1
+             */
+            user_id: string;
+        };
         /** ListUserUpdate */
         ListUserUpdate: {
             /** User Id */
             user_id: string;
         };
+        /** ListsResponse */
+        ListsResponse: {
+            /** Lists */
+            lists: components["schemas"]["ListSummary"][];
+        };
+        /** LiveSyncStatusResponse */
+        LiveSyncStatusResponse: {
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Is Running */
+            is_running: boolean;
+            /** List Id */
+            list_id?: string | null;
+            /** List Type */
+            list_type?: string | null;
+            /** Pid */
+            pid?: number | null;
+            /** Session Id */
+            session_id?: string | null;
+            /** Start Time */
+            start_time?: string | null;
+            /** Status */
+            status: string;
+            /** Sync Type */
+            sync_type?: string | null;
+            /** Timestamp */
+            timestamp: string;
+        };
+        /** OverseerrStatusResponse */
+        OverseerrStatusResponse: {
+            /** Commitsbehind */
+            commitsBehind?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Isconnected */
+            isConnected: boolean;
+            /** Lastchecked */
+            lastChecked: string;
+            /** Restartrequired */
+            restartRequired?: boolean | null;
+            /** Updateavailable */
+            updateAvailable?: boolean | null;
+            /** Version */
+            version?: string | null;
+        };
+        /** OverseerrUser */
+        OverseerrUser: {
+            /** Avatar */
+            avatar: string;
+            /** Display Name */
+            display_name: string;
+            /** Email */
+            email: string;
+            /** Id */
+            id: string;
+        };
+        /** OverseerrUsersResponse */
+        OverseerrUsersResponse: {
+            /** Count */
+            count: number;
+            /** Success */
+            success: boolean;
+            /** Users */
+            users: components["schemas"]["OverseerrUser"][];
+        };
+        /** OverseerrUsersSyncResponse */
+        OverseerrUsersSyncResponse: {
+            /** Count */
+            count: number;
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
+            /** Users */
+            users: components["schemas"]["OverseerrUser"][];
+        };
+        /** PopularCollectionsResponse */
+        PopularCollectionsResponse: {
+            /** Collections */
+            collections: components["schemas"]["CollectionDetail"][];
+        };
+        /** SyncErrorDetail */
+        SyncErrorDetail: {
+            /** Error */
+            error: string;
+            /** Pid */
+            pid?: number | null;
+        };
+        /** SyncIntervalResponse */
+        SyncIntervalResponse: {
+            /** Interval Hours */
+            interval_hours: number;
+            /** Last Updated */
+            last_updated?: string | null;
+            /** Message */
+            message?: string | null;
+            /** Source */
+            source: string;
+        };
         /** SyncIntervalUpdate */
         SyncIntervalUpdate: {
             /** Interval Hours */
             interval_hours: number;
+        };
+        /** SyncProcessInfo */
+        SyncProcessInfo: {
+            /**
+             * Can Signal
+             * @default true
+             */
+            can_signal: boolean;
+            /** Cmdline */
+            cmdline?: string[] | null;
+            /** Cpu Percent */
+            cpu_percent?: number | null;
+            /** Created */
+            created?: number | null;
+            /** Error */
+            error?: string | null;
+            /** Memory Percent */
+            memory_percent?: number | null;
+            /** Pid */
+            pid: number;
+            /** Status */
+            status: string;
+        };
+        /** SyncSignalSent */
+        SyncSignalSent: {
+            /** Cmdline */
+            cmdline?: string[] | null;
+            /** Pid */
+            pid: number;
+            /** Status */
+            status?: string | null;
+        };
+        /** SyncStatsBreakdown */
+        SyncStatsBreakdown: {
+            /** Already Requested */
+            already_requested: number;
+            /** Available */
+            available: number;
+            /** Errors */
+            errors: number;
+            /** Newly Requested */
+            newly_requested: number;
+            /** Skipped */
+            skipped: number;
+        };
+        /** SyncStatsResponse */
+        SyncStatsResponse: {
+            breakdown: components["schemas"]["SyncStatsBreakdown"];
+            /** Duplicates In Current Sync */
+            duplicates_in_current_sync: number;
+            /** Last Updated */
+            last_updated?: string | null;
+            /** Success Rate */
+            success_rate: number;
+            /** Successful Items */
+            successful_items: number;
+            /** Total Errors */
+            total_errors: number;
+            /** Total Processed */
+            total_processed: number;
+            /** Total Requested */
+            total_requested: number;
+        };
+        /** SyncStatusResponse */
+        SyncStatusResponse: {
+            /** Can Trigger Sync */
+            can_trigger_sync: boolean;
+            /** Processes */
+            processes: components["schemas"]["SyncProcessInfo"][];
+            /** Processes Found */
+            processes_found: number;
+            /** Sync Method */
+            sync_method: string;
+            /** Timestamp */
+            timestamp: string;
+        };
+        /** SyncTargetList */
+        SyncTargetList: {
+            /** List Id */
+            list_id: string;
+            /** List Type */
+            list_type: string;
+        };
+        /** SystemHealthResponse */
+        SystemHealthResponse: {
+            /** Database */
+            database: boolean;
+            /** Last Sync */
+            last_sync?: string | null;
+            /** Next Sync */
+            next_sync?: string | null;
+            /** Process */
+            process: boolean;
+            /** Sync Status */
+            sync_status?: string | null;
+        };
+        /** TriggerSyncResponse */
+        TriggerSyncResponse: {
+            /** Errors */
+            errors?: components["schemas"]["SyncErrorDetail"][] | null;
+            /** Message */
+            message: string;
+            /** Method */
+            method: string;
+            /** Note */
+            note: string;
+            /** Signals Sent */
+            signals_sent: components["schemas"]["SyncSignalSent"][];
+            /** Success */
+            success: boolean;
+            /** Sync Type */
+            sync_type: string;
+            target_list?: components["schemas"]["SyncTargetList"] | null;
+            /** Timestamp */
+            timestamp: string;
+        };
+        /** UpdateListUserResponse */
+        UpdateListUserResponse: {
+            /** List Id */
+            list_id: string;
+            /** List Type */
+            list_type: string;
+            /** Message */
+            message: string;
+            /** Success */
+            success: boolean;
+            /** User Display Name */
+            user_display_name?: string | null;
+            /** User Id */
+            user_id: string;
+        };
+        /** UpdateSyncIntervalResponse */
+        UpdateSyncIntervalResponse: {
+            /** Interval Hours */
+            interval_hours: number;
+            /** Message */
+            message: string;
+            /** Source */
+            source: string;
+            /** Success */
+            success: boolean;
         };
         /** ValidationError */
         ValidationError: {
@@ -2281,13 +2743,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CollectionsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2310,13 +2772,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PopularCollectionsResponse"];
                 };
             };
         };
@@ -2404,13 +2866,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CollectionDetail"];
                 };
             };
             /** @description Validation Error */
@@ -2435,13 +2897,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CollectionMoviesResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2466,13 +2928,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CollectionPosterResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2797,13 +3259,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ListsResponse"];
                 };
             };
         };
@@ -2821,13 +3283,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AddListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2873,13 +3335,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["DeleteListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2907,13 +3369,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ListItemsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -2943,13 +3405,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UpdateListUserResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3274,13 +3736,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OverseerrStatusResponse"];
                 };
             };
         };
@@ -3294,13 +3756,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OverseerrUsersResponse"];
                 };
             };
         };
@@ -3314,13 +3776,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["OverseerrUsersSyncResponse"];
                 };
             };
         };
@@ -3778,13 +4240,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SyncStatsResponse"];
                 };
             };
         };
@@ -3953,13 +4415,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SyncIntervalResponse"];
                 };
             };
         };
@@ -3977,13 +4439,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UpdateSyncIntervalResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4032,13 +4494,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TriggerSyncResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4061,13 +4523,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SyncStatusResponse"];
                 };
             };
         };
@@ -4081,13 +4543,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LiveSyncStatusResponse"];
                 };
             };
         };
@@ -4107,13 +4569,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TriggerSyncResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4138,13 +4600,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CancelSyncResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4187,13 +4649,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Successful response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SystemHealthResponse"];
                 };
             };
         };

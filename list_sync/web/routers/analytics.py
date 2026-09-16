@@ -21,12 +21,16 @@ from list_sync.web.common import (
     build_log_info,
     get_deduplicated_items,
 )
+from list_sync.web.schemas import (
+    SyncStatsResponse,
+    response,
+)
 from list_sync.web.services.analytics import process_analytics_data
 
 router = APIRouter()
 
 
-@router.get("/api/stats/sync")
+@router.get("/api/stats/sync", responses=response(SyncStatsResponse))
 async def get_sync_stats():
     """Get deduplicated sync statistics"""
     try:

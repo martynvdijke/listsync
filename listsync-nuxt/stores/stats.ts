@@ -48,7 +48,8 @@ export const useStatsStore = defineStore('stats', {
      * Get breakdown stats
      */
     breakdown: (state) => state.syncStats?.breakdown || {
-      requested: 0,
+      newly_requested: 0,
+      already_requested: 0,
       available: 0,
       skipped: 0,
       errors: 0,

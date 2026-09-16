@@ -10,6 +10,23 @@ import type {
   ApiSystemHealthResponse,
   ApiSyncStatusResponse,
   ApiLiveSyncStatusResponse,
+  ApiTriggerSyncResponse,
+  ApiCancelSyncResponse,
+  ApiSyncIntervalResponse,
+  ApiUpdateSyncIntervalResponse,
+  ApiListsResponse,
+  ApiListItemsResponse,
+  ApiAddListResponse,
+  ApiUpdateListUserResponse,
+  ApiDeleteListResponse,
+  ApiOverseerrUsersResponse,
+  ApiOverseerrUsersSyncResponse,
+  ApiOverseerrStatusResponse,
+  ApiCollectionsResponse,
+  ApiPopularCollectionsResponse,
+  ApiCollectionDetail,
+  ApiCollectionMoviesResponse,
+  ApiCollectionPosterResponse,
   ApiListAddInput,
   ApiListUserUpdateRequest,
   ApiSyncIntervalUpdateRequest,
@@ -96,29 +113,29 @@ export function useApiService() {
     },
 
     // Lists Management
-    async getLists() {
+    async getLists(): Promise<ApiListsResponse> {
       return apiCall(`${baseURL}/lists`)
     },
 
-    async getListItems(listType: string, listId: string, limit: number = 20) {
+    async getListItems(listType: string, listId: string, limit: number = 20): Promise<ApiListItemsResponse> {
       const encodedListId = encodeURIComponent(listId)
       return apiCall(`${baseURL}/lists/${listType}/${encodedListId}/items?limit=${limit}`)
     },
 
-    async addList(list: ApiListAddInput) {
+    async addList(list: ApiListAddInput): Promise<ApiAddListResponse> {
       return apiCall(`${baseURL}/lists`, {
         method: 'POST',
         body: list,
       })
     },
 
-    async deleteList(listType: string, listId: string) {
+    async deleteList(listType: string, listId: string): Promise<ApiDeleteListResponse> {
       return apiCall(`${baseURL}/lists/${listType}/${encodeURIComponent(listId)}`, {
         method: 'DELETE',
       })
     },
 
-    async updateListUser(listType: string, listId: string, userId: string) {
+    async updateListUser(listType: string, listId: string, userId: string): Promise<ApiUpdateListUserResponse> {
       const body: ApiListUserUpdateRequest = { user_id: userId }
       return apiCall(`${baseURL}/lists/${listType}/${encodeURIComponent(listId)}/user`, {
         method: 'PATCH',
@@ -134,7 +151,7 @@ export function useApiService() {
     },
 
     // Sync Operations
-    async triggerSync() {
+    async triggerSync(): Promise<ApiTriggerSyncResponse> {
       return apiCall(`${baseURL}/sync/trigger`, {
         method: 'POST',
       })
@@ -152,7 +169,7 @@ export function useApiService() {
       })
     },
 
-    async triggerSingleListSync(listType: string, listId: string) {
+    async triggerSingleListSync(listType: string, listId: string): Promise<ApiTriggerSyncResponse> {
       return apiCall(`${baseURL}/sync/single`, {
         method: 'POST',
         body: {
@@ -170,18 +187,18 @@ export function useApiService() {
       return apiCall<ApiLiveSyncStatusResponse>(`${baseURL}/sync/status/live`)
     },
 
-    async cancelSync(jobId: string) {
+    async cancelSync(jobId: string): Promise<ApiCancelSyncResponse> {
       return apiCall(`${baseURL}/sync/${jobId}/cancel`, {
         method: 'POST',
       })
     },
 
     // Sync Interval Configuration
-    async getSyncInterval() {
+    async getSyncInterval(): Promise<ApiSyncIntervalResponse> {
       return apiCall(`${baseURL}/sync-interval`)
     },
 
-    async updateSyncInterval(intervalHours: number) {
+    async updateSyncInterval(intervalHours: number): Promise<ApiUpdateSyncIntervalResponse> {
       const body: ApiSyncIntervalUpdateRequest = { interval_hours: intervalHours }
       return apiCall(`${baseURL}/sync-interval`, {
         method: 'PUT',
@@ -275,7 +292,7 @@ export function useApiService() {
     },
 
     // Seerr Integration
-    async getOverseerrStatus() {
+    async getOverseerrStatus(): Promise<ApiOverseerrStatusResponse> {
       return apiCall(`${baseURL}/overseerr/status`)
     },
 
@@ -287,11 +304,11 @@ export function useApiService() {
       return apiCall(`${baseURL}/overseerr/status`)
     },
 
-    async getOverseerrUsers() {
+    async getOverseerrUsers(): Promise<ApiOverseerrUsersResponse> {
       return apiCall(`${baseURL}/overseerr/users`)
     },
 
-    async syncOverseerrUsers() {
+    async syncOverseerrUsers(): Promise<ApiOverseerrUsersSyncResponse> {
       return apiCall(`${baseURL}/overseerr/users/sync`, {
         method: 'POST',
       })
@@ -544,7 +561,7 @@ export function useApiService() {
       limit: number = 50,
       search: string = '',
       sort: string = 'popularity'
-    ) {
+    ): Promise<ApiCollectionsResponse> {
       const params = new URLSearchParams({
         page: page.toString(),
         limit: limit.toString(),
@@ -554,7 +571,7 @@ export function useApiService() {
       return apiCall(`${baseURL}/collections?${params.toString()}`)
     },
 
-    async getPopularCollections() {
+    async getPopularCollections(): Promise<ApiPopularCollectionsResponse> {
       return apiCall(`${baseURL}/collections/popular`)
     },
 
@@ -566,17 +583,17 @@ export function useApiService() {
       return apiCall(`${baseURL}/collections/synced`)
     },
 
-    async getCollectionDetails(franchiseName: string) {
+    async getCollectionDetails(franchiseName: string): Promise<ApiCollectionDetail> {
       const encoded = encodeURIComponent(franchiseName)
       return apiCall(`${baseURL}/collections/${encoded}`)
     },
 
-    async getCollectionMovies(franchiseName: string) {
+    async getCollectionMovies(franchiseName: string): Promise<ApiCollectionMoviesResponse> {
       const encoded = encodeURIComponent(franchiseName)
       return apiCall(`${baseURL}/collections/${encoded}/movies`)
     },
 
-    async getCollectionPoster(franchiseName: string) {
+    async getCollectionPoster(franchiseName: string): Promise<ApiCollectionPosterResponse> {
       const encoded = encodeURIComponent(franchiseName)
       return apiCall(`${baseURL}/collections/${encoded}/poster`)
     },

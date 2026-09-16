@@ -8,11 +8,18 @@ import psutil
 from fastapi import APIRouter, HTTPException
 
 from list_sync.web.common import find_listsync_processes
+from list_sync.web.schemas import (
+    CancelSyncResponse,
+    LiveSyncStatusResponse,
+    SyncStatusResponse,
+    TriggerSyncResponse,
+    response,
+)
 
 router = APIRouter()
 
 
-@router.post("/api/sync/trigger")
+@router.post("/api/sync/trigger", responses=response(TriggerSyncResponse))
 async def trigger_manual_sync(sync_request: dict = None):
     """Trigger a manual sync by sending SIGUSR1 signal to ListSync process"""
     try:
@@ -193,14 +200,14 @@ async def trigger_manual_sync(sync_request: dict = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/api/sync/single")
+@router.post("/api/sync/single", responses=response(TriggerSyncResponse))
 async def trigger_single_list_sync_endpoint(sync_request: dict):
     """Endpoint for single list sync requests - redirects to main trigger endpoint"""
     # Redirect to the main trigger endpoint with the same payload
     return await trigger_manual_sync(sync_request)
 
 
-@router.get("/api/sync/status")
+@router.get("/api/sync/status", responses=response(SyncStatusResponse))
 async def get_sync_status():
     """Get current sync status and process information"""
     try:
@@ -248,7 +255,7 @@ async def get_sync_status():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/api/sync/{job_id}/cancel")
+@router.post("/api/sync/{job_id}/cancel", responses=response(CancelSyncResponse))
 async def cancel_sync(job_id: str):
     """Cancel a running sync - first gracefully via cancellation flag, then forcefully if needed"""
     try:
@@ -393,7 +400,7 @@ async def cancel_sync(job_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to cancel sync: {e!s}")
 
 
-@router.get("/api/sync/status/live")
+@router.get("/api/sync/status/live", responses=response(LiveSyncStatusResponse))
 async def get_live_sync_status():
     """Get real-time sync status by checking database"""
     try:

@@ -15,6 +15,15 @@ from list_sync.utils.timezone_utils import (
     normalize_timezone_input,
 )
 from list_sync.web.common import SyncIntervalUpdate, SystemStatus, build_log_info, find_listsync_processes
+from list_sync.web.schemas import (
+    OverseerrStatusResponse,
+    OverseerrUsersResponse,
+    OverseerrUsersSyncResponse,
+    SyncIntervalResponse,
+    SystemHealthResponse,
+    UpdateSyncIntervalResponse,
+    response,
+)
 
 router = APIRouter()
 
@@ -102,7 +111,7 @@ async def test_database():
         return {"connected": False, "error": str(e)}
 
 
-@router.get("/api/system/health")
+@router.get("/api/system/health", responses=response(SystemHealthResponse))
 async def get_health_check():
     """Simple health check endpoint"""
     try:
@@ -382,7 +391,7 @@ async def test_overseerr_connection(data: dict):
         }
 
 
-@router.get("/api/overseerr/users")
+@router.get("/api/overseerr/users", responses=response(OverseerrUsersResponse))
 async def get_seerr_users_endpoint():
     """Get all Seerr users from database"""
     try:
@@ -400,7 +409,7 @@ async def get_seerr_users_endpoint():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/api/overseerr/users/sync")
+@router.post("/api/overseerr/users/sync", responses=response(OverseerrUsersSyncResponse))
 async def sync_seerr_users_endpoint():
     """Sync Seerr users from Seerr API to database"""
     try:
@@ -1069,7 +1078,7 @@ async def complete_setup():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/api/sync-interval")
+@router.get("/api/sync-interval", responses=response(SyncIntervalResponse))
 async def get_sync_interval():
     """Get current sync interval with source tracking"""
     try:
@@ -1109,7 +1118,7 @@ async def get_sync_interval():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.put("/api/sync-interval")
+@router.put("/api/sync-interval", responses=response(UpdateSyncIntervalResponse))
 async def update_sync_interval(update: SyncIntervalUpdate):
     """Update sync interval in database"""
     try:
@@ -1147,7 +1156,7 @@ async def sync_interval_from_env():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/api/overseerr/status")
+@router.get("/api/overseerr/status", responses=response(OverseerrStatusResponse))
 async def get_overseerr_status():
     """Check Seerr connection status"""
     try:

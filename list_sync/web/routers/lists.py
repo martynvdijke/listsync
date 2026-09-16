@@ -27,11 +27,19 @@ from list_sync.web.common import (
     _validate_overseerr_user,
     get_deduplicated_items,
 )
+from list_sync.web.schemas import (
+    AddListResponse,
+    DeleteListResponse,
+    ListItemsResponse,
+    ListsResponse,
+    UpdateListUserResponse,
+    response,
+)
 
 router = APIRouter()
 
 
-@router.get("/api/lists")
+@router.get("/api/lists", responses=response(ListsResponse))
 async def get_lists():
     """Get all configured lists"""
     try:
@@ -142,7 +150,7 @@ async def get_lists_debug():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.patch("/api/lists/{list_type}/{list_id:path}/user")
+@router.patch("/api/lists/{list_type}/{list_id:path}/user", responses=response(UpdateListUserResponse))
 async def update_list_user_endpoint(list_type: str, list_id: str, payload: ListUserUpdate):
     """Change which Seerr user a list requests as - uses :path for full URLs"""
     try:
@@ -175,7 +183,7 @@ async def update_list_user_endpoint(list_type: str, list_id: str, payload: ListU
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/api/lists")
+@router.post("/api/lists", responses=response(AddListResponse))
 async def add_list(list_add: ListAdd):
     """Add new list with URL generation and auto-detection of special Trakt lists"""
     try:
@@ -221,7 +229,7 @@ async def add_list(list_add: ListAdd):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/api/lists/{list_type}/{list_id:path}/items")
+@router.get("/api/lists/{list_type}/{list_id:path}/items", responses=response(ListItemsResponse))
 async def get_list_items_endpoint(list_type: str, list_id: str, limit: int = Query(20, ge=1, le=100)):
     """Get items from a specific list with enriched metadata"""
     try:
@@ -257,7 +265,7 @@ async def get_list_items_endpoint(list_type: str, list_id: str, limit: int = Que
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.delete("/api/lists/{list_type}/{list_id:path}")
+@router.delete("/api/lists/{list_type}/{list_id:path}", responses=response(DeleteListResponse))
 async def delete_list_endpoint(list_type: str, list_id: str):
     """Delete list - uses :path to capture full URLs with forward slashes"""
     try:

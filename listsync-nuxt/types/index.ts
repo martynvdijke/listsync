@@ -1,44 +1,104 @@
 // Core types for ListSync Nuxt Frontend
 //
 // `./api` is generated from the backend OpenAPI schema by `npm run openapi`.
-// It is re-exported here so app code can adopt it incrementally; the
-// hand-written interfaces below predate it and remain the app-facing shapes
-// where the schema publishes no response model (see the generated API
-// contract section at the bottom).
+// Responses of the endpoints the backend publishes a schema for are aliases
+// into that generated contract (see "Generated API contract" below). The
+// hand-written interfaces that remain cover routes whose 200 response is still
+// schema-less and shapes that are frontend-only (forms, store state, UI).
 
-import type { components, paths } from './api'
+import type { components } from './api'
 
 export type { components, operations, paths } from './api'
 
-export interface SyncStats {
-  total_processed: number      // Total items processed after deduplication
-  successful_items: number     // requested + already_requested + already_available + skipped
-  total_requested: number      // Items actually requested to Seerr
-  total_errors: number         // error + not_found items
-  success_rate: number
-  duplicates_in_current_sync: number  // Duplicates found within the current sync session
-  last_updated: string
-  breakdown: {
-    requested: number
-    available: number
-    skipped: number
-    errors: number
-  }
-}
+type Schemas = components['schemas']
 
-export interface List {
-  id: number
-  list_type: string
-  list_id: string
-  list_url?: string
-  url?: string
-  display_name: string
-  item_count: number
-  status?: string
-  last_synced?: string
-  user_id?: string
-  user_display_name?: string | null
-}
+// ==========================================
+// Generated API contract
+// ==========================================
+
+// Response types used by `useApiService` / stores. Each alias exists only when
+// the backend route publishes a response model; regenerate with `npm run openapi`.
+
+/** Response of `GET /api/stats/sync`. */
+export type ApiStatsResponse = Schemas['SyncStatsResponse']
+/** Response of `GET /api/system/health`. */
+export type ApiSystemHealthResponse = Schemas['SystemHealthResponse']
+/** Response of `GET /api/sync/status`. */
+export type ApiSyncStatusResponse = Schemas['SyncStatusResponse']
+/** Response of `GET /api/sync/status/live`. */
+export type ApiLiveSyncStatusResponse = Schemas['LiveSyncStatusResponse']
+/** Response of `POST /api/sync/trigger` and `POST /api/sync/single`. */
+export type ApiTriggerSyncResponse = Schemas['TriggerSyncResponse']
+/** Response of `POST /api/sync/{job_id}/cancel`. */
+export type ApiCancelSyncResponse = Schemas['CancelSyncResponse']
+/** Response of `GET /api/sync-interval`. */
+export type ApiSyncIntervalResponse = Schemas['SyncIntervalResponse']
+/** Response of `PUT /api/sync-interval`. */
+export type ApiUpdateSyncIntervalResponse = Schemas['UpdateSyncIntervalResponse']
+/** Response of `GET /api/lists`. */
+export type ApiListsResponse = Schemas['ListsResponse']
+/** Response of `POST /api/lists`. */
+export type ApiAddListResponse = Schemas['AddListResponse']
+/** Response of `GET /api/lists/{list_type}/{list_id}/items`. */
+export type ApiListItemsResponse = Schemas['ListItemsResponse']
+/** Response of `PATCH /api/lists/{list_type}/{list_id}/user`. */
+export type ApiUpdateListUserResponse = Schemas['UpdateListUserResponse']
+/** Response of `DELETE /api/lists/{list_type}/{list_id}`. */
+export type ApiDeleteListResponse = Schemas['DeleteListResponse']
+/** Response of `GET /api/overseerr/users`. */
+export type ApiOverseerrUsersResponse = Schemas['OverseerrUsersResponse']
+/** Response of `POST /api/overseerr/users/sync`. */
+export type ApiOverseerrUsersSyncResponse = Schemas['OverseerrUsersSyncResponse']
+/** Response of `GET /api/overseerr/status`. */
+export type ApiOverseerrStatusResponse = Schemas['OverseerrStatusResponse']
+/** Response of `GET /api/collections`. */
+export type ApiCollectionsResponse = Schemas['CollectionsResponse']
+/** Response of `GET /api/collections/popular`. */
+export type ApiPopularCollectionsResponse = Schemas['PopularCollectionsResponse']
+/** Response of `GET /api/collections/{franchise_name}`. */
+export type ApiCollectionDetail = Schemas['CollectionDetail']
+/** Response of `GET /api/collections/{franchise_name}/movies`. */
+export type ApiCollectionMoviesResponse = Schemas['CollectionMoviesResponse']
+/** Response of `GET /api/collections/{franchise_name}/poster`. */
+export type ApiCollectionPosterResponse = Schemas['CollectionPosterResponse']
+
+/** Request body of `POST /api/lists`. */
+export type ApiListAddRequest = Schemas['ListAdd']
+
+/**
+ * `ListAdd` marks `user_id` required because the schema gives it a default;
+ * the API accepts it omitted and applies that default, so callers may leave it
+ * out.
+ */
+export type ApiListAddInput = Omit<ApiListAddRequest, 'user_id'> & Partial<Pick<ApiListAddRequest, 'user_id'>>
+
+/** Request body of `PATCH /api/lists/{list_type}/{list_id}/user`. */
+export type ApiListUserUpdateRequest = Schemas['ListUserUpdate']
+
+/** Request body of `PUT /api/sync-interval`. */
+export type ApiSyncIntervalUpdateRequest = Schemas['SyncIntervalUpdate']
+
+// ==========================================
+// App-facing aliases of the generated shapes
+// ==========================================
+
+export type List = Schemas['ListSummary']
+export type SyncStats = ApiStatsResponse
+export type SystemHealth = ApiSystemHealthResponse
+export type SyncProcessStatus = ApiSyncStatusResponse
+export type LiveSyncStatus = ApiLiveSyncStatusResponse
+export type OverseerrUser = Schemas['OverseerrUser']
+export type OverseerrStatus = ApiOverseerrStatusResponse
+export type SyncInterval = ApiSyncIntervalResponse
+export type Collection = Schemas['CollectionDetail']
+export type CollectionMovie = Schemas['CollectionMovie']
+export type CollectionsResponse = ApiCollectionsResponse
+export type CollectionMoviesResponse = ApiCollectionMoviesResponse
+export type CollectionPosterResponse = ApiCollectionPosterResponse
+
+// ==========================================
+// Frontend-only types
+// ==========================================
 
 export interface MediaItem {
   title: string
@@ -84,14 +144,6 @@ export interface CreateListRequest {
   list_type: 'imdb' | 'trakt' | 'trakt_special' | 'letterboxd' | 'mdblist' | 'stevenlu' | 'tmdb' | 'simkl' | 'tvdb'
   list_id: string
   user_id?: string
-}
-
-export interface OverseerrUser {
-  id: string
-  display_name: string
-  email: string
-  avatar: string
-  last_synced?: string
 }
 
 export interface UpdateConfigRequest {
@@ -142,24 +194,6 @@ export interface SyncOptions {
   specificLists?: string[]
 }
 
-export interface SystemHealth {
-  database: boolean
-  process: boolean
-  sync_status: string
-  last_sync?: string
-  next_sync?: string
-}
-
-export interface OverseerrStatus {
-  isConnected: boolean
-  version?: string
-  updateAvailable?: boolean
-  commitsBehind?: number
-  restartRequired?: boolean
-  error?: string
-  lastChecked: string
-}
-
 export interface DashboardData {
   stats: SyncStats
   recentActivity: MediaItem[]
@@ -174,43 +208,6 @@ export interface RecentActivity {
   status: string
   last_synced: string
   action: 'synced' | 'requested' | 'available' | 'error' | 'skipped'
-}
-
-export interface SyncInterval {
-  interval_hours: number
-  source: string
-  last_updated: string | null
-}
-
-export interface SyncProcessStatus {
-  processes_found: number
-  can_trigger_sync: boolean
-  sync_method: string
-  timestamp: string
-  processes?: Array<{
-    pid: number
-    status: string
-    created: string
-    cmdline: string[]
-    memory_percent?: number
-    cpu_percent?: number
-    can_signal: boolean
-    error?: string
-  }>
-}
-
-export interface LiveSyncStatus {
-  is_running: boolean
-  status: string
-  sync_type?: 'full' | 'single' | null
-  session_id?: string | null
-  start_time?: string | null
-  duration_seconds?: number | null
-  list_type?: string | null
-  list_id?: string | null
-  pid?: number | null
-  timestamp: string
-  error?: string
 }
 
 export interface ProcessedItem {
@@ -372,89 +369,6 @@ export interface FailedItem {
   retryable: boolean
 }
 
-// ==========================================
-// Collections Types
-// ==========================================
-
-export interface CollectionMovie {
-  id: number
-  title: string
-  original_title?: string
-  rating?: number
-  voteCount?: number
-  releaseDate?: string
-  poster_path?: string
-  backdrop_path?: string
-  overview?: string
-  tagline?: string
-  runtime?: number
-  genres?: string[]
-  imdb_id?: string
-  popularity?: number
-  budget?: number
-  revenue?: number
-  status?: string
-  original_language?: string
-  production_countries?: string[]
-  spoken_languages?: string[]
-}
-
-export interface Collection {
-  franchise: string
-  popularityScore?: number
-  averageRating?: number
-  totalMovies?: number
-  totalVotes?: number
-  highestRatedMovie?: {
-    id: number
-    title: string
-    rating: number
-  }
-  lowestRatedMovie?: {
-    id: number
-    title: string
-    rating: number
-  }
-  movieRatings?: CollectionMovie[]
-  movieIds?: number[]
-  collectionId?: number
-  poster_path?: string
-  backdrop_path?: string
-  overview?: string
-  poster_url?: string
-}
-
-export interface CollectionsResponse {
-  collections: Collection[]
-  total: number
-  page: number
-  total_pages: number
-  limit: number
-}
-
-export interface CollectionMoviesResponse {
-  franchise: string
-  movies: CollectionMovie[]
-  total: number
-}
-
-export interface CollectionPosterResponse {
-  poster_url: string | null
-  movie_id: number
-}
-
-export interface CollectionSyncResponse {
-  success: boolean
-  franchise: string
-  items_processed: number
-  results: {
-    requested: number
-    already_requested: number
-    request_failed: number
-    errors: string[]
-  }
-}
-
 export interface FailedItemsResponse {
   items: FailedItem[]
   total: number
@@ -468,11 +382,11 @@ export interface FailedItemsResponse {
   }
 }
 
-export interface CollectionPosterResponse {
-  poster_url: string | null
-  movie_id: number
-}
-
+/**
+ * Response of `POST /api/collections/{franchise_name}/sync`.
+ *
+ * This route publishes no response model yet, so the shape stays hand-written.
+ */
 export interface CollectionSyncResponse {
   success: boolean
   franchise: string
@@ -484,57 +398,3 @@ export interface CollectionSyncResponse {
     errors: string[]
   }
 }
-
-// ==========================================
-// Generated API contract
-// ==========================================
-
-/**
- * Use the OpenAPI-derived type once it is meaningful.
- *
- * Most backend routes return `Dict[str, Any]`, so their 200 response resolves
- * to `unknown` in the generated contract. Until a route publishes a response
- * model the hand-written interface is kept; when one lands the generated shape
- * takes over automatically.
- */
-export type GeneratedOr<Generated, Handwritten> = [unknown] extends [Generated] ? Handwritten : Generated
-
-/** Response of `GET /api/stats/sync`. */
-export type ApiStatsResponse = GeneratedOr<
-  paths['/api/stats/sync']['get']['responses'][200]['content']['application/json'],
-  SyncStats
->
-
-/** Response of `GET /api/system/health`. */
-export type ApiSystemHealthResponse = GeneratedOr<
-  paths['/api/system/health']['get']['responses'][200]['content']['application/json'],
-  SystemHealth
->
-
-/** Response of `GET /api/sync/status`. */
-export type ApiSyncStatusResponse = GeneratedOr<
-  paths['/api/sync/status']['get']['responses'][200]['content']['application/json'],
-  SyncProcessStatus
->
-
-/** Response of `GET /api/sync/status/live`. */
-export type ApiLiveSyncStatusResponse = GeneratedOr<
-  paths['/api/sync/status/live']['get']['responses'][200]['content']['application/json'],
-  LiveSyncStatus
->
-
-/** Request body of `POST /api/lists`. */
-export type ApiListAddRequest = components['schemas']['ListAdd']
-
-/**
- * `ListAdd` marks `user_id` required because the schema gives it a default;
- * the API accepts it omitted and applies that default, so callers may leave it
- * out.
- */
-export type ApiListAddInput = Omit<ApiListAddRequest, 'user_id'> & Partial<Pick<ApiListAddRequest, 'user_id'>>
-
-/** Request body of `PATCH /api/lists/{list_type}/{list_id}/user`. */
-export type ApiListUserUpdateRequest = components['schemas']['ListUserUpdate']
-
-/** Request body of `PUT /api/sync-interval`. */
-export type ApiSyncIntervalUpdateRequest = components['schemas']['SyncIntervalUpdate']

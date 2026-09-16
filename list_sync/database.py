@@ -6,7 +6,9 @@ import hashlib
 import logging
 import os
 import sqlite3
+from collections.abc import Sequence
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -493,6 +495,15 @@ def init_database():
             )
         """)
 
+        # Error detail text for failed outcomes was previously only written to
+        # the log; reporting now reads it from here.
+        try:
+            cursor.execute("ALTER TABLE sync_items ADD COLUMN error_details TEXT")
+            logging.info("Added error_details column to sync_items table")
+        except sqlite3.OperationalError:
+            # Column already exists
+            pass
+
         # Create indexes for sync tables
         try:
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_history_in_progress ON sync_history(in_progress)")
@@ -500,6 +511,7 @@ def init_database():
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_history_start_time ON sync_history(start_time DESC)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_items_sync_id ON sync_items(sync_id)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_items_item_id ON sync_items(item_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_sync_items_processed_at ON sync_items(processed_at DESC)")
         except sqlite3.OperationalError:
             # Indexes might already exist
             pass
@@ -1295,9 +1307,13 @@ def add_item_to_sync(
     imdb_id: str | None = None,
     tmdb_id: str | None = None,
     overseerr_id: int | None = None,
-) -> int:
+    error_details: str | None = None,
+) -> None:
     """
-    Add an item to a sync operation.
+    Record one processed item for a sync run.
+
+    This is the per-item outcome log the reporting surface reads; every status
+    the sync produces is written here at the moment it is determined.
 
     Args:
         sync_id: The sync history record ID
@@ -1311,9 +1327,7 @@ def add_item_to_sync(
         imdb_id: IMDB ID
         tmdb_id: TMDB ID
         overseerr_id: Seerr ID
-
-    Returns:
-        int: The sync_items record ID
+        error_details: Human-readable failure reason, if any
     """
     with sqlite3.connect(DB_FILE) as conn:
         cursor = conn.cursor()
@@ -1322,14 +1336,25 @@ def add_item_to_sync(
             INSERT INTO sync_items (
                 sync_id, item_id, title, media_type, year,
                 imdb_id, tmdb_id, overseerr_id, status,
-                list_type, list_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                list_type, list_id, error_details
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-            (sync_id, item_id, title, media_type, year, imdb_id, tmdb_id, overseerr_id, status, list_type, list_id),
+            (
+                sync_id,
+                item_id,
+                title,
+                media_type,
+                year,
+                imdb_id,
+                tmdb_id,
+                overseerr_id,
+                status,
+                list_type,
+                list_id,
+                error_details,
+            ),
         )
-        item_record_id = cursor.lastrowid
         conn.commit()
-        return item_record_id
 
 
 def get_current_sync_status(clear_stale: bool = True) -> dict[str, Any] | None:
@@ -2424,3 +2449,868 @@ def replace_lists(updated_lists: list[dict]) -> None:
             "INSERT INTO lists (list_type, list_id) VALUES (?, ?)",
             [(entry["type"], entry["id"]) for entry in updated_lists],
         )
+
+
+# ============================================================================
+# Structured sync reporting - the database is the single source of truth.
+# Everything below queries sync_items / sync_history / synced_items; it never
+# reads the text log, which is kept only as a human-readable/live-tail artifact.
+# ============================================================================
+
+# Statuses grouped the way the reporting surface reports them.
+SUCCESS_STATUSES = ("requested", "already_available", "already_requested", "skipped", "available", "synced")
+ERROR_STATUSES = ("not_found", "error", "request_failed")
+
+# How a per-item status maps onto the recent-activity view.
+_RECENT_STATUS_MAP = {
+    "already_available": ("available", "Already Available"),
+    "available": ("available", "Already Available"),
+    "already_requested": ("requested", "Already Requested"),
+    "requested": ("requested", "Requested"),
+    "skipped": ("skipped", "Skipped"),
+    "not_found": ("not_found", "Not Found"),
+    "error": ("not_found", "Not Found"),
+    "request_failed": ("not_found", "Not Found"),
+    "cancelled": ("not_found", "Cancelled"),
+    "would_be_synced": ("requested", "Would Be Synced"),
+}
+
+
+def _to_iso(value: Any) -> str | None:
+    """Normalise a SQLite timestamp string to ISO-8601 for the API layer."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.isoformat()
+    text = str(value)
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).isoformat()
+    except ValueError:
+        return text
+
+
+def _sqlite_ts(value: Any) -> str | None:
+    """Reduce an ISO timestamp to the 'YYYY-MM-DD HH:MM:SS' SQLite stores."""
+    if not value:
+        return None
+    return str(value).replace("T", " ")[:19]
+
+
+def _placeholders(values: Sequence[Any]) -> str:
+    return ", ".join("?" for _ in values)
+
+
+def query_sync_items(
+    statuses: list[str] | None = None,
+    search: str | None = None,
+    media_type: str | None = None,
+    list_type: str | None = None,
+    list_id: str | None = None,
+    session_id: str | None = None,
+    limit: int | None = None,
+    offset: int | None = None,
+) -> dict[str, Any]:
+    """
+    Query recorded per-item sync outcomes.
+
+    Returns the rows plus the aggregate counters the reporting endpoints need.
+    item_number/total_items are the position within the item's own sync, which
+    is how the log used to render "(n/N)".
+    """
+    where: list[str] = []
+    params: list[Any] = []
+    if statuses:
+        where.append(f"si.status IN ({_placeholders(statuses)})")
+        params.extend(statuses)
+    if search and search.strip():
+        where.append("LOWER(si.title) LIKE ?")
+        params.append(f"%{search.strip().lower()}%")
+    if media_type:
+        where.append("si.media_type = ?")
+        params.append(media_type)
+    if list_type:
+        where.append("si.list_type = ?")
+        params.append(list_type)
+    if list_id:
+        where.append("si.list_id = ?")
+        params.append(list_id)
+    if session_id:
+        where.append("sh.session_id = ?")
+        params.append(session_id)
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    base_from = (
+        "FROM sync_items si "
+        "LEFT JOIN synced_items syn ON si.item_id = syn.id "
+        "LEFT JOIN sync_history sh ON si.sync_id = sh.id"
+    )
+
+    with get_db_connection(row_factory=True) as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT COUNT(*) AS total {base_from} {where_sql}", params)
+        total = cursor.fetchone()["total"]
+
+        select_sql = f"""
+            SELECT
+                si.id AS row_id,
+                si.title,
+                si.media_type,
+                si.year,
+                si.imdb_id,
+                si.tmdb_id,
+                si.overseerr_id,
+                si.status,
+                si.list_type,
+                si.list_id,
+                si.processed_at,
+                sh.session_id AS sync_session,
+                COALESCE(rn.rn, ROW_NUMBER() OVER (PARTITION BY si.sync_id ORDER BY si.processed_at, si.id)) AS item_number,
+                COALESCE(st.total, COUNT(*) OVER (PARTITION BY si.sync_id)) AS total_items,
+                si.item_id,
+                syn.status AS db_status,
+                syn.source_list_type AS source_list_type,
+                syn.source_list_id AS source_list_id
+            {base_from}
+            LEFT JOIN (SELECT sync_id, COUNT(*) AS total FROM sync_items GROUP BY sync_id) st ON st.sync_id = si.sync_id
+            LEFT JOIN (SELECT id, ROW_NUMBER() OVER (PARTITION BY sync_id ORDER BY processed_at, id) AS rn FROM sync_items) rn ON rn.id = si.id
+            {where_sql}
+            ORDER BY si.processed_at DESC, si.id DESC
+        """
+        select_params = list(params)
+        if limit is not None:
+            select_sql += " LIMIT ?"
+            select_params.append(limit)
+            if offset is not None:
+                select_sql += " OFFSET ?"
+                select_params.append(offset)
+        elif offset is not None:
+            select_sql += " LIMIT -1 OFFSET ?"
+            select_params.append(offset)
+        cursor.execute(select_sql, select_params)
+        items = []
+        for row in cursor.fetchall():
+            item = dict(row)
+            item["processed_at"] = _to_iso(item.get("processed_at"))
+            items.append(item)
+
+        cursor.execute(
+            f"SELECT si.media_type, COUNT(*) AS count {base_from} {where_sql} GROUP BY si.media_type", params
+        )
+        type_counts = {row["media_type"]: row["count"] for row in cursor.fetchall()}
+
+        cursor.execute(
+            """
+            SELECT sh.session_id AS session_id
+            FROM sync_items si
+            JOIN sync_history sh ON si.sync_id = sh.id
+            GROUP BY sh.session_id
+            ORDER BY MAX(sh.start_time) DESC
+            """
+        )
+        sessions = [row["session_id"] for row in cursor.fetchall()]
+
+    return {
+        "items": items,
+        "total": total,
+        "sessions": sessions,
+        "movie_count": int(type_counts.get("movie", 0)),
+        "tv_count": int(type_counts.get("tv", 0)),
+    }
+
+
+def _session_lists_from_history(session_row: dict[str, Any]) -> list[dict[str, Any]]:
+    """Rebuild a session's list summary from sync_history for sessions with no items."""
+    list_id = session_row.get("list_id")
+    if not list_id:
+        return []
+    lists = []
+    for part in str(list_id).split(","):
+        list_type, _, part_id = part.partition(":")
+        lists.append(
+            {
+                "type": list_type or session_row.get("list_type") or "unknown",
+                "id": part_id or part,
+                "url": None,
+                "item_count": 0,
+            }
+        )
+    return lists
+
+
+def _build_session_dict(cursor, session_row: dict[str, Any]) -> dict[str, Any]:
+    """Shape one sync_history row like the old SyncSession.to_dict output."""
+    session_row = dict(session_row)
+    cursor.execute(
+        """
+        SELECT
+            si.title, si.status, si.media_type, si.year, si.error_details, si.processed_at,
+            si.list_type, si.list_id,
+            ROW_NUMBER() OVER (ORDER BY si.processed_at, si.id) AS item_number,
+            COUNT(*) OVER () AS total_items
+        FROM sync_items si
+        WHERE si.sync_id = ?
+        ORDER BY si.processed_at, si.id
+        """,
+        (session_row["id"],),
+    )
+    item_rows = [dict(row) for row in cursor.fetchall()]
+
+    results = {
+        "requested": 0,
+        "already_available": 0,
+        "already_requested": 0,
+        "skipped": 0,
+        "not_found": 0,
+        "error": 0,
+    }
+    for row in item_rows:
+        status = row["status"] or ""
+        if status == "request_failed":
+            results["error"] += 1
+        elif status in ("available", "synced"):
+            results["already_available"] += 1
+        elif status == "would_be_synced":
+            results["skipped"] += 1
+        elif status in results:
+            results[status] += 1
+        else:
+            # Any unknown status is not dropped; count as error so counts sum to item count
+            results["error"] += 1
+
+    items = [
+        {
+            "title": row["title"],
+            "status": row["status"],
+            "progress_number": row["item_number"] or 0,
+            "progress_total": row["total_items"] or len(item_rows),
+            "timestamp": _to_iso(row["processed_at"]),
+            "year": row["year"],
+            "media_type": row["media_type"] or "movie",
+            "error_details": row["error_details"],
+        }
+        for row in item_rows
+    ]
+
+    lists: list[dict[str, Any]] = []
+    seen: set[tuple] = set()
+    for row in item_rows:
+        if row["list_type"] and row["list_id"]:
+            key = (row["list_type"], row["list_id"])
+            if key not in seen:
+                seen.add(key)
+                lists.append({"type": row["list_type"], "id": row["list_id"], "url": None, "item_count": 0})
+    if not lists:
+        lists = _session_lists_from_history(session_row)
+
+    start_time = session_row.get("start_time")
+    end_time = session_row.get("end_time")
+    duration = None
+    if start_time and end_time:
+        try:
+            duration = (datetime.fromisoformat(str(end_time)) - datetime.fromisoformat(str(start_time))).total_seconds()
+        except (ValueError, TypeError):
+            duration = None
+
+    total_items = session_row.get("total_items") or len(item_rows)
+
+    return {
+        "id": session_row.get("session_id"),
+        "type": session_row.get("sync_type") or "full",
+        "start_timestamp": _to_iso(start_time),
+        "end_timestamp": _to_iso(end_time),
+        "duration": duration,
+        "version": None,
+        "total_items": total_items,
+        "processed_items": len(item_rows),
+        "lists": lists,
+        "results": results,
+        "items": items,
+        "errors": [
+            {
+                "title": row["title"],
+                "error": row["error_details"] or "Unknown error",
+                "timestamp": _to_iso(row["processed_at"]),
+            }
+            for row in item_rows
+            if row["status"] in ("error", "request_failed")
+        ],
+        "not_found_items": [row["title"] for row in item_rows if row["status"] == "not_found"],
+        "average_time_ms": None,
+        "total_time_seconds": duration,
+        "status": "in_progress" if session_row.get("in_progress") else "completed",
+    }
+
+
+def get_sync_sessions(
+    limit: int | None = None, offset: int | None = None, sync_type: str | None = None
+) -> dict[str, Any]:
+    """List sync sessions in the shape the /api/sync-history endpoints return."""
+    where: list[str] = []
+    params: list[Any] = []
+    if sync_type:
+        where.append("sync_type = ?")
+        params.append(sync_type)
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+
+    with get_db_connection(row_factory=True) as conn:
+        cursor = conn.cursor()
+        cursor.execute(f"SELECT COUNT(*) AS total FROM sync_history {where_sql}", params)
+        total = cursor.fetchone()["total"]
+
+        select_sql = f"SELECT * FROM sync_history {where_sql} ORDER BY start_time DESC"
+        select_params = list(params)
+        if limit is not None:
+            select_sql += " LIMIT ?"
+            select_params.append(limit)
+            if offset is not None:
+                select_sql += " OFFSET ?"
+                select_params.append(offset)
+        cursor.execute(select_sql, select_params)
+        sessions = [_build_session_dict(cursor, dict(row)) for row in cursor.fetchall()]
+
+    return {"sessions": sessions, "total": total}
+
+
+def get_sync_session_by_id(session_id: str) -> dict[str, Any] | None:
+    """Return one sync session in to_dict shape, or None when it does not exist."""
+    with get_db_connection(row_factory=True) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sync_history WHERE session_id = ?", (session_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        return _build_session_dict(cursor, dict(row))
+
+
+def get_sync_history_stats() -> dict[str, Any]:
+    """Aggregate sync-history statistics from structured rows."""
+    with get_db_connection(row_factory=True) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM sync_history")
+        sessions = [dict(row) for row in cursor.fetchall()]
+
+        cursor.execute("SELECT sync_id, COUNT(*) AS processed FROM sync_items GROUP BY sync_id")
+        processed = {row["sync_id"]: row["processed"] for row in cursor.fetchall()}
+
+        cursor.execute("SELECT sync_id, status, COUNT(*) AS count FROM sync_items GROUP BY sync_id, status")
+        status_counts: dict[int, dict[str, int]] = {}
+        for row in cursor.fetchall():
+            status_counts.setdefault(row["sync_id"], {})[row["status"]] = row["count"]
+
+        cursor.execute(
+            """
+            SELECT si.list_type, si.list_id, COUNT(DISTINCT si.sync_id) AS count
+            FROM sync_items si
+            WHERE si.list_type IS NOT NULL AND si.list_id IS NOT NULL
+            GROUP BY si.list_type, si.list_id
+            ORDER BY count DESC
+            LIMIT 10
+            """
+        )
+        most_synced = [
+            {"list": f"{row['list_type']}:{row['list_id']}", "count": row["count"]} for row in cursor.fetchall()
+        ]
+
+    valid = [s for s in sessions if processed.get(s["id"], 0) > 0 or (s.get("total_items") or 0) > 0]
+    if not sessions:
+        return {"error": "No sync sessions found"}
+    if not valid:
+        return {"error": "No valid sync sessions found"}
+
+    now = datetime.now(UTC)
+    last_24h = 0
+    last_7d = 0
+    last_30d = 0
+    total_items = 0
+    total_requested = 0
+    total_errors = 0
+    durations: list[float] = []
+
+    for session in valid:
+        session_id = session["id"]
+        total_items += processed.get(session_id, 0)
+        counts = status_counts.get(session_id, {})
+        total_requested += counts.get("requested", 0)
+        total_errors += sum(counts.get(status, 0) for status in ERROR_STATUSES)
+
+        start = _to_iso(session.get("start_time"))
+        if start:
+            try:
+                started = datetime.fromisoformat(start)
+                if started.tzinfo is None:
+                    started = started.replace(tzinfo=UTC)
+                age = now - started
+                if age < timedelta(days=1):
+                    last_24h += 1
+                if age < timedelta(days=7):
+                    last_7d += 1
+                if age < timedelta(days=30):
+                    last_30d += 1
+            except (ValueError, TypeError):
+                pass
+
+        if session.get("start_time") and session.get("end_time"):
+            try:
+                duration = (
+                    datetime.fromisoformat(str(session["end_time"]))
+                    - datetime.fromisoformat(str(session["start_time"]))
+                ).total_seconds()
+                if duration > 0:
+                    durations.append(duration)
+            except (ValueError, TypeError):
+                pass
+
+    total_sessions = len(valid)
+    if total_sessions == 0:
+        return {"error": "No valid sync sessions found"}
+
+    success_rate = ((total_items - total_errors) / total_items * 100) if total_items > 0 else 0
+    avg_items = total_items / total_sessions
+    avg_duration = sum(durations) / len(durations) if durations else None
+
+    return {
+        "total_sessions": total_sessions,
+        "full_syncs": sum(1 for s in valid if s.get("sync_type") == "full"),
+        "single_syncs": sum(1 for s in valid if s.get("sync_type") == "single"),
+        "total_items_processed": total_items,
+        "total_requested": total_requested,
+        "total_errors": total_errors,
+        "success_rate": round(success_rate, 2),
+        "avg_items_per_sync": round(avg_items, 2),
+        "avg_duration_seconds": round(avg_duration, 2) if avg_duration is not None else None,
+        "recent_stats": {"last_24h": last_24h, "last_7d": last_7d, "last_30d": last_30d},
+        "most_synced_lists": most_synced,
+    }
+
+
+def get_recent_sync_items(limit: int = 50) -> list[dict[str, Any]]:
+    """Most recently processed items, shaped for the recent-activity views."""
+    with get_db_connection(row_factory=True) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT * FROM (
+                SELECT
+                    si.title,
+                    si.status,
+                    si.processed_at,
+                    ROW_NUMBER() OVER (PARTITION BY si.sync_id ORDER BY si.processed_at, si.id) AS item_number,
+                    COUNT(*) OVER (PARTITION BY si.sync_id) AS total_items
+                FROM sync_items si
+            )
+            ORDER BY processed_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = [dict(row) for row in cursor.fetchall()]
+
+    recent = []
+    for row in rows:
+        status, status_text = _RECENT_STATUS_MAP.get(
+            row["status"], (row["status"], str(row["status"]).replace("_", " ").title())
+        )
+        recent.append(
+            {
+                "title": row["title"],
+                "status": status,
+                "status_text": status_text,
+                "timestamp": _to_iso(row["processed_at"]),
+                "position": row["item_number"] or 0,
+                "total": row["total_items"] or 0,
+            }
+        )
+    return recent
+
+
+def get_duplicate_count() -> int:
+    """Count repeat occurrences of a title within the most recent sync session."""
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM sync_history ORDER BY start_time DESC LIMIT 1")
+        row = cursor.fetchone()
+        if not row:
+            return 0
+        cursor.execute(
+            """
+            SELECT COALESCE(SUM(c - 1), 0) FROM (
+                SELECT COUNT(*) AS c
+                FROM sync_items
+                WHERE sync_id = ?
+                GROUP BY LOWER(TRIM(title))
+                HAVING COUNT(*) > 1
+            )
+            """,
+            (row[0],),
+        )
+        return int(cursor.fetchone()[0] or 0)
+
+
+def get_sync_info() -> dict[str, Any]:
+    """DB-backed replacement for the log-derived sync timing info (LogInfo)."""
+    with get_db_connection(row_factory=True) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT start_time, end_time, in_progress FROM sync_history ORDER BY start_time DESC")
+        rows = [dict(row) for row in cursor.fetchall()]
+        cursor.execute(
+            """
+            SELECT title, error_details
+            FROM sync_items
+            WHERE status IN ('error', 'request_failed')
+            ORDER BY processed_at DESC
+            LIMIT 5
+            """
+        )
+        error_rows = cursor.fetchall()
+
+    last_sync_start = None
+    last_sync_complete = None
+    running = False
+    for row in rows:
+        if row["in_progress"]:
+            running = True
+        if not last_sync_start and row["start_time"]:
+            last_sync_start = _to_iso(row["start_time"])
+        if not last_sync_complete and not row["in_progress"] and row["end_time"]:
+            last_sync_complete = _to_iso(row["end_time"])
+    if not last_sync_complete:
+        last_sync_complete = get_last_synced_time()
+
+    try:
+        interval = load_sync_interval()
+    except Exception:
+        interval = None
+
+    next_sync_time = None
+    sync_status = "unknown"
+    if running:
+        sync_status = "running"
+    elif last_sync_complete and interval:
+        try:
+            next_sync = datetime.fromisoformat(last_sync_complete) + timedelta(hours=interval)
+            next_sync_time = next_sync.isoformat()
+            age = datetime.now() - next_sync.replace(tzinfo=None)
+            if age > timedelta(minutes=10):
+                sync_status = "overdue"
+            elif age > timedelta(0):
+                sync_status = "due"
+            else:
+                sync_status = "scheduled"
+        except (ValueError, TypeError):
+            sync_status = "unknown"
+
+    return {
+        "last_sync_start": last_sync_start,
+        "last_sync_complete": last_sync_complete,
+        "sync_interval_hours": interval,
+        "next_sync_time": next_sync_time,
+        "sync_status": sync_status,
+        "recent_errors": [f"{row['title']}: {row['error_details'] or 'Processing error'}" for row in error_rows],
+    }
+
+
+def _selector_performance_mock() -> list[dict[str, Any]]:
+    """Selector scraping skill is not persisted; the report keeps its placeholders."""
+    now = datetime.now().isoformat()
+    return [
+        {
+            "website": "trakt.tv",
+            "selector": ".list-item",
+            "success_rate": 95,
+            "total_attempts": 150,
+            "last_used": now,
+            "status": "working",
+        },
+        {
+            "website": "imdb.com",
+            "selector": ".titleColumn",
+            "success_rate": 88,
+            "total_attempts": 120,
+            "last_used": now,
+            "status": "working",
+        },
+        {
+            "website": "letterboxd.com",
+            "selector": ".film-poster",
+            "success_rate": 92,
+            "total_attempts": 80,
+            "last_used": now,
+            "status": "working",
+        },
+        {
+            "website": "mubi.com",
+            "selector": ".film-title",
+            "success_rate": 45,
+            "total_attempts": 30,
+            "last_used": now,
+            "status": "failing",
+        },
+        {
+            "website": "criterion.com",
+            "selector": ".spine-title",
+            "success_rate": 78,
+            "total_attempts": 60,
+            "last_used": now,
+            "status": "working",
+        },
+        {
+            "website": "rottentomatoes.com",
+            "selector": ".movie-title",
+            "success_rate": 15,
+            "total_attempts": 25,
+            "last_used": now,
+            "status": "deprecated",
+        },
+    ]
+
+
+def get_analytics_payload(start: Any = None, end: Any = None) -> dict[str, Any]:
+    """
+    Build the AnalyticsResponse dict from structured sync rows.
+
+    Genre and selector detail are not persisted, so those two series keep the
+    same placeholder values the log-based implementation produced.
+    """
+    where: list[str] = []
+    params: list[Any] = []
+    start_ts = _sqlite_ts(start)
+    end_ts = _sqlite_ts(end)
+    if start_ts:
+        where.append("si.processed_at >= ?")
+        params.append(start_ts)
+    if end_ts:
+        where.append("si.processed_at <= ?")
+        params.append(end_ts)
+    where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+    error_list = _placeholders(ERROR_STATUSES)
+
+    with get_db_connection(row_factory=True) as conn:
+        cursor = conn.cursor()
+
+        cursor.execute(
+            f"""
+            SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN si.status IN ({error_list}) THEN 1 ELSE 0 END) AS errors,
+                SUM(CASE WHEN si.overseerr_id IS NOT NULL THEN 1 ELSE 0 END) AS matched,
+                MAX(si.processed_at) AS last_at
+            FROM sync_items si {where_sql}
+            """,
+            [*ERROR_STATUSES, *params],
+        )
+        overview_row = dict(cursor.fetchone())
+        total_items = overview_row["total"] or 0
+        total_errors = overview_row["errors"] or 0
+        matched = overview_row["matched"] or 0
+        last_sync_time = _to_iso(overview_row["last_at"]) or ""
+        success_rate = ((total_items - total_errors) / total_items * 100) if total_items else 0
+
+        sh_where: list[str] = []
+        sh_params: list[Any] = []
+        if start_ts:
+            sh_where.append("start_time >= ?")
+            sh_params.append(start_ts)
+        if end_ts:
+            sh_where.append("start_time <= ?")
+            sh_params.append(end_ts)
+        sh_sql = f"WHERE {' AND '.join(sh_where)}" if sh_where else ""
+        cursor.execute(
+            f"SELECT COUNT(*) AS ops, SUM(CASE WHEN in_progress = 1 THEN 1 ELSE 0 END) AS active FROM sync_history {sh_sql}",
+            sh_params,
+        )
+        ops_row = dict(cursor.fetchone())
+
+        overview = {
+            "total_items": total_items,
+            "success_rate": round(success_rate, 1),
+            "avg_processing_time": 0.0,
+            "active_sync": bool(ops_row["active"]),
+            "total_sync_operations": ops_row["ops"] or 0,
+            "total_errors": total_errors,
+            "last_sync_time": last_sync_time,
+        }
+
+        cursor.execute(
+            f"""
+            SELECT substr(si.processed_at, 1, 16) AS slot,
+                   COALESCE(si.list_type, 'unknown') AS source,
+                   COALESCE(si.media_type, 'movie') AS media_type,
+                   COUNT(*) AS count
+            FROM sync_items si {where_sql}
+            GROUP BY slot, source, media_type
+            ORDER BY slot DESC
+            LIMIT 20
+            """,
+            params,
+        )
+        media_additions = [
+            {
+                "timestamp": str(row["slot"]).replace(" ", "T"),
+                "count": row["count"],
+                "type": row["media_type"],
+                "source": row["source"],
+            }
+            for row in cursor.fetchall()
+        ]
+
+        cursor.execute(
+            f"""
+            SELECT substr(si.processed_at, 1, 16) AS slot,
+                   COALESCE(si.list_type, 'unknown') AS source,
+                   COUNT(*) AS total,
+                   SUM(CASE WHEN si.status IN ({error_list}) THEN 1 ELSE 0 END) AS failed
+            FROM sync_items si {where_sql}
+            GROUP BY slot, source
+            ORDER BY slot DESC
+            LIMIT 20
+            """,
+            [*ERROR_STATUSES, *params],
+        )
+        list_fetches = []
+        for row in cursor.fetchall():
+            total = row["total"] or 0
+            failed = row["failed"] or 0
+            successful = total - failed
+            list_fetches.append(
+                {
+                    "timestamp": str(row["slot"]).replace(" ", "T"),
+                    "success_rate": round((successful / total * 100) if total else 0, 1),
+                    "total_attempts": total,
+                    "successful_fetches": successful,
+                    "failed_fetches": failed,
+                    "source": row["source"],
+                }
+            )
+
+        cursor.execute(
+            f"""
+            SELECT COALESCE(si.list_type, 'unknown') AS source,
+                   COUNT(*) AS items,
+                   SUM(CASE WHEN si.status IN ({error_list}) THEN 1 ELSE 0 END) AS failed
+            FROM sync_items si {where_sql}
+            GROUP BY source
+            ORDER BY items DESC
+            LIMIT 10
+            """,
+            [*ERROR_STATUSES, *params],
+        )
+        source_distribution = []
+        for row in cursor.fetchall():
+            items_found = row["items"] or 0
+            failed = row["failed"] or 0
+            source_distribution.append(
+                {
+                    "source": row["source"],
+                    "items_found": items_found,
+                    "average_items_per_page": items_found,
+                    "total_pages": 1,
+                    "success_rate": round(((items_found - failed) / items_found * 100) if items_found else 0, 1),
+                }
+            )
+
+        cursor.execute(
+            f"""
+            SELECT substr(si.processed_at, 1, 16) AS slot,
+                   COALESCE(si.list_type, 'unknown') AS source,
+                   COUNT(*) AS total
+            FROM sync_items si {where_sql}
+            GROUP BY slot, source
+            ORDER BY slot DESC
+            LIMIT 20
+            """,
+            params,
+        )
+        scraping_performance = [
+            {
+                "timestamp": str(row["slot"]).replace(" ", "T"),
+                "items_per_minute": 60.0,
+                "source": row["source"],
+                "total_items": row["total"],
+                "processing_time": row["total"],
+            }
+            for row in cursor.fetchall()
+        ]
+
+        search_where = f"{where_sql} {'AND' if where_sql else 'WHERE'} si.status = 'not_found'"
+        cursor.execute(
+            f"""
+            SELECT si.title,
+                   COUNT(*) AS search_count,
+                   MAX(si.processed_at) AS last_attempt,
+                   COALESCE(si.media_type, 'movie') AS media_type,
+                   GROUP_CONCAT(DISTINCT COALESCE(si.list_type, 'unknown')) AS sources
+            FROM sync_items si {search_where}
+            GROUP BY si.title
+            ORDER BY search_count DESC
+            LIMIT 10
+            """,
+            params,
+        )
+        search_failures = [
+            {
+                "title": row["title"],
+                "search_count": row["search_count"],
+                "last_attempt": _to_iso(row["last_attempt"]) or "",
+                "sources": str(row["sources"]).split(",") if row["sources"] else [],
+                "type": row["media_type"],
+            }
+            for row in cursor.fetchall()
+        ]
+
+        year_where = f"{where_sql} {'AND' if where_sql else 'WHERE'} si.year IS NOT NULL"
+        cursor.execute(
+            f"""
+            SELECT si.year, COALESCE(si.media_type, 'movie') AS media_type, COUNT(*) AS count
+            FROM sync_items si {year_where}
+            GROUP BY si.year, media_type
+            ORDER BY si.year DESC
+            LIMIT 10
+            """,
+            params,
+        )
+        year_rows = cursor.fetchall()
+
+    matching = {
+        "perfect_matches": matched,
+        "partial_matches": 0,
+        "failed_matches": total_items - matched,
+        "average_score": 0.0,
+        "low_confidence_matches": [],
+    }
+
+    genre_distribution = []
+    mock_genres = [
+        ("Drama", 45),
+        ("Comedy", 38),
+        ("Action", 32),
+        ("Thriller", 28),
+        ("Horror", 22),
+        ("Romance", 18),
+        ("Sci-Fi", 15),
+        ("Documentary", 12),
+    ]
+    genre_total = sum(count for _, count in mock_genres)
+    for genre, count in mock_genres:
+        genre_distribution.append(
+            {"genre": genre, "count": count, "percentage": round((count / genre_total * 100) if genre_total else 0, 1)}
+        )
+
+    if year_rows:
+        year_distribution = [
+            {"year": row["year"], "count": row["count"], "type": row["media_type"]} for row in year_rows
+        ]
+    else:
+        current_year = datetime.now().year
+        year_distribution = [{"year": current_year - i, "count": 10 - i * 2, "type": "movie"} for i in range(5)]
+
+    return {
+        "overview": overview,
+        "media_additions": media_additions,
+        "list_fetches": list_fetches,
+        "matching": matching,
+        "search_failures": search_failures,
+        "scraping_performance": scraping_performance,
+        "source_distribution": source_distribution,
+        "selector_performance": _selector_performance_mock(),
+        "genre_distribution": genre_distribution,
+        "year_distribution": year_distribution,
+    }

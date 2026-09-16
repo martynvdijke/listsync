@@ -11,9 +11,8 @@ import multiprocessing
 import os
 import re
 import signal
-import statistics
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -38,22 +37,29 @@ from list_sync.database import (
     delete_list,
     fetch_cached_images,
     get_all_synced_items,
-    get_historic_enrichment_rows,
+    get_analytics_payload,
+    get_duplicate_count,
     get_item_lists_for_items,
     get_item_tmdb_and_posters,
-    get_last_synced_time,
     get_list_items,
     get_poster_urls,
     get_raw_lists,
-    get_sync_stats,
+    get_recent_sync_items,
+    get_sync_info,
+    get_sync_session_by_id,
+    get_sync_sessions,
     get_synced_items_quality_rows,
     init_database,
     load_list_ids,
     load_sync_interval,
     normalize_list_id,
     query_requested_items,
+    query_sync_items,
     save_list_id,
     update_list_user_id,
+)
+from list_sync.database import (
+    get_sync_history_stats as query_sync_history_stats,
 )
 
 # Removed in-memory sync tracker - now using database-based tracking
@@ -232,155 +238,6 @@ def find_listsync_processes() -> list[ProcessInfo]:
     return processes
 
 
-def parse_log_for_sync_info(log_path: str = "data/list_sync.log", max_lines: int = 200) -> LogInfo:
-    """Parse log file for sync timing information"""
-    log_info = LogInfo()
-
-    if not os.path.exists(log_path):
-        logging.info(f"Log file not found: {log_path}")
-        # Try to get last sync from database as fallback
-        try:
-            last_synced = get_last_synced_time()
-            if last_synced:
-                log_info.last_sync_complete = last_synced
-                logging.info(f"Got last sync from database: {last_synced}")
-        except Exception as e:
-            logging.exception(f"Could not get last sync from database: {e}")
-        return log_info
-
-    try:
-        # Get file stats
-        stat = os.stat(log_path)
-        log_info.log_file_size = stat.st_size
-        log_info.log_last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
-
-        with open(log_path, encoding="utf-8", errors="ignore") as f:
-            lines = f.readlines()
-
-        # Check last N lines for recent activity
-        recent_lines = lines[-max_lines:] if len(lines) > max_lines else lines
-
-        # Enhanced sync completion patterns
-        sync_completion_patterns = [
-            r"sync complete",
-            r"sync summary",
-            r"processing complete",
-            r"webhook sent",
-            r"discord notification sent",
-            r"sync finished",
-            r"soluify - list sync summary",
-            r"sync operation completed",
-            r"all lists processed",
-            r"sleeping for.*hours",  # This usually indicates sync completion
-            r"automated sync mode.*sleeping",
-        ]
-
-        logging.info(f"Parsing {len(recent_lines)} lines from log file...")
-
-        for line in reversed(recent_lines):  # Start from most recent
-            line_lower = line.lower()
-
-            # Look for sync completion (most recent first)
-            for pattern in sync_completion_patterns:
-                if pattern in line_lower:
-                    timestamp_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
-                    if timestamp_match and not log_info.last_sync_complete:
-                        log_info.last_sync_complete = timestamp_match.group(1)
-                        logging.info(
-                            f"Found sync completion pattern '{pattern}' with timestamp: {timestamp_match.group(1)}"
-                        )
-                        break
-
-            # Look for sync start
-            if "starting sync" in line_lower or "sync started" in line_lower:
-                timestamp_match = re.search(r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
-                if timestamp_match and not log_info.last_sync_start:
-                    log_info.last_sync_start = timestamp_match.group(1)
-                    logging.info(f"Found sync start: {timestamp_match.group(1)}")
-
-        # If no sync completion found in logs, try database fallback
-        if not log_info.last_sync_complete:
-            logging.info("No sync completion found in logs, checking database...")
-            try:
-                last_synced = get_last_synced_time()
-                if last_synced:
-                    log_info.last_sync_complete = last_synced
-                    logging.info(f"Got last sync from database: {last_synced}")
-            except Exception as e:
-                logging.exception(f"Could not get last sync from database: {e}")
-
-        # Look for sync interval in any line
-        for line in recent_lines:
-            # Look for sync interval
-            if "sleeping for" in line.lower():
-                hours_match = re.search(r"sleeping for (\d+\.?\d*) hours", line.lower())
-                if hours_match:
-                    log_info.sync_interval_hours = float(hours_match.group(1))
-                    logging.info(f"Found sync interval in logs: {hours_match.group(1)} hours")
-                    break
-            elif "sync interval" in line.lower():
-                hours_match = re.search(r"(\d+\.?\d*) hours?", line.lower())
-                if hours_match:
-                    log_info.sync_interval_hours = float(hours_match.group(1))
-                    logging.info(f"Found sync interval in logs: {hours_match.group(1)} hours")
-                    break
-
-        # Get sync interval from database if not found in logs
-        if not log_info.sync_interval_hours:
-            try:
-                db_interval = load_sync_interval()
-                if db_interval > 0:
-                    log_info.sync_interval_hours = db_interval
-                    logging.info(f"Got sync interval from database: {db_interval} hours")
-            except Exception as e:
-                logging.debug("Failed to load sync interval from database: %s", e)
-
-        # Calculate next sync time and status
-        if log_info.last_sync_complete and log_info.sync_interval_hours:
-            try:
-                last_sync = datetime.fromisoformat(log_info.last_sync_complete)
-                next_sync = last_sync + timedelta(hours=log_info.sync_interval_hours)
-                log_info.next_sync_time = next_sync.isoformat()
-
-                logging.info(f"Calculated next sync: {next_sync.isoformat()}")
-
-                # Determine if sync is overdue (with 10 minute grace period)
-                now = datetime.now()
-                grace_period = timedelta(minutes=10)
-                if now > (next_sync + grace_period):
-                    log_info.sync_status = "overdue"
-                elif now > next_sync:
-                    log_info.sync_status = "due"
-                else:
-                    log_info.sync_status = "scheduled"
-
-                logging.info(f"Sync status: {log_info.sync_status}")
-            except Exception as e:
-                logging.exception(f"Error calculating next sync: {e}")
-                log_info.sync_status = "unknown"
-        else:
-            log_info.sync_status = "unknown"
-            logging.info(
-                f"Cannot calculate next sync - last_sync: {log_info.last_sync_complete}, interval: {log_info.sync_interval_hours}"
-            )
-
-        # Look for recent errors (last 50 lines only)
-        error_lines = recent_lines[-50:] if len(recent_lines) > 50 else recent_lines
-        for line in error_lines:
-            if any(keyword in line.lower() for keyword in ["error", "exception", "failed", "timeout"]):
-                # Skip common non-error messages
-                if not any(skip in line.lower() for skip in ["no error", "error: none", "successfully"]):
-                    log_info.recent_errors.append(line.strip())
-
-        # Limit errors to last 5
-        log_info.recent_errors = log_info.recent_errors[-5:]
-
-    except Exception as e:
-        logging.exception(f"Error parsing log: {e}")
-
-    return log_info
-
-
 def get_deduplicated_items():
     """Get unique items with deduplication logic"""
     if not os.path.exists(DB_FILE):
@@ -517,1139 +374,6 @@ def analyze_data_quality():
         return None
 
 
-def parse_docker_logs_for_activity(limit: int = 10) -> list[dict[str, Any]]:
-    """Parse ListSync core logs for recent sync activity"""
-    try:
-        # Try to read from the mounted log file first
-        log_file_paths = [
-            "/var/log/supervisor/listsync-core.log",  # Docker supervisor log (priority)
-            "logs/listsync-core.log",  # Mounted from container
-            "/usr/src/app/logs/listsync-core.log",  # Container app logs
-            "data/list_sync.log",  # Fallback to data directory
-        ]
-
-        logs_output = None
-        log_file_used = None
-
-        for log_path in log_file_paths:
-            try:
-                if os.path.exists(log_path):
-                    with open(log_path, encoding="utf-8", errors="ignore") as f:
-                        # Read last 500 lines to capture recent sync
-                        lines = f.readlines()
-                        logs_output = "".join(lines[-500:]) if len(lines) > 500 else "".join(lines)
-                        log_file_used = log_path
-                        break
-            except Exception as e:
-                logging.exception(f"Could not read log file {log_path}: {e}")
-                continue
-
-        if not logs_output:
-            logging.exception("Could not retrieve ListSync logs from any source")
-            return []
-
-        logging.info(f"Successfully retrieved logs from: {log_file_used}")
-
-        # Parse logs for sync activity
-        activities = []
-        lines = logs_output.strip().split("\n")
-
-        # Look for the specific patterns from the user's logs:
-        # 2024-01-15 10:30:45 ☑️  Guardians of the Galaxy: Already Available (1/78)
-        # 2024-01-15 10:30:45 📌 Pixar Remix: WALL·E in 16-Bit: Already Requested (54/78)
-        # 2024-01-15 10:30:45 ⏭️  Item Name: Skipped (X/Y)
-        # 2024-01-15 10:30:45 ✅ Item Name: Requested (X/Y)
-
-        for line in lines:
-            # Extract timestamp - now we expect format: "YYYY-MM-DD HH:MM:SS content"
-            timestamp_str = None
-            log_content = line
-
-            # Try our new timestamp format first: 2024-01-15 10:30:45
-            timestamp_match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s+(.*)$", line)
-            if timestamp_match:
-                timestamp_str = timestamp_match.group(1)
-                log_content = timestamp_match.group(2)
-            else:
-                # Try Docker timestamp format: 2024-01-15T10:30:45.123456789Z
-                timestamp_match = re.match(r"^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})", line)
-                if timestamp_match:
-                    timestamp_str = timestamp_match.group(1)
-                    log_content = line[len(timestamp_match.group(0)) :].strip()
-                else:
-                    # Fallback: use current time if no timestamp found
-                    timestamp_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-            # Look for the specific status patterns with emojis
-            status_patterns = [
-                (r"☑️\s+(.+?):\s*Already Available\s*\((\d+)/(\d+)\)", "already_available", "available"),
-                (r"📌\s+(.+?):\s*Already Requested\s*\((\d+)/(\d+)\)", "already_requested", "requested"),
-                (r"✅\s+(.+?):\s*(?:Successfully )?Requested\s*\((\d+)/(\d+)\)", "requested", "requested"),
-                (r"⏭️\s+(.+?):\s*Skipped\s*\((\d+)/(\d+)\)", "skipped", "skipped"),
-                (r"❌\s+(.+?):\s*(?:Error|Not Found)\s*\((\d+)/(\d+)\)", "error", "error"),
-                # Fallback patterns without emojis
-                (r"(.+?):\s*Already Available\s*\((\d+)/(\d+)\)", "already_available", "available"),
-                (r"(.+?):\s*Already Requested\s*\((\d+)/(\d+)\)", "already_requested", "requested"),
-                (r"(.+?):\s*(?:Successfully )?Requested\s*\((\d+)/(\d+)\)", "requested", "requested"),
-                (r"(.+?):\s*Skipped\s*\((\d+)/(\d+)\)", "skipped", "skipped"),
-                (r"(.+?):\s*(?:Error|Not Found)\s*\((\d+)/(\d+)\)", "error", "error"),
-            ]
-
-            for pattern, status, action in status_patterns:
-                match = re.search(pattern, log_content)
-                if match:
-                    title = match.group(1).strip()
-                    item_num = int(match.group(2))
-                    total_items = int(match.group(3))
-
-                    # Clean up title (remove extra whitespace, special characters)
-                    title = re.sub(r"\s+", " ", title).strip()
-
-                    # Determine media type based on title patterns
-                    media_type = "movie"  # default
-
-                    # Common TV show indicators
-                    tv_indicators = [
-                        "game of thrones",
-                        "breaking bad",
-                        "the walking dead",
-                        "big bang theory",
-                        "stranger things",
-                        "sherlock",
-                        "how i met your mother",
-                        "dexter",
-                        "friends",
-                        "lost",
-                        "rick and morty",
-                        "black mirror",
-                        "house",
-                        "the office",
-                        "arrow",
-                        "chernobyl",
-                        "better call saul",
-                        "mr. robot",
-                        "the boys",
-                        "squid game",
-                    ]
-
-                    title_lower = title.lower()
-                    if any(indicator in title_lower for indicator in tv_indicators):
-                        media_type = "tv"
-
-                    # Convert timestamp to ISO format for consistency
-                    try:
-                        if "T" in timestamp_str:
-                            # Already in ISO format or similar
-                            if timestamp_str.endswith("Z"):
-                                # UTC timestamp - convert to local time
-                                utc_dt = datetime.fromisoformat(timestamp_str.replace("Z", "+00:00"))
-                                local_dt = utc_dt.replace(tzinfo=UTC).astimezone()
-                                local_timestamp = local_dt.isoformat()
-                            else:
-                                local_timestamp = timestamp_str
-                        else:
-                            # Standard format "YYYY-MM-DD HH:MM:SS" - convert to ISO
-                            dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-                            local_timestamp = dt.isoformat()
-                    except Exception as e:
-                        logging.exception(f"Error converting timestamp {timestamp_str}: {e}")
-                        # Fallback to current time
-                        local_timestamp = datetime.now().isoformat()
-
-                    activity = {
-                        "id": f"log-{item_num}",
-                        "title": title,
-                        "media_type": media_type,
-                        "status": status,
-                        "last_synced": local_timestamp,
-                        "action": action,
-                        "item_number": item_num,
-                        "total_items": total_items,
-                    }
-
-                    activities.append(activity)
-                    break  # Found a match, don't check other patterns
-
-        # Sort by item number (most recent processing first - highest numbers first)
-        activities.sort(key=lambda x: x.get("item_number", 0), reverse=True)
-
-        logging.debug(f"DEBUG: Found {len(activities)} total activities")
-        if activities:
-            logging.debug("DEBUG: First 10 activities (sorted by item number):")
-            for i, activity in enumerate(activities[:10]):
-                logging.info(
-                    f"  {i+1}. #{activity['item_number']}: {activity['title']} - {activity['action']} - {activity['last_synced']}"
-                )
-
-        # No deduplication - return raw stream of recent activity
-        logging.info(f"Returning {len(activities[:limit])} raw activities from logs")
-
-        return activities[:limit]
-
-    except Exception as e:
-        logging.exception(f"Error parsing logs: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return []
-
-
-def parse_failures_from_logs():
-    """Parse failure items from the log file"""
-    log_file_paths = [
-        "/var/log/supervisor/listsync-core.log",  # Docker supervisor log (priority)
-        "logs/listsync-core.log",  # Mounted from container
-        "/usr/src/app/logs/listsync-core.log",  # Container app logs
-        "data/list_sync.log",  # Fallback to data directory
-    ]
-
-    failures_data = {
-        "not_found": [],
-        "errors": [],
-        "total_failures": 0,
-        "last_sync_time": None,
-        "log_file_exists": False,
-    }
-
-    log_content = None
-    for log_path in log_file_paths:
-        try:
-            if os.path.exists(log_path):
-                with open(log_path, encoding="utf-8", errors="ignore") as f:
-                    log_content = f.read()
-                    failures_data["log_file_exists"] = True
-                    break
-        except Exception as e:
-            logging.exception(f"Could not read log file {log_path}: {e}")
-            continue
-
-    if not log_content:
-        return failures_data
-
-    lines = log_content.strip().split("\n")
-
-    # Look for the "Not Found Items" section at the end of sync
-    in_not_found_section = False
-    last_error_item = None  # Track last error to attach detail lines
-
-    for i, line in enumerate(lines):
-        # Extract timestamp
-        timestamp_match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
-        timestamp_str = timestamp_match.group(1) if timestamp_match else None
-
-        # Update last sync time
-        if timestamp_str and not failures_data["last_sync_time"]:
-            failures_data["last_sync_time"] = timestamp_str
-
-        # Look for "Not Found Items" section header
-        if "Not Found Items" in line and "(" in line:
-            in_not_found_section = True
-            continue
-
-        # If we're in the not found section, parse items
-        if in_not_found_section:
-            # Look for items like: "• Untitled Disney (2027) (Not Found)"
-            not_found_match = re.search(r"•\s+(.+?)\s+\(Not Found\)", line)
-            if not_found_match:
-                item_name = not_found_match.group(1).strip()
-                failures_data["not_found"].append(
-                    {
-                        "name": item_name,
-                        "timestamp": timestamp_str,
-                        "item_number": None,
-                        "total_items": None,
-                        "sync_session": None,
-                        "error_details": "Item not found in Seerr database",
-                    }
-                )
-                continue
-
-            # Look for HTTP errors like: "• Star Wars: Andor (2022) (Error: 404 Not Found)"
-            # Capture everything after "Error:" to get full error message with nested parentheses
-            error_match = re.search(r"•\s+(.+?)\s+\(Error:\s+(.+)$", line)
-            if error_match:
-                item_name = error_match.group(1).strip()
-                error_details = error_match.group(2).strip()
-
-                # Remove trailing closing parenthesis that's part of the log format
-                if error_details.endswith(")"):
-                    # Count parentheses to remove only the outer log format one
-                    open_count = error_details.count("(")
-                    close_count = error_details.count(")")
-                    if close_count > open_count:
-                        error_details = error_details[:-1]
-
-                failures_data["errors"].append(
-                    {
-                        "name": item_name,
-                        "timestamp": timestamp_str,
-                        "item_number": None,
-                        "total_items": None,
-                        "sync_session": None,
-                        "error_details": error_details,
-                    }
-                )
-                continue
-
-            # If we hit an empty line or new section, exit not found section
-            if line.strip() == "" or "─" in line or "=" in line:
-                in_not_found_section = False
-
-        # Also look for real-time failures during processing
-        # Pattern: "❓ Item Name: Not Found (X/Y)"
-        not_found_realtime = re.search(r"❓\s+(.+?):\s*Not Found\s*\((\d+)/(\d+)\)", line)
-        if not_found_realtime:
-            item_name = not_found_realtime.group(1).strip()
-            item_num = int(not_found_realtime.group(2))
-            total_items = int(not_found_realtime.group(3))
-
-            # Check if we already have this item (avoid duplicates)
-            if not any(item["name"] == item_name for item in failures_data["not_found"]):
-                new_item = {
-                    "name": item_name,
-                    "timestamp": timestamp_str,
-                    "item_number": item_num,
-                    "total_items": total_items,
-                    "sync_session": None,
-                    "error_details": "Item not found during sync processing",
-                }
-                failures_data["not_found"].append(new_item)
-                last_error_item = new_item
-
-        # Pattern: "❌ Item Name: Error (X/Y)"
-        error_realtime = re.search(r"❌\s+(.+?):\s*(?:Error|Failed)\s*\((\d+)/(\d+)\)", line)
-        if error_realtime:
-            item_name = error_realtime.group(1).strip()
-            item_num = int(error_realtime.group(2))
-            total_items = int(error_realtime.group(3))
-
-            # Check if we already have this item (avoid duplicates)
-            if not any(item["name"] == item_name for item in failures_data["errors"]):
-                new_item = {
-                    "name": item_name,
-                    "timestamp": timestamp_str,
-                    "item_number": item_num,
-                    "total_items": total_items,
-                    "sync_session": None,
-                    "error_details": "Processing error during sync",
-                }
-                failures_data["errors"].append(new_item)
-                last_error_item = new_item
-
-        # Look for error detail lines that follow error items (format: "    └─ error message")
-        if last_error_item and re.match(r"\s+└─\s+(.+)", line):
-            error_detail_match = re.match(r"\s+└─\s+(.+)", line)
-            if error_detail_match:
-                error_detail = error_detail_match.group(1).strip()
-                # Update the last error item with this detail
-                last_error_item["error_details"] = error_detail
-                last_error_item = None  # Reset after attaching details
-
-    # Calculate total failures
-    failures_data["total_failures"] = len(failures_data["not_found"]) + len(failures_data["errors"])
-
-    # Sort by item number if available, otherwise by timestamp
-    def sort_key(item):
-        if item.get("item_number"):
-            return item["item_number"]
-        if item.get("timestamp"):
-            try:
-                return datetime.fromisoformat(item["timestamp"]).timestamp()
-            except (ValueError, TypeError):
-                return 0  # best-effort timestamp parsing; invalid format ignored
-        return 0
-
-    failures_data["not_found"].sort(key=sort_key, reverse=True)
-    failures_data["errors"].sort(key=sort_key, reverse=True)
-
-    return failures_data
-
-
-def parse_historic_items_from_logs():
-    """Parse all items from the entire log file for historic data"""
-    log_file_paths = [
-        "/var/log/supervisor/listsync-core.log",  # Docker supervisor log (priority)
-        "logs/listsync-core.log",  # Mounted from container
-        "/usr/src/app/logs/listsync-core.log",  # Container app logs
-        "data/list_sync.log",  # Fallback to data directory
-    ]
-
-    historic_data = {
-        "total_processed": [],
-        "successful_items": [],
-        "requested_items": [],
-        "sync_sessions": [],
-        "log_file_exists": False,
-        "total_unique_processed": 0,
-        "total_unique_successful": 0,
-        "total_unique_requested": 0,
-    }
-
-    log_content = None
-    for log_path in log_file_paths:
-        try:
-            if os.path.exists(log_path):
-                with open(log_path, encoding="utf-8", errors="ignore") as f:
-                    log_content = f.read()
-                    historic_data["log_file_exists"] = True
-                    break
-        except Exception as e:
-            logging.exception(f"Could not read log file {log_path}: {e}")
-            continue
-
-    if not log_content:
-        return historic_data
-
-    lines = log_content.strip().split("\n")
-
-    # Track sync sessions and items
-    current_sync_session = None
-    all_items = {}  # For deduplication: key = "title_mediatype", value = latest item data
-
-    # Status patterns with emojis and their categories
-    status_patterns = [
-        # Successful patterns
-        (r"☑️\s+(.+?):\s*Already Available\s*\((\d+)/(\d+)\)", "already_available", "successful"),
-        (r"📌\s+(.+?):\s*Already Requested\s*\((\d+)/(\d+)\)", "already_requested", "successful"),
-        (r"✅\s+(.+?):\s*(?:Successfully )?Requested\s*\((\d+)/(\d+)\)", "requested", "successful"),
-        (r"⏭️\s+(.+?):\s*Skipped\s*\((\d+)/(\d+)\)", "skipped", "successful"),
-        # Failure patterns
-        (r"❓\s+(.+?):\s*Not Found\s*\((\d+)/(\d+)\)", "not_found", "failed"),
-        (r"❌\s+(.+?):\s*(?:Error|Failed)\s*\((\d+)/(\d+)\)", "error", "failed"),
-        # Fallback patterns without emojis
-        (r"(.+?):\s*Already Available\s*\((\d+)/(\d+)\)", "already_available", "successful"),
-        (r"(.+?):\s*Already Requested\s*\((\d+)/(\d+)\)", "already_requested", "successful"),
-        (r"(.+?):\s*(?:Successfully )?Requested\s*\((\d+)/(\d+)\)", "requested", "successful"),
-        (r"(.+?):\s*Skipped\s*\((\d+)/(\d+)\)", "skipped", "successful"),
-        (r"(.+?):\s*Not Found\s*\((\d+)/(\d+)\)", "not_found", "failed"),
-        (r"(.+?):\s*(?:Error|Failed)\s*\((\d+)/(\d+)\)", "error", "failed"),
-    ]
-
-    for line in lines:
-        # Extract timestamp
-        timestamp_match = re.match(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
-        timestamp_str = timestamp_match.group(1) if timestamp_match else None
-
-        # Detect new sync session
-        if "Total unique media items ready for sync:" in line:
-            total_match = re.search(r"Total unique media items ready for sync:\s*(\d+)", line)
-            if total_match:
-                current_sync_session = {
-                    "timestamp": timestamp_str,
-                    "total_items": int(total_match.group(1)),
-                    "session_id": f"sync_{timestamp_str}_{total_match.group(1)}"
-                    if timestamp_str
-                    else f"sync_unknown_{len(historic_data['sync_sessions'])}",
-                }
-                historic_data["sync_sessions"].append(current_sync_session)
-
-        # Parse individual item processing
-        for pattern, status, category in status_patterns:
-            match = re.search(pattern, line)
-            if match:
-                title = match.group(1).strip()
-                item_num = int(match.group(2))
-                total_items = int(match.group(3))
-
-                # Clean up title
-                title = re.sub(r"\s+", " ", title).strip()
-
-                # Extract year from title (look for patterns like "Movie Name (2023)" or "Movie Name 2023")
-                year = None
-                year_patterns = [
-                    r"\((\d{4})\)",  # (2023)
-                    r"\s(\d{4})\s",  # 2023 with spaces
-                    r"\s(\d{4})$",  # 2023 at end
-                ]
-
-                for pattern in year_patterns:
-                    year_match = re.search(pattern, title)
-                    if year_match:
-                        year = int(year_match.group(1))
-                        # Remove year from title for cleaner display
-                        title = re.sub(pattern, "", title).strip()
-                        # Clean up any double spaces or trailing punctuation
-                        title = re.sub(r"\s+", " ", title).strip()
-                        title = re.sub(r"\s*,\s*$", "", title)  # Remove trailing comma
-                        break
-
-                # Determine media type
-                media_type = "movie"  # default
-                tv_indicators = [
-                    "game of thrones",
-                    "breaking bad",
-                    "the walking dead",
-                    "big bang theory",
-                    "stranger things",
-                    "sherlock",
-                    "how i met your mother",
-                    "dexter",
-                    "friends",
-                    "lost",
-                    "rick and morty",
-                    "black mirror",
-                    "house",
-                    "the office",
-                    "arrow",
-                    "chernobyl",
-                    "better call saul",
-                    "mr. robot",
-                    "the boys",
-                    "squid game",
-                ]
-
-                if any(indicator in title.lower() for indicator in tv_indicators):
-                    media_type = "tv"
-
-                # Create unique key for deduplication
-                unique_key = f"{title.lower()}_{media_type}"
-
-                # Convert timestamp to ISO format
-                try:
-                    if timestamp_str:
-                        dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-                        iso_timestamp = dt.isoformat()
-                    else:
-                        iso_timestamp = datetime.now().isoformat()
-                except (ValueError, TypeError):
-                    iso_timestamp = datetime.now().isoformat()  # best-effort fallback; unparsable timestamp ignored
-
-                item_data = {
-                    "id": f"historic-{item_num}-{timestamp_str or 'unknown'}",
-                    "title": title,
-                    "year": year,
-                    "media_type": media_type,
-                    "status": status,
-                    "category": category,
-                    "timestamp": iso_timestamp,
-                    "item_number": item_num,
-                    "total_items": total_items,
-                    "sync_session": current_sync_session["session_id"] if current_sync_session else "unknown",
-                    "action": status.replace("_", " ").title(),
-                }
-
-                # For deduplication, prefer most recent timestamp and higher priority statuses
-                status_priority = {
-                    "requested": 100,
-                    "already_requested": 90,
-                    "already_available": 80,
-                    "skipped": 70,
-                    "not_found": 20,
-                    "error": 10,
-                }
-
-                if unique_key not in all_items:
-                    all_items[unique_key] = item_data
-                else:
-                    existing = all_items[unique_key]
-                    current_priority = status_priority.get(status, 0)
-                    existing_priority = status_priority.get(existing["status"], 0)
-
-                    # Replace if higher priority or same priority but more recent
-                    if current_priority > existing_priority or (
-                        current_priority == existing_priority and iso_timestamp > existing["timestamp"]
-                    ):
-                        all_items[unique_key] = item_data
-
-                break  # Found a match, don't check other patterns
-
-    # Categorize deduplicated items
-    for item in all_items.values():
-        # Add to total processed
-        historic_data["total_processed"].append(item)
-
-        # Add to successful if it's a successful status
-        if item["category"] == "successful":
-            historic_data["successful_items"].append(item)
-
-            # Add to requested if it's specifically a requested item
-            if item["status"] in ["requested", "already_requested"]:
-                historic_data["requested_items"].append(item)
-
-    # Calculate totals
-    historic_data["total_unique_processed"] = len(all_items)
-    historic_data["total_unique_successful"] = len(historic_data["successful_items"])
-    historic_data["total_unique_requested"] = len(historic_data["requested_items"])
-
-    # Sort items by timestamp (most recent first)
-    for key in ["total_processed", "successful_items", "requested_items"]:
-        historic_data[key].sort(key=lambda x: x["timestamp"], reverse=True)
-
-    logging.debug("DEBUG - Historic parsing complete:")
-    logging.info(f"  Total unique processed: {historic_data['total_unique_processed']}")
-    logging.info(f"  Total unique successful: {historic_data['total_unique_successful']}")
-    logging.info(f"  Total unique requested: {historic_data['total_unique_requested']}")
-    logging.info(f"  Sync sessions found: {len(historic_data['sync_sessions'])}")
-
-    return historic_data
-
-
-def get_duplicates_from_current_sync():
-    """Calculate actual duplicates (same name appearing multiple times) within the most recent sync session from logs"""
-    log_file_paths = [
-        "/var/log/supervisor/listsync-core.log",  # Docker supervisor log (priority)
-        "logs/listsync-core.log",  # Mounted from container
-        "/usr/src/app/logs/listsync-core.log",  # Container app logs
-        "data/list_sync.log",  # Fallback to data directory
-    ]
-
-    for log_path in log_file_paths:
-        try:
-            if os.path.exists(log_path):
-                with open(log_path, encoding="utf-8", errors="ignore") as f:
-                    log_content = f.read()
-
-                lines = log_content.strip().split("\n")
-
-                # Find the most recent sync session boundaries
-                sync_start_index = -1
-                sync_end_index = -1
-
-                # Find the most recent sync start marker
-                for i in range(len(lines) - 1, -1, -1):
-                    if "📊  Total unique media items ready for sync:" in lines[i]:
-                        sync_start_index = i
-                        break
-
-                if sync_start_index == -1:
-                    logging.debug("DEBUG - No sync start marker found")
-                    return 0
-
-                # Find the sync end marker (summary section)
-                for i in range(sync_start_index + 1, len(lines)):
-                    if "Soluify - List Sync Summary" in lines[i] or "──────────────" in lines[i]:
-                        sync_end_index = i
-                        break
-
-                # If no end marker found, use end of file
-                if sync_end_index == -1:
-                    sync_end_index = len(lines)
-
-                logging.debug(f"DEBUG - Analyzing sync session from line {sync_start_index} to {sync_end_index}")
-
-                # Parse all items processed in this sync session
-                item_names = []
-                processing_patterns = [
-                    r"☑️\s+(.+?):\s*Already Available\s*\(\d+/\d+\)",
-                    r"📌\s+(.+?):\s*Already Requested\s*\(\d+/\d+\)",
-                    r"✅\s+(.+?):\s*(?:Successfully )?Requested\s*\(\d+/\d+\)",
-                    r"⏭️\s+(.+?):\s*Skipped\s*\(\d+/\d+\)",
-                    r"❓\s+(.+?):\s*Not Found\s*\(\d+/\d+\)",
-                    r"❌\s+(.+?):\s*(?:Error|Failed)\s*\(\d+/\d+\)",
-                ]
-
-                # Count occurrences of each item name
-                for i in range(sync_start_index + 1, sync_end_index):
-                    line = lines[i]
-
-                    for pattern in processing_patterns:
-                        match = re.search(pattern, line)
-                        if match:
-                            item_name = match.group(1).strip()
-                            # Normalize the name (remove extra whitespace, convert to lowercase for comparison)
-                            normalized_name = re.sub(r"\s+", " ", item_name).strip().lower()
-                            item_names.append(normalized_name)
-                            break
-
-                # Count duplicates
-                from collections import Counter
-
-                name_counts = Counter(item_names)
-                duplicates_count = sum(count - 1 for count in name_counts.values() if count > 1)
-
-                logging.debug(f"DEBUG - Found {len(item_names)} total items processed in sync session")
-                logging.debug(
-                    f"DEBUG - Found {len([count for count in name_counts.values() if count > 1])} items with duplicates"
-                )
-                logging.debug(f"DEBUG - Total duplicate occurrences: {duplicates_count}")
-
-                # Debug: Show some duplicate examples
-                duplicates = {name: count for name, count in name_counts.items() if count > 1}
-                if duplicates:
-                    logging.debug("DEBUG - Examples of duplicated items:")
-                    for name, count in list(duplicates.items())[:5]:  # Show first 5 examples
-                        logging.info(f"  '{name}' appeared {count} times")
-
-                return duplicates_count
-
-        except Exception as e:
-            logging.exception(f"Error reading log file {log_path}: {e}")
-            continue
-
-    logging.debug("DEBUG - No sync session found in logs")
-    return 0
-
-
-def categorize_log_entry(message: str, level: str) -> str:
-    """Categorize log entries based on comprehensive regex patterns"""
-    message_lower = message.lower()
-
-    # Pattern-based categorization with priority order
-
-    # Sync operations (patterns 14, 21, 29)
-    if any(
-        keyword in message_lower
-        for keyword in [
-            "starting automated sync",
-            "starting in automated mode",
-            "sync operation completed",
-            "full sync",
-            "sync complete",
-        ]
-    ):
-        return "sync"
-
-    # Web scraping operations - IMDb, Letterboxd, MDBList, Trakt (patterns 6, 7, 8, 9, 16, 18, 23, 24, 25, 26, 27, 28)
-    if any(
-        keyword in message_lower
-        for keyword in [
-            "fetching imdb list",
-            "fetching letterboxd",
-            "fetching mdblist",
-            "attempting to load url",
-            "list fetched successfully",
-            "found",
-            "items using selector",
-            "processing page",
-            "trying to find chart",
-            "chart parent found",
-            "clicking next page",
-            "total items in chart",
-            "beautifulsoup",
-            "selenium",
-            "scraping",
-        ]
-    ):
-        return "web_scraping"
-
-    # API Calls - Seerr, TMDb, Trakt API (pattern 13, 19)
-    if any(
-        keyword in message_lower
-        for keyword in [
-            "overseerr api",
-            "api connection",
-            "tmdb",
-            "detailed response for movie id",
-            "fetching trakt",
-            "trakt api",
-            "api request",
-            "api call",
-            '"id":',
-            "response for",
-        ]
-    ) or ("{" in message and ('"id"' in message or "tmdbId" in message or "imdbId" in message)):
-        return "api_calls"
-
-    # Database operations - Title matching, searching (patterns 10, 11, 12, 20)
-    if any(
-        keyword in message_lower
-        for keyword in [
-            "searching for",
-            "match candidate",
-            "final match for",
-            "score:",
-            "database",
-            "exact year match",
-            "close year match",
-        ]
-    ):
-        return "database"
-
-    # Item processing operations (patterns 3, 4, 5)
-    if any(
-        keyword in message_lower
-        for keyword in [
-            "added tv:",
-            "added movie:",
-            "processing item",
-            "requesting",
-        ]
-    ):
-        return "item_processing"
-
-    # Webhook and notification operations (patterns 15, 30)
-    if any(
-        keyword in message_lower
-        for keyword in [
-            "discord webhook",
-            "webhook notification",
-            "webhook integration",
-        ]
-    ):
-        return "webhook"
-
-    # Pagination operations (pattern 17)
-    if any(
-        keyword in message_lower
-        for keyword in [
-            "no more pages available",
-            "pagination",
-        ]
-    ):
-        return "pagination"
-
-    # Process management (pattern 22)
-    if any(
-        keyword in message_lower
-        for keyword in [
-            "process pid",
-            "sigusr1",
-        ]
-    ):
-        return "process"
-
-    # Default category
-    return "general"
-
-
-def extract_media_info(message: str) -> dict[str, Any] | None:
-    """Extract comprehensive media information from log messages using all 30 patterns"""
-    import re
-
-    # Pattern 3: Added TV/Movie with IMDB
-    pattern_3 = r"Added (tv|movie): (.+?) \((\d{4})\) \(IMDB ID: (tt\d+)\)"
-    match = re.search(pattern_3, message)
-    if match:
-        return {
-            "pattern": 3,
-            "type": "item_added_imdb",
-            "media_type": match.group(1),
-            "title": match.group(2).strip(),
-            "year": int(match.group(3)),
-            "imdb_id": match.group(4),
-            "source": "imdb",
-        }
-
-    # Pattern 4: Added Movie (Simple)
-    pattern_4 = r"Added movie: (.+)$"
-    match = re.search(pattern_4, message)
-    if match and "IMDB ID:" not in message and "[" not in message:
-        return {
-            "pattern": 4,
-            "type": "item_added_simple",
-            "media_type": "movie",
-            "title": match.group(1).strip(),
-            "source": "trakt",
-        }
-
-    # Pattern 5: Added Movie with Position
-    pattern_5 = r"Added movie: (.+?) \((\d{4})\) \[(\d+)/(\d+)\]"
-    match = re.search(pattern_5, message)
-    if match:
-        return {
-            "pattern": 5,
-            "type": "item_added_position",
-            "media_type": "movie",
-            "title": match.group(1).strip(),
-            "year": int(match.group(2)),
-            "position": int(match.group(3)),
-            "total": int(match.group(4)),
-            "source": "trakt_special",
-        }
-
-    # Pattern 6: Fetching List
-    pattern_6 = r"Fetching (IMDB|TRAKT|TRAKT_SPECIAL) list: (.+)"
-    match = re.search(pattern_6, message)
-    if match:
-        return {
-            "pattern": 6,
-            "type": "list_fetch_start",
-            "list_type": match.group(1).lower(),
-            "list_id": match.group(2).strip(),
-            "source": match.group(1).lower(),
-        }
-
-    # Pattern 7: Attempting to Load URL
-    pattern_7 = r"Attempting to load URL: (.+)"
-    match = re.search(pattern_7, message)
-    if match:
-        return {
-            "pattern": 7,
-            "type": "url_load",
-            "url": match.group(1).strip(),
-        }
-
-    # Pattern 8: Found Items
-    pattern_8 = r"Found (\d+) items (?:using selector: (.+)|on (?:current page|page (\d+)))"
-    match = re.search(pattern_8, message)
-    if match:
-        return {
-            "pattern": 8,
-            "type": "items_found",
-            "count": int(match.group(1)),
-            "selector": match.group(2) if match.group(2) else None,
-            "page": int(match.group(3)) if match.group(3) else None,
-        }
-
-    # Pattern 9: Found Title Using Selector
-    pattern_9 = r"Found title using selector: (.+)"
-    match = re.search(pattern_9, message)
-    if match:
-        return {
-            "pattern": 9,
-            "type": "title_found",
-            "selector": match.group(1).strip(),
-        }
-
-    # Pattern 10: Searching for Title
-    pattern_10 = r"Searching for '(.+?)' \(Year: (\d{4}|None)\)"
-    match = re.search(pattern_10, message)
-    if match:
-        year = None if match.group(2) == "None" else int(match.group(2))
-        return {
-            "pattern": 10,
-            "type": "title_search",
-            "title": match.group(1),
-            "year": year,
-        }
-
-    # Pattern 11: Match Candidate
-    pattern_11 = r"Match candidate: '(.+?)' \((None|\d{4})\) - Score: (\d*\.\d+)"
-    match = re.search(pattern_11, message)
-    if match:
-        year = None if match.group(2) == "None" else int(match.group(2))
-        return {
-            "pattern": 11,
-            "type": "match_candidate",
-            "title": match.group(1),
-            "year": year,
-            "score": float(match.group(3)),
-        }
-
-    # Pattern 12: Final Match
-    pattern_12 = r"Final match for '(.+?)' \((None|\d{4})\): '(.+?)' \((None|\d{4})\) - Score: (\d*\.\d+)"
-    match = re.search(pattern_12, message)
-    if match:
-        original_year = None if match.group(2) == "None" else int(match.group(2))
-        matched_year = None if match.group(4) == "None" else int(match.group(4))
-        return {
-            "pattern": 12,
-            "type": "final_match",
-            "original_title": match.group(1),
-            "original_year": original_year,
-            "matched_title": match.group(3),
-            "matched_year": matched_year,
-            "score": float(match.group(5)),
-        }
-
-    # Pattern 13: API Connection
-    pattern_13 = r"Seerr API connection successful!"
-    if re.search(pattern_13, message):
-        return {
-            "pattern": 13,
-            "type": "api_connection",
-            "service": "overseerr",
-            "status": "success",
-        }
-
-    # Pattern 14: Sync Operation
-    pattern_14 = r"Starting automated sync with (\d+\.\d+) hour interval"
-    match = re.search(pattern_14, message)
-    if match:
-        return {
-            "pattern": 14,
-            "type": "sync_start",
-            "interval_hours": float(match.group(1)),
-        }
-
-    # Pattern 15: Webhook Notification
-    pattern_15 = r"Discord webhook notification sent successfully"
-    if re.search(pattern_15, message):
-        return {
-            "pattern": 15,
-            "type": "webhook_sent",
-            "service": "discord",
-            "status": "success",
-        }
-
-    # Pattern 16: Processing Page
-    pattern_16 = r"Processing page (\d+)\.\.\."
-    match = re.search(pattern_16, message)
-    if match:
-        return {
-            "pattern": 16,
-            "type": "page_processing",
-            "page": int(match.group(1)),
-        }
-
-    # Pattern 17: No More Pages
-    pattern_17 = r"No more pages available: Message: (.+)"
-    match = re.search(pattern_17, message)
-    if match:
-        return {
-            "pattern": 17,
-            "type": "pagination_end",
-            "error_message": match.group(1).strip(),
-        }
-
-    # Pattern 18: List Fetched Successfully
-    pattern_18 = r"(IMDB|Trakt) list (.+?) fetched successfully. Found (\d+) items."
-    match = re.search(pattern_18, message)
-    if match:
-        return {
-            "pattern": 18,
-            "type": "list_fetch_complete",
-            "service": match.group(1).lower(),
-            "list_id": match.group(2).strip(),
-            "item_count": int(match.group(3)),
-        }
-
-    # Pattern 19: Detailed Response for Movie ID
-    pattern_19 = r"Detailed response for movie ID (\d+): ({.+)"
-    match = re.search(pattern_19, message)
-    if match:
-        return {
-            "pattern": 19,
-            "type": "movie_metadata",
-            "movie_id": int(match.group(1)),
-            "metadata_json": match.group(2),
-        }
-
-    # Pattern 20: Truncated Log Entries
-    pattern_20 = r"\.\.\.truncated (\d+) characters\)\.\.\.:"
-    match = re.search(pattern_20, message)
-    if match:
-        return {
-            "pattern": 20,
-            "type": "truncated_log",
-            "truncated_chars": int(match.group(1)),
-        }
-
-    # Pattern 21: Mode of Operation
-    pattern_21 = r"Starting in automated mode"
-    if re.search(pattern_21, message):
-        return {
-            "pattern": 21,
-            "type": "mode_start",
-            "mode": "automated",
-        }
-
-    # Pattern 22: Process PID
-    pattern_22 = r"Process PID: (\d+) - Send SIGUSR1 to trigger immediate sync"
-    match = re.search(pattern_22, message)
-    if match:
-        return {
-            "pattern": 22,
-            "type": "process_info",
-            "pid": int(match.group(1)),
-            "trigger_signal": "SIGUSR1",
-        }
-
-    # Pattern 23: Web Scraping Attempts
-    pattern_23 = r'Trying to find chart with data-testid selector: \[data-testid="(.+?)"\]'
-    match = re.search(pattern_23, message)
-    if match:
-        return {
-            "pattern": 23,
-            "type": "chart_search",
-            "selector": match.group(1),
-        }
-
-    # Pattern 24: Chart Found
-    pattern_24 = r'Chart parent found with selector: \[data-testid="(.+?)"\]'
-    match = re.search(pattern_24, message)
-    if match:
-        return {
-            "pattern": 24,
-            "type": "chart_found",
-            "selector": match.group(1),
-        }
-
-    # Pattern 25: Pagination Action
-    pattern_25 = r"Clicking next page button to go to page (\d+)"
-    match = re.search(pattern_25, message)
-    if match:
-        return {
-            "pattern": 25,
-            "type": "page_navigation",
-            "target_page": int(match.group(1)),
-        }
-
-    # Pattern 26: Processed Items
-    pattern_26 = r"Processed (\d+) items on page (\d+)"
-    match = re.search(pattern_26, message)
-    if match:
-        return {
-            "pattern": 26,
-            "type": "page_processed",
-            "item_count": int(match.group(1)),
-            "page": int(match.group(2)),
-        }
-
-    # Pattern 27: Total Items in Chart
-    pattern_27 = r"Total items in chart: (\d+)"
-    match = re.search(pattern_27, message)
-    if match:
-        return {
-            "pattern": 27,
-            "type": "chart_total",
-            "total_items": int(match.group(1)),
-        }
-
-    # Pattern 28: Detailed Fetch for Special Trakt List
-    pattern_28 = r"Fetching special Trakt list: (.+) \(limit: (\d+) items\)"
-    match = re.search(pattern_28, message)
-    if match:
-        return {
-            "pattern": 28,
-            "type": "special_list_fetch",
-            "url": match.group(1).strip(),
-            "limit": int(match.group(2)),
-        }
-
-    # Pattern 29: Sync Completion
-    pattern_29 = r"Sync operation completed successfully"
-    if re.search(pattern_29, message):
-        return {
-            "pattern": 29,
-            "type": "sync_complete",
-            "status": "success",
-        }
-
-    # Pattern 30: Webhook Enabled
-    pattern_30 = r"Discord webhook integration enabled"
-    if re.search(pattern_30, message):
-        return {
-            "pattern": 30,
-            "type": "webhook_enabled",
-            "service": "discord",
-        }
-
-    return None
-
-
-def parse_log_line(line: str, line_number: int) -> LogEntry | None:
-    """Parse a single log line into a LogEntry"""
-    # Pattern: "YYYY-MM-DD HH:MM:SS,mmm - LEVEL - MESSAGE"
-    log_pattern = r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+ - (DEBUG|INFO|ERROR|WARNING) - (.+)$"
-    match = re.match(log_pattern, line.strip())
-
-    if not match:
-        return None
-
-    timestamp_str, level, message = match.groups()
-
-    # Convert timestamp to ISO format
-    try:
-        dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-        iso_timestamp = dt.isoformat()
-    except (ValueError, TypeError):
-        iso_timestamp = timestamp_str  # best-effort; keep original if unparsable
-
-    category = categorize_log_entry(message, level)
-    media_info = extract_media_info(message)
-
-    return LogEntry(
-        id=f"log-{line_number}",
-        timestamp=iso_timestamp,
-        level=level,
-        category=category,
-        message=message,
-        raw_line=line.strip(),
-        media_info=media_info,
-    )
-
-
 def get_line_number(entry):
     """Extract line number from log entry ID for secondary sorting"""
     try:
@@ -1657,6 +381,20 @@ def get_line_number(entry):
         return int(entry.id.split("-")[1])
     except (IndexError, ValueError):
         return 0
+
+
+# The live-tail reader's line format and the keyword buckets the log viewer
+# groups by. Reporting does not use either.
+_LOG_LINE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}),\d+ - (DEBUG|INFO|ERROR|WARNING) - (.+)$")
+_LOG_CATEGORY_KEYWORDS = (
+    ("sync", ("sync", "session")),
+    ("fetching", ("fetch", "list")),
+    ("items", ("request", "skipped", "available", "not found", "added")),
+    ("matching", ("match", "resolv")),
+    ("api", ("seerr", "trakt", "tmdb", "api request", "http")),
+    ("webhook", ("webhook", "discord", "gotify")),
+    ("process", ("process", "pid", "signal", "cancel")),
+)
 
 
 def get_log_entries(
@@ -1668,8 +406,12 @@ def get_log_entries(
     search: str | None = None,
     sort_order: str = "desc",
 ) -> LogStreamResponse:
-    """Get log entries with filtering and pagination"""
+    """Read log lines for the live-tail / log viewer.
 
+    This is the single remaining log-line reader: reporting and analytics read
+    the database, and this exists only so the log can still be streamed and
+    displayed. It does a light keyword categorisation for the viewer filters.
+    """
     if not os.path.exists(log_path):
         return LogStreamResponse(entries=[], total_count=0, has_more=False, last_position=0)
 
@@ -1677,12 +419,35 @@ def get_log_entries(
         with open(log_path, encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
 
-        # Parse all lines into log entries
         all_entries = []
         for i, line in enumerate(lines):
-            entry = parse_log_line(line, i + 1)
-            if entry:
-                all_entries.append(entry)
+            match = _LOG_LINE_RE.match(line.strip())
+            if not match:
+                continue
+            timestamp_str, level, message = match.groups()
+            try:
+                iso_timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S").isoformat()
+            except (ValueError, TypeError):
+                iso_timestamp = timestamp_str
+
+            lowered = message.lower()
+            category = "general"
+            for name, keywords in _LOG_CATEGORY_KEYWORDS:
+                if any(keyword in lowered for keyword in keywords):
+                    category = name
+                    break
+
+            all_entries.append(
+                LogEntry(
+                    id=f"log-{i + 1}",
+                    timestamp=iso_timestamp,
+                    level=level,
+                    category=category,
+                    message=message,
+                    raw_line=line.strip(),
+                    media_info=None,
+                )
+            )
 
         # Apply filters
         filtered_entries = all_entries
@@ -1695,12 +460,7 @@ def get_log_entries(
 
         if search:
             search_lower = search.lower()
-            filtered_entries = [
-                e
-                for e in filtered_entries
-                if search_lower in e.message.lower()
-                or (e.media_info and e.media_info.get("title", "").lower().find(search_lower) != -1)
-            ]
+            filtered_entries = [e for e in filtered_entries if search_lower in e.message.lower()]
 
         # Sort by timestamp and line number to maintain original file order for same timestamps
         if sort_order == "desc":
@@ -1736,7 +496,12 @@ async def stream_log_updates(
     category_filters: list[str] | None = None,
     search: str | None = None,
 ) -> AsyncGenerator[str, None]:
-    """Stream new log entries as they are added to the file"""
+    """Stream new log entries as they are added to the file.
+
+    Reads through the one retained line reader rather than parsing the log
+    itself. The file is re-read each tick; rotated logs are bounded, so this
+    stays cheap enough for a tail.
+    """
 
     if not os.path.exists(log_path):
         yield f"data: {json.dumps({'error': 'Log file not found'})}\n\n"
@@ -1746,46 +511,28 @@ async def stream_log_updates(
 
     while True:
         try:
-            with open(log_path, encoding="utf-8", errors="ignore") as f:
-                # Seek to last known position
-                f.seek(0, 2)  # Go to end of file
-                file_size = f.tell()
+            response = get_log_entries(log_path, limit=100000, offset=0, sort_order="asc")
 
-                if file_size > current_position:
-                    f.seek(current_position)
-                    new_lines = f.readlines()
+            new_entries = []
+            for entry in response.entries:
+                if get_line_number(entry) <= current_position:
+                    continue
+                if level_filter and entry.level != level_filter:
+                    continue
+                if category_filters and len(category_filters) > 0 and entry.category not in category_filters:
+                    continue
+                if search and search.lower() not in entry.message.lower():
+                    continue
+                new_entries.append(entry)
 
-                    new_entries = []
-                    for i, line in enumerate(new_lines):
-                        entry = parse_log_line(line, current_position + i + 1)
-                        if entry:
-                            # Apply filters
-                            if level_filter and entry.level != level_filter:
-                                continue
-                            if (
-                                category_filters
-                                and len(category_filters) > 0
-                                and entry.category not in category_filters
-                            ):
-                                continue
-                            if search and search.lower() not in entry.message.lower():
-                                if not (
-                                    entry.media_info
-                                    and entry.media_info.get("title", "").lower().find(search.lower()) != -1
-                                ):
-                                    continue
+            for entry in new_entries:
+                yield f"data: {json.dumps(entry.dict())}\n\n"
 
-                            new_entries.append(entry)
+            if response.last_position:
+                current_position = response.last_position
 
-                    if new_entries:
-                        # Send new entries
-                        for entry in new_entries:
-                            yield f"data: {json.dumps(entry.dict())}\n\n"
-
-                    current_position = file_size
-
-                # Send heartbeat
-                yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()})}\n\n"
+            # Send heartbeat
+            yield f"data: {json.dumps({'type': 'heartbeat', 'timestamp': datetime.now().isoformat()})}\n\n"
 
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
@@ -1793,7 +540,42 @@ async def stream_log_updates(
         await asyncio.sleep(1)  # Check for updates every second
 
 
-# API Endpoints
+# Status buckets the reporting surface groups by.
+REPORTING_SUCCESS_STATUSES = ("requested", "already_available", "already_requested", "skipped", "available", "synced")
+REPORTING_FAILURE_STATUSES = ("not_found", "error", "request_failed")
+
+
+def build_log_info() -> LogInfo:
+    """Build the sync/log summary the system endpoints return.
+
+    Timing and errors come from the database; only file size/mtime are read
+    from the log file, which is no longer parsed.
+    """
+    try:
+        info = get_sync_info()
+    except Exception as e:
+        logging.exception(f"Could not build sync info from database: {e}")
+        info = {}
+
+    log_info = LogInfo(
+        last_sync_start=info.get("last_sync_start"),
+        last_sync_complete=info.get("last_sync_complete"),
+        sync_interval_hours=info.get("sync_interval_hours"),
+        next_sync_time=info.get("next_sync_time"),
+        sync_status=info.get("sync_status", "unknown"),
+        recent_errors=info.get("recent_errors", []),
+    )
+
+    log_path = "data/list_sync.log"
+    try:
+        if os.path.exists(log_path):
+            stat = os.stat(log_path)
+            log_info.log_file_size = stat.st_size
+            log_info.log_last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+    except OSError as e:
+        logging.debug("Could not stat log file: %s", e)
+
+    return log_info
 
 
 @app.get("/api/system/status")
@@ -1830,7 +612,7 @@ async def get_system_status():
     }
 
     # Log analysis
-    logs = parse_log_for_sync_info()
+    logs = build_log_info()
 
     # Sync status
     sync_status = {
@@ -1866,7 +648,7 @@ async def get_processes():
 @app.get("/api/system/logs")
 async def get_log_info():
     """Get log file analysis"""
-    return parse_log_for_sync_info()
+    return build_log_info()
 
 
 @app.get("/api/system/database/test")
@@ -1892,7 +674,7 @@ async def get_health_check():
         process_running = len(processes) > 0
 
         # Parse logs for sync status
-        log_info = parse_log_for_sync_info()
+        log_info = build_log_info()
 
         return {
             "database": db_connected,
@@ -2948,16 +1730,15 @@ async def get_sync_stats():
         skipped_count = sum(1 for item in unique_items if item[6] in skipped_statuses)
         error_count = sum(1 for item in unique_items if item[6] in error_statuses)
 
-        # Get duplicates from the most recent sync session in logs
-        duplicates_in_current_sync = get_duplicates_from_current_sync()
+        # Get duplicates from the most recent sync session in the database
+        duplicates_in_current_sync = get_duplicate_count()
 
-        # Get actual failures from the failures endpoint (same source as /failures page)
+        # Count failures from the same structured source as /api/failures
         try:
-            failures = parse_failures_from_logs()
-            log_based_errors = failures["total_failures"]
-            logging.debug(f"DEBUG - Found {log_based_errors} failures from logs (same as /failures page)")
+            log_based_errors = query_sync_items(statuses=["not_found", "error", "request_failed"], limit=0)["total"]
+            logging.debug(f"DEBUG - Found {log_based_errors} failures from sync_items (same as /failures page)")
         except Exception as e:
-            logging.debug(f"DEBUG - Could not parse failures from logs: {e}")
+            logging.debug(f"DEBUG - Could not query failures from database: {e}")
             log_based_errors = error_count
 
         # Calculate simplified metrics
@@ -2979,12 +1760,12 @@ async def get_sync_stats():
         )
         logging.info(f"  Total Requested (NEW): {total_requested}")
         logging.info(f"  Already Requested: {already_requested_count}")
-        logging.warning(f"  Errors: {total_errors} (from logs, same as /failures page)")
+        logging.warning(f"  Errors: {total_errors} (from sync_items, same as /failures page)")
         logging.info(f"  Success Rate: {success_rate:.1f}%")
         logging.info(f"  Duplicates in current sync: {duplicates_in_current_sync}")
 
-        # Get actual last sync time from logs
-        log_info = parse_log_for_sync_info()
+        # Get actual last sync time from the database
+        log_info = build_log_info()
         last_updated = log_info.last_sync_complete or log_info.log_last_modified
 
         return {
@@ -3001,7 +1782,7 @@ async def get_sync_stats():
                 "already_requested": already_requested_count,
                 "available": available_count,
                 "skipped": skipped_count,
-                "errors": log_based_errors,  # Use log-based errors for consistency with /failures
+                "errors": log_based_errors,  # Use structured errors for consistency with /failures
             },
         }
     except Exception as e:
@@ -3057,154 +1838,14 @@ async def get_recent_activity(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(5, ge=1, le=20, description="Items per page (max 20)"),
 ):
-    """Get recent sync activity from listsync-core.log with pagination"""
+    """Get recent sync activity from structured sync records with pagination"""
     try:
-        # Try multiple log file paths in order of preference
-        log_file_paths = [
-            "/var/log/supervisor/listsync-core.log",  # Docker supervisor log
-            "logs/listsync-core.log",  # Mounted log directory
-            "/usr/src/app/logs/listsync-core.log",  # Container app logs
-            "data/list_sync.log",  # Fallback to data directory
-        ]
+        recent_items = get_recent_sync_items(limit=500)
 
-        log_content = None
-        log_file_used = None
-
-        for log_path in log_file_paths:
-            try:
-                if os.path.exists(log_path):
-                    with open(log_path, encoding="utf-8") as file:
-                        log_content = file.read()
-                        log_file_used = log_path
-                        break
-            except Exception as e:
-                logging.exception(f"Could not read log file {log_path}: {e}")
-                continue
-
-        if not log_content:
-            return {
-                "items": [],
-                "total_items": 0,
-                "page": page,
-                "limit": limit,
-                "total_pages": 0,
-                "has_next": False,
-                "has_prev": False,
-                "error": "No log file found in any of the expected locations",
-            }
-
-        logging.info(f"Successfully reading recent activity from: {log_file_used}")
-
-        recent_items = []
-        lines = log_content.strip().split("\n")
-
-        # Parse lines in reverse order to get most recent first
-        for line in reversed(lines):
-            line = line.strip()
-            if not line:
-                continue
-
-            # Look for sync item patterns with emojis
-            if "☑️" in line and "Already Available" in line:
-                # Extract: "☑️  Poker Face: Already Available (10/10)"
-                match = re.search(r"☑️\s+(.+?):\s+Already Available\s+\((\d+)/(\d+)\)", line)
-                if match:
-                    title = match.group(1).strip()
-                    position = match.group(2)
-                    total = match.group(3)
-
-                    # Extract timestamp from beginning of line
-                    timestamp_match = re.search(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
-                    timestamp = timestamp_match.group(1) if timestamp_match else None
-
-                    recent_items.append(
-                        {
-                            "title": title,
-                            "status": "available",
-                            "status_text": "Already Available",
-                            "timestamp": timestamp,
-                            "position": int(position),
-                            "total": int(total),
-                        }
-                    )
-
-            elif "❓" in line and "Not Found" in line:
-                # Extract: "❓ Star Wars: Andor: Not Found (5/10)"
-                match = re.search(r"❓\s+(.+?):\s+Not Found\s+\((\d+)/(\d+)\)", line)
-                if match:
-                    title = match.group(1).strip()
-                    position = match.group(2)
-                    total = match.group(3)
-
-                    timestamp_match = re.search(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
-                    timestamp = timestamp_match.group(1) if timestamp_match else None
-
-                    recent_items.append(
-                        {
-                            "title": title,
-                            "status": "not_found",
-                            "status_text": "Not Found",
-                            "timestamp": timestamp,
-                            "position": int(position),
-                            "total": int(total),
-                        }
-                    )
-
-            elif "✅" in line and "Requested" in line:
-                # Extract: "✅  Title: Requested (1/10)"
-                match = re.search(r"✅\s+(.+?):\s+Requested\s+\((\d+)/(\d+)\)", line)
-                if match:
-                    title = match.group(1).strip()
-                    position = match.group(2)
-                    total = match.group(3)
-
-                    timestamp_match = re.search(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
-                    timestamp = timestamp_match.group(1) if timestamp_match else None
-
-                    recent_items.append(
-                        {
-                            "title": title,
-                            "status": "requested",
-                            "status_text": "Requested",
-                            "timestamp": timestamp,
-                            "position": int(position),
-                            "total": int(total),
-                        }
-                    )
-
-            elif "⏭️" in line and "Skipped" in line:
-                # Extract: "⏭️  Title: Skipped (1/10)"
-                match = re.search(r"⏭️\s+(.+?):\s+Skipped\s+\((\d+)/(\d+)\)", line)
-                if match:
-                    title = match.group(1).strip()
-                    position = match.group(2)
-                    total = match.group(3)
-
-                    timestamp_match = re.search(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})", line)
-                    timestamp = timestamp_match.group(1) if timestamp_match else None
-
-                    recent_items.append(
-                        {
-                            "title": title,
-                            "status": "skipped",
-                            "status_text": "Skipped",
-                            "timestamp": timestamp,
-                            "position": int(position),
-                            "total": int(total),
-                        }
-                    )
-
-        # Sort by timestamp (most recent first) and position
-        recent_items.sort(key=lambda x: (x["timestamp"] or "", x["position"]), reverse=True)
-
-        # Calculate pagination
         total_items = len(recent_items)
         total_pages = (total_items + limit - 1) // limit if total_items > 0 else 0
         start_index = (page - 1) * limit
-        end_index = start_index + limit
-
-        # Get paginated items
-        paginated_items = recent_items[start_index:end_index]
+        paginated_items = recent_items[start_index : start_index + limit]
 
         return {
             "items": paginated_items,
@@ -3214,10 +1855,11 @@ async def get_recent_activity(
             "total_pages": total_pages,
             "has_next": page < total_pages,
             "has_prev": page > 1,
-            "log_file_used": log_file_used,
+            "log_file_used": "database",
         }
 
     except Exception as e:
+        logging.exception(f"Error loading recent activity: {e}")
         return {
             "items": [],
             "total_items": 0,
@@ -3226,17 +1868,39 @@ async def get_recent_activity(
             "total_pages": 0,
             "has_next": False,
             "has_prev": False,
-            "error": f"Failed to parse log file: {e!s}",
+            "error": f"Failed to load recent activity: {e!s}",
         }
 
 
 @app.get("/api/activity/recent/docker")
 async def get_recent_activity_from_docker(limit: int = Query(10, ge=1, le=100)):
-    """Get recent sync activity specifically from Docker logs"""
+    """Get recent sync activity from structured sync records"""
     try:
-        activities = parse_docker_logs_for_activity(limit)
-        return activities
+        result = query_sync_items(limit=limit)
+        action_map = {
+            "already_available": "available",
+            "already_requested": "requested",
+            "requested": "requested",
+            "skipped": "skipped",
+            "not_found": "error",
+            "error": "error",
+            "request_failed": "error",
+        }
+        return [
+            {
+                "id": f"sitem-{row['row_id']}",
+                "title": row["title"],
+                "media_type": row["media_type"],
+                "status": row["status"],
+                "last_synced": row["processed_at"],
+                "action": action_map.get(row["status"], row["status"]),
+                "item_number": row["item_number"] or 0,
+                "total_items": row["total_items"] or 0,
+            }
+            for row in result["items"]
+        ]
     except Exception as e:
+        logging.exception(f"Error loading recent activity: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -4656,88 +3320,53 @@ async def get_failures(
     failure_type_filter: str = Query("", description="Filter by failure type (not_found/error)"),
     media_type_filter: str = Query("", description="Filter by media type (movie/tv)"),
 ):
-    """Get all failures from historic log data with search/filter and pagination"""
+    """Get all failures from structured sync records with search/filter and pagination"""
     try:
-        failures = parse_failures_from_logs()
+        result = query_sync_items(
+            statuses=list(REPORTING_FAILURE_STATUSES),
+            search=search,
+            media_type=media_type_filter or None,
+        )
 
-        # Combine all failures with type indicator
         all_failures = []
+        for row in result["items"]:
+            failure_type = "not_found" if row["status"] == "not_found" else "error"
+            if failure_type_filter.strip() and failure_type != failure_type_filter:
+                continue
 
-        # Add not_found items
-        for item in failures["not_found"]:
-            item_with_type = item.copy()
-            item_with_type["failure_type"] = "not_found"
-            # Map 'name' to 'title' for frontend compatibility
-            if "name" in item_with_type and "title" not in item_with_type:
-                item_with_type["title"] = item_with_type["name"]
-            # Add missing fields for frontend
-            item_with_type["media_type"] = item_with_type.get("media_type", "movie")
-            item_with_type["year"] = item_with_type.get("year")
-            item_with_type["error_type"] = "not_found"
-            item_with_type["error_message"] = item_with_type.get("error_details", "Not found in database")
-            item_with_type["retryable"] = False
-            item_with_type["failed_at"] = item_with_type.get("timestamp", "")
-            all_failures.append(item_with_type)
+            error_details = row.get("error_details")
+            if not error_details:
+                error_details = (
+                    "Item not found in Seerr database" if failure_type == "not_found" else "Processing error"
+                )
 
-        # Add error items
-        for item in failures["errors"]:
-            item_with_type = item.copy()
-            item_with_type["failure_type"] = "error"
-            # Map 'name' to 'title' for frontend compatibility
-            if "name" in item_with_type and "title" not in item_with_type:
-                item_with_type["title"] = item_with_type["name"]
-            # Add missing fields for frontend
-            item_with_type["media_type"] = item_with_type.get("media_type", "movie")
-            item_with_type["year"] = item_with_type.get("year")
-            item_with_type["error_type"] = "error"
-            item_with_type["error_message"] = item_with_type.get("error_details", "Processing error")
-            item_with_type["retryable"] = True
-            item_with_type["failed_at"] = item_with_type.get("timestamp", "")
-            all_failures.append(item_with_type)
+            all_failures.append(
+                {
+                    "name": row["title"],
+                    "title": row["title"],
+                    "media_type": row.get("media_type") or "movie",
+                    "year": row.get("year"),
+                    "timestamp": row.get("processed_at"),
+                    "item_number": row.get("item_number"),
+                    "total_items": row.get("total_items"),
+                    "sync_session": row.get("sync_session"),
+                    "failure_type": failure_type,
+                    "error_type": failure_type,
+                    "error_details": error_details,
+                    "error_message": error_details,
+                    "retryable": failure_type == "error",
+                    "failed_at": row.get("processed_at") or "",
+                }
+            )
 
-        # Apply filters BEFORE pagination
-        filtered_failures = all_failures
-
-        # Search filter (case-insensitive title search)
-        if search.strip():
-            search_term = search.strip().lower()
-            filtered_failures = [
-                item for item in filtered_failures if search_term in item.get("title", item.get("name", "")).lower()
-            ]
-
-        # Failure type filter
-        if failure_type_filter.strip():
-            filtered_failures = [item for item in filtered_failures if item["failure_type"] == failure_type_filter]
-
-        # Media type filter
-        if media_type_filter.strip():
-            filtered_failures = [item for item in filtered_failures if item["media_type"] == media_type_filter]
-
-        # Sort by timestamp (most recent first)
-        def sort_key(item):
-            try:
-                if item.get("timestamp"):
-                    return datetime.fromisoformat(item["timestamp"].replace("Z", "+00:00")).timestamp()
-                return 0
-            except (ValueError, TypeError):
-                return 0  # best-effort timestamp parsing; invalid format ignored
-
-        filtered_failures.sort(key=sort_key, reverse=True)
-
-        # Calculate pagination on filtered results
-        total_items = len(filtered_failures)
+        total_items = len(all_failures)
         total_pages = (total_items + limit - 1) // limit if total_items > 0 else 0
         start = (page - 1) * limit
-        end = start + limit
+        paginated_failures = all_failures[start : start + limit]
 
-        # Get paginated items from filtered results
-        paginated_failures = filtered_failures[start:end]
-
-        # Separate back into categories for response
         paginated_not_found = [item for item in paginated_failures if item["failure_type"] == "not_found"]
         paginated_errors = [item for item in paginated_failures if item["failure_type"] == "error"]
 
-        # Remove the failure_type field from response items
         for item in paginated_not_found:
             item.pop("failure_type", None)
         for item in paginated_errors:
@@ -4746,10 +3375,10 @@ async def get_failures(
         return {
             "not_found": paginated_not_found,
             "errors": paginated_errors,
-            "total_failures": failures["total_failures"],
-            "filtered_count": total_items,  # Count after filtering
-            "last_sync_time": failures["last_sync_time"],
-            "log_file_exists": failures["log_file_exists"],
+            "total_failures": query_sync_items(statuses=list(REPORTING_FAILURE_STATUSES), limit=0)["total"],
+            "filtered_count": total_items,
+            "last_sync_time": build_log_info().last_sync_complete or "",
+            "log_file_exists": os.path.exists(DB_FILE),
             "filters": {
                 "search": search,
                 "failure_type_filter": failure_type_filter,
@@ -4758,14 +3387,14 @@ async def get_failures(
             "pagination": {
                 "page": page,
                 "limit": limit,
-                "total_items": total_items,  # Use filtered count for pagination
+                "total_items": total_items,
                 "total_pages": total_pages,
                 "has_next": page < total_pages,
                 "has_prev": page > 1,
             },
         }
     except Exception as e:
-        logging.exception(f"Error parsing failures: {e}")
+        logging.exception(f"Error loading failures: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -4778,15 +3407,28 @@ async def get_processed_items(
     media_type_filter: str = Query("", description="Filter by media type (movie/tv)"),
     list_source: str = Query("", description="Filter by list source in format 'list_type:list_id'"),
 ):
-    """Get all processed items from historic log data with search/filter and pagination"""
+    """Get all processed items from the database with search/filter and pagination"""
     try:
-        historic_data = parse_historic_items_from_logs()
-        all_items = historic_data["total_processed"]
+        list_type = list_id = None
+        if list_source and list_source.strip():
+            if ":" in list_source:
+                raw_type, raw_id = list_source.split(":", 1)
+                list_type = raw_type
+                list_id = normalize_list_id(raw_type, raw_id)
+            else:
+                logging.warning(f"Invalid list_source format: {list_source}, expected 'list_type:list_id'")
 
-        # Enrich with database information for Seerr/IMDb links
-        all_items = enrich_historic_data_with_database(all_items)
+        result = query_sync_items(
+            statuses=[status_filter] if status_filter.strip() else None,
+            search=search,
+            media_type=media_type_filter or None,
+            list_type=list_type,
+            list_id=list_id,
+            limit=limit,
+            offset=(page - 1) * limit,
+        )
+        total_count = query_sync_items(limit=0)["total"]
 
-        # Get Seerr base URL for generating item links
         try:
             seerr_base_url, _, _, _, _, _ = load_env_config()
             seerr_base_url = seerr_base_url.rstrip("/") if seerr_base_url else None
@@ -4794,95 +3436,57 @@ async def get_processed_items(
             logging.debug("Failed to load Seerr base URL: %s", e)
             seerr_base_url = None
 
-        # Batch fetch list sources for all items (before filtering)
-        item_ids = [item.get("id") for item in all_items if item.get("id")]
-        item_lists_map = {}  # Map item_id to list of lists it belongs to
+        items = []
+        for row in result["items"]:
+            status = row["status"]
+            overseerr_url = None
+            if seerr_base_url and row.get("overseerr_id"):
+                overseerr_url = f"{seerr_base_url}/{row['media_type']}/{row['overseerr_id']}"
 
-        if item_ids:
-            try:
-                item_lists_map = get_item_lists_for_items(item_ids)
-            except Exception as e:
-                logging.warning(f"Failed to batch fetch list sources: {e}")
-
-        # Add seerr_url and list_sources to items
-        for item in all_items:
-            if seerr_base_url and item.get("overseerr_id"):
-                item["overseerr_url"] = f"{seerr_base_url}/{item['media_type']}/{item['overseerr_id']}"
-            else:
-                item["overseerr_url"] = None
-
-            # Add list sources from item_lists table
-            item_id = item.get("id")
-            item["list_sources"] = item_lists_map.get(item_id, [])
-
-            # If no list sources from item_lists, use the source_list columns as fallback
-            if not item["list_sources"] and item.get("source_list_type") and item.get("source_list_id"):
-                item["list_sources"] = [
+            if row.get("source_list_type") and row.get("source_list_id"):
+                list_sources = [
                     {
-                        "list_type": item["source_list_type"],
-                        "list_id": item["source_list_id"],
+                        "list_type": row["source_list_type"],
+                        "list_id": row["source_list_id"],
                         "display_name": None,
                     }
                 ]
+            elif row.get("list_type") and row.get("list_id"):
+                list_sources = [{"list_type": row["list_type"], "list_id": row["list_id"], "display_name": None}]
+            else:
+                list_sources = []
 
-        # Apply filters BEFORE pagination
-        filtered_items = all_items
+            items.append(
+                {
+                    "id": row["row_id"],
+                    "title": row["title"],
+                    "year": row["year"],
+                    "media_type": row["media_type"],
+                    "status": status,
+                    "category": "successful" if status in REPORTING_SUCCESS_STATUSES else "failed",
+                    "timestamp": row["processed_at"],
+                    "item_number": row["item_number"],
+                    "total_items": row["total_items"],
+                    "sync_session": row["sync_session"],
+                    "action": status.replace("_", " ").title(),
+                    "imdb_id": row["imdb_id"],
+                    "overseerr_id": row["overseerr_id"],
+                    "db_status": row["db_status"],
+                    "source_list_type": row["source_list_type"],
+                    "source_list_id": row["source_list_id"],
+                    "overseerr_url": overseerr_url,
+                    "list_sources": list_sources,
+                }
+            )
 
-        # Search filter (case-insensitive title search)
-        if search.strip():
-            search_term = search.strip().lower()
-            filtered_items = [item for item in filtered_items if search_term in item["title"].lower()]
-
-        # Status filter
-        if status_filter.strip():
-            filtered_items = [item for item in filtered_items if item["status"] == status_filter]
-
-        # Media type filter
-        if media_type_filter.strip():
-            filtered_items = [item for item in filtered_items if item["media_type"] == media_type_filter]
-
-        # List source filter
-        if list_source and list_source.strip():
-            try:
-                filter_list_type, filter_list_id = list_source.split(":", 1)
-
-                # Normalize the list_id to match what's stored in item_lists table
-                normalized_list_id = normalize_list_id(filter_list_type, filter_list_id)
-
-                logging.info(
-                    f"📋 Filtering processed items by list {filter_list_type}:{filter_list_id} (normalized: {normalized_list_id})"
-                )
-
-                # Filter items that have this list in their list_sources
-                filtered_items = [
-                    item
-                    for item in filtered_items
-                    if any(
-                        source["list_type"] == filter_list_type
-                        and (source["list_id"] == normalized_list_id or source["list_id"] == filter_list_id)
-                        for source in item.get("list_sources", [])
-                    )
-                ]
-
-                logging.info(f"📊 After list filtering: {len(filtered_items)} items match")
-            except ValueError:
-                logging.warning(f"Invalid list_source format: {list_source}, expected 'list_type:list_id'")
-
-        # Calculate pagination on filtered results
-        total_items = len(filtered_items)
+        total_items = result["total"]
         total_pages = (total_items + limit - 1) // limit if total_items > 0 else 0
-        start = (page - 1) * limit
-        end = start + limit
-
-        # Get paginated items from filtered results
-        paginated_items = filtered_items[start:end]
-
         return {
-            "items": paginated_items,
-            "total_count": historic_data["total_unique_processed"],
-            "filtered_count": total_items,  # Count after filtering
-            "sync_sessions": historic_data["sync_sessions"],
-            "log_file_exists": historic_data["log_file_exists"],
+            "items": items,
+            "total_count": total_count,
+            "filtered_count": total_items,
+            "sync_sessions": result["sessions"],
+            "log_file_exists": os.path.exists(DB_FILE),
             "filters": {
                 "search": search,
                 "status_filter": status_filter,
@@ -4892,14 +3496,14 @@ async def get_processed_items(
             "pagination": {
                 "page": page,
                 "limit": limit,
-                "total_items": total_items,  # Use filtered count for pagination
+                "total_items": total_items,
                 "total_pages": total_pages,
                 "has_next": page < total_pages,
                 "has_prev": page > 1,
             },
         }
     except Exception as e:
-        logging.exception(f"Error parsing processed items: {e}")
+        logging.exception(f"Error loading processed items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -4911,15 +3515,17 @@ async def get_successful_items(
     status_filter: str = Query("", description="Filter by status"),
     media_type_filter: str = Query("", description="Filter by media type (movie/tv)"),
 ):
-    """Get all successful items from historic log data with search/filter and pagination"""
+    """Get all successful items from the database with search/filter and pagination"""
     try:
-        historic_data = parse_historic_items_from_logs()
-        all_items = historic_data["successful_items"]
+        result = query_sync_items(
+            statuses=list(REPORTING_SUCCESS_STATUSES),
+            search=search,
+            media_type=media_type_filter or None,
+            limit=limit,
+            offset=(page - 1) * limit,
+        )
+        total_count = query_sync_items(statuses=list(REPORTING_SUCCESS_STATUSES), limit=0)["total"]
 
-        # Enrich with database information for Seerr/IMDb links
-        all_items = enrich_historic_data_with_database(all_items)
-
-        # Get Seerr base URL for generating item links
         try:
             seerr_base_url, _, _, _, _, _ = load_env_config()
             seerr_base_url = seerr_base_url.rstrip("/") if seerr_base_url else None
@@ -4927,50 +3533,45 @@ async def get_successful_items(
             logging.debug("Failed to load Seerr base URL: %s", e)
             seerr_base_url = None
 
-        # Add seerr_url to items
-        for item in all_items:
-            if seerr_base_url and item.get("overseerr_id"):
-                item["overseerr_url"] = f"{seerr_base_url}/{item['media_type']}/{item['overseerr_id']}"
-            else:
-                item["overseerr_url"] = None
+        items = []
+        for row in result["items"]:
+            status = row["status"]
+            overseerr_url = None
+            if seerr_base_url and row.get("overseerr_id"):
+                overseerr_url = f"{seerr_base_url}/{row['media_type']}/{row['overseerr_id']}"
 
-        # Apply filters BEFORE pagination
-        filtered_items = all_items
+            items.append(
+                {
+                    "id": row["row_id"],
+                    "title": row["title"],
+                    "year": row["year"],
+                    "media_type": row["media_type"],
+                    "status": status,
+                    "category": "successful",
+                    "timestamp": row["processed_at"],
+                    "item_number": row["item_number"],
+                    "total_items": row["total_items"],
+                    "sync_session": row["sync_session"],
+                    "action": status.replace("_", " ").title(),
+                    "imdb_id": row["imdb_id"],
+                    "overseerr_id": row["overseerr_id"],
+                    "db_status": row["db_status"],
+                    "source_list_type": row["source_list_type"],
+                    "source_list_id": row["source_list_id"],
+                    "overseerr_url": overseerr_url,
+                }
+            )
 
-        # Search filter (case-insensitive title search)
-        if search.strip():
-            search_term = search.strip().lower()
-            filtered_items = [item for item in filtered_items if search_term in item["title"].lower()]
-
-        # Status filter
-        if status_filter.strip():
-            filtered_items = [item for item in filtered_items if item["status"] == status_filter]
-
-        # Media type filter
-        if media_type_filter.strip():
-            filtered_items = [item for item in filtered_items if item["media_type"] == media_type_filter]
-
-        # Calculate pagination on filtered results
-        total_items = len(filtered_items)
+        total_items = result["total"]
         total_pages = (total_items + limit - 1) // limit if total_items > 0 else 0
-        start = (page - 1) * limit
-        end = start + limit
-
-        # Get paginated items from filtered results
-        paginated_items = filtered_items[start:end]
-
-        # Calculate media type counts from ALL filtered items (not just current page)
-        movie_count = sum(1 for item in filtered_items if item.get("media_type") == "movie")
-        tv_count = sum(1 for item in filtered_items if item.get("media_type") == "tv")
-
         return {
-            "items": paginated_items,
-            "total_count": historic_data["total_unique_successful"],
-            "filtered_count": total_items,  # Count after filtering
-            "movie_count": movie_count,  # Total movies in filtered results
-            "tv_count": tv_count,  # Total TV shows in filtered results
-            "sync_sessions": historic_data["sync_sessions"],
-            "log_file_exists": historic_data["log_file_exists"],
+            "items": items,
+            "total_count": total_count,
+            "filtered_count": total_items,
+            "movie_count": result["movie_count"],
+            "tv_count": result["tv_count"],
+            "sync_sessions": result["sessions"],
+            "log_file_exists": os.path.exists(DB_FILE),
             "filters": {
                 "search": search,
                 "status_filter": status_filter,
@@ -4979,14 +3580,14 @@ async def get_successful_items(
             "pagination": {
                 "page": page,
                 "limit": limit,
-                "total_items": total_items,  # Use filtered count for pagination
+                "total_items": total_items,
                 "total_pages": total_pages,
                 "has_next": page < total_pages,
                 "has_prev": page > 1,
             },
         }
     except Exception as e:
-        logging.exception(f"Error parsing successful items: {e}")
+        logging.exception(f"Error loading successful items: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -5907,72 +4508,28 @@ async def get_log_stats():
                 "error": "Log file not found",
             }
 
-        # Get file stats
         stat = os.stat(log_path)
         file_size = stat.st_size
         last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
 
-        # Use a more efficient approach - sample recent entries for stats
-        # This balances accuracy with performance
+        response = get_log_entries(log_path=log_path, limit=10000, offset=0, sort_order="desc")
+        now = datetime.now()
+        one_hour_ago = now - timedelta(hours=1)
         level_counts = {}
         category_counts = {}
         recent_activity = 0
-        total_entries = 0
-
-        # Calculate time for recent activity (last hour)
-        now = datetime.now()
-        one_hour_ago = now - timedelta(hours=1)
-
-        try:
-            # Read file in chunks to avoid memory issues with very large files
-            with open(log_path, encoding="utf-8", errors="ignore") as f:
-                # Count total lines first (fast)
-                f.seek(0)
-                total_entries = sum(1 for _ in f)
-
-                # Reset and read last 10000 lines for stats (more representative sample)
-                f.seek(0)
-                lines = f.readlines()
-
-                # Take a sample of lines for stats - last 10000 lines should be representative
-                sample_lines = lines[-10000:] if len(lines) > 10000 else lines
-
-                # Parse sample lines for level/category counts
-                for i, line in enumerate(sample_lines):
-                    entry = parse_log_line(line, i + 1)
-                    if entry:
-                        # Count levels and categories
-                        level_counts[entry.level] = level_counts.get(entry.level, 0) + 1
-                        category_counts[entry.category] = category_counts.get(entry.category, 0) + 1
-
-                        # Count recent activity
-                        try:
-                            entry_time = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
-                            if entry_time >= one_hour_ago:
-                                recent_activity += 1
-                        except (ValueError, TypeError) as e:
-                            logging.debug("Skipping unparsable timestamp for recent activity: %s", e)
-
-        except Exception as e:
-            logging.exception(f"Error reading log file for stats: {e}")
-            # Fallback to using get_log_entries with reasonable limit
-            response = get_log_entries(limit=1000)
-            total_entries = response.total_count
-
-            if response.entries:
-                for entry in response.entries:
-                    level_counts[entry.level] = level_counts.get(entry.level, 0) + 1
-                    category_counts[entry.category] = category_counts.get(entry.category, 0) + 1
-
-                    try:
-                        entry_time = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
-                        if entry_time >= one_hour_ago:
-                            recent_activity += 1
-                    except (ValueError, TypeError) as e:
-                        logging.debug("Skipping unparsable timestamp for stats: %s", e)
+        for entry in response.entries:
+            level_counts[entry.level] = level_counts.get(entry.level, 0) + 1
+            category_counts[entry.category] = category_counts.get(entry.category, 0) + 1
+            try:
+                entry_time = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
+                if entry_time >= one_hour_ago:
+                    recent_activity += 1
+            except (ValueError, TypeError) as e:
+                logging.debug("Skipping unparsable timestamp for recent stats: %s", e)
 
         return {
-            "total_entries": total_entries,
+            "total_entries": response.total_count,
             "level_counts": level_counts,
             "category_counts": category_counts,
             "recent_activity": recent_activity,
@@ -5982,10 +4539,10 @@ async def get_log_stats():
         }
 
     except Exception as e:
+        logging.exception(f"Error getting log stats: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# Analytics Pydantic models
 class AnalyticsOverview(BaseModel):
     total_items: int
     success_rate: float
@@ -6090,10 +4647,9 @@ class AnalyticsResponse(BaseModel):
 
 # Analytics processing functions
 def process_analytics_data(time_range: str = "24h", category: str = "all") -> AnalyticsResponse:
-    """Process log data to generate comprehensive analytics"""
+    """Generate analytics from structured sync records."""
     try:
-        # Calculate time filter
-        now = datetime.now()
+        now = datetime.now(UTC)
         if time_range == "1h":
             start_time = now - timedelta(hours=1)
         elif time_range == "24h":
@@ -6103,54 +4659,13 @@ def process_analytics_data(time_range: str = "24h", category: str = "all") -> An
         elif time_range == "30d":
             start_time = now - timedelta(days=30)
         else:
-            start_time = now - timedelta(hours=24)  # Default to 24h
+            start_time = now - timedelta(hours=24)
 
-        # Get log entries for analysis
-        category_filters_list = [category] if category != "all" else None
-        log_response = get_log_entries(limit=5000, category_filters=category_filters_list)
-        entries = log_response.entries
-
-        # Filter by time range
-        filtered_entries = []
-        for entry in entries:
-            try:
-                entry_time = datetime.fromisoformat(entry.timestamp.replace("Z", "+00:00"))
-                if entry_time >= start_time:
-                    filtered_entries.append(entry)
-            except (ValueError, TypeError):
-                # If timestamp parsing fails, include the entry
-                filtered_entries.append(entry)
-
-        # Process overview data
-        overview = process_overview_analytics(filtered_entries)
-
-        # Process specific analytics
-        media_additions = process_media_additions(filtered_entries)
-        list_fetches = process_list_fetches(filtered_entries)
-        matching = process_matching_analytics(filtered_entries)
-        search_failures = process_search_failures(filtered_entries)
-        scraping_performance = process_scraping_performance(filtered_entries)
-        source_distribution = process_source_distribution(filtered_entries)
-        selector_performance = process_selector_performance(filtered_entries)
-        genre_distribution = process_genre_distribution(filtered_entries)
-        year_distribution = process_year_distribution(filtered_entries)
-
-        return AnalyticsResponse(
-            overview=overview,
-            media_additions=media_additions,
-            list_fetches=list_fetches,
-            matching=matching,
-            search_failures=search_failures,
-            scraping_performance=scraping_performance,
-            source_distribution=source_distribution,
-            selector_performance=selector_performance,
-            genre_distribution=genre_distribution,
-            year_distribution=year_distribution,
-        )
+        payload = get_analytics_payload(start=start_time.isoformat(), end=now.isoformat())
+        return AnalyticsResponse(**payload)
 
     except Exception as e:
         logging.exception(f"Error processing analytics data: {e}")
-        # Return empty analytics data on error
         return AnalyticsResponse(
             overview=AnalyticsOverview(
                 total_items=0,
@@ -6177,360 +4692,6 @@ def process_analytics_data(time_range: str = "24h", category: str = "all") -> An
             genre_distribution=[],
             year_distribution=[],
         )
-
-
-def process_overview_analytics(entries: list[LogEntry]) -> AnalyticsOverview:
-    """Process overview analytics from log entries"""
-    total_items = 0
-    success_count = 0
-    error_count = 0
-    sync_operations = 0
-    processing_times = []
-    last_sync_time = ""
-    active_sync = False
-
-    for entry in entries:
-        if entry.category == "items":
-            total_items += 1
-            if "added" in entry.message.lower() or "success" in entry.message.lower():
-                success_count += 1
-
-        if entry.level == "ERROR":
-            error_count += 1
-
-        if entry.category == "sync":
-            sync_operations += 1
-            if not last_sync_time:
-                last_sync_time = entry.timestamp
-            if "starting" in entry.message.lower():
-                active_sync = True
-
-        # Extract processing times if available
-        if entry.media_info and "processing_time" in entry.media_info:
-            processing_times.append(entry.media_info["processing_time"])
-
-    success_rate = (success_count / total_items * 100) if total_items > 0 else 0
-    avg_processing_time = statistics.mean(processing_times) if processing_times else 0
-
-    return AnalyticsOverview(
-        total_items=total_items,
-        success_rate=round(success_rate, 1),
-        avg_processing_time=round(avg_processing_time, 2),
-        active_sync=active_sync,
-        total_sync_operations=sync_operations,
-        total_errors=error_count,
-        last_sync_time=last_sync_time,
-    )
-
-
-def process_media_additions(entries: list[LogEntry]) -> list[MediaAdditionData]:
-    """Process media addition analytics"""
-    additions_by_source = defaultdict(lambda: defaultdict(int))
-
-    for entry in entries:
-        if entry.category == "items" and entry.media_info:
-            source = entry.media_info.get("source", "unknown")
-            media_type = "movie"  # Default, could be enhanced with better detection
-            timestamp = entry.timestamp[:16]  # Group by hour
-            additions_by_source[timestamp][source] += 1
-
-    result = []
-    for timestamp, sources in additions_by_source.items():
-        for source, count in sources.items():
-            result.append(
-                MediaAdditionData(
-                    timestamp=timestamp,
-                    count=count,
-                    type="movie",
-                    source=source,
-                )
-            )
-
-    return sorted(result, key=lambda x: x.timestamp, reverse=True)[:20]
-
-
-def process_list_fetches(entries: list[LogEntry]) -> list[ListFetchData]:
-    """Process list fetch analytics"""
-    fetches_by_time = defaultdict(lambda: {"success": 0, "failed": 0, "sources": set()})
-
-    for entry in entries:
-        if entry.category == "fetching":
-            timestamp = entry.timestamp[:16]  # Group by hour
-            source = entry.media_info.get("source", "unknown") if entry.media_info else "unknown"
-
-            fetches_by_time[timestamp]["sources"].add(source)
-
-            if "success" in entry.message.lower() or "fetched" in entry.message.lower():
-                fetches_by_time[timestamp]["success"] += 1
-            elif "error" in entry.message.lower() or "failed" in entry.message.lower():
-                fetches_by_time[timestamp]["failed"] += 1
-
-    result = []
-    for timestamp, data in fetches_by_time.items():
-        total = data["success"] + data["failed"]
-        success_rate = (data["success"] / total * 100) if total > 0 else 0
-
-        for source in data["sources"]:
-            result.append(
-                ListFetchData(
-                    timestamp=timestamp,
-                    success_rate=round(success_rate, 1),
-                    total_attempts=total,
-                    successful_fetches=data["success"],
-                    failed_fetches=data["failed"],
-                    source=source,
-                )
-            )
-
-    return sorted(result, key=lambda x: x.timestamp, reverse=True)[:20]
-
-
-def process_matching_analytics(entries: list[LogEntry]) -> MatchingData:
-    """Process matching accuracy analytics"""
-    perfect_matches = 0
-    partial_matches = 0
-    failed_matches = 0
-    scores = []
-    low_confidence = []
-
-    for entry in entries:
-        if entry.category == "matching" and entry.media_info:
-            score = entry.media_info.get("score", 0)
-            if isinstance(score, (int, float)):
-                scores.append(score)
-
-                if score >= 1.0:
-                    perfect_matches += 1
-                elif score >= 0.7:
-                    partial_matches += 1
-                else:
-                    failed_matches += 1
-
-                # Low confidence matches (score < 0.7)
-                if score < 0.7:
-                    low_confidence.append(
-                        LowConfidenceMatch(
-                            title=entry.media_info.get("title", "Unknown"),
-                            year=entry.media_info.get("year"),
-                            score=score,
-                            source=entry.media_info.get("source", "unknown"),
-                            timestamp=entry.timestamp,
-                            needs_review=True,
-                        )
-                    )
-
-    avg_score = statistics.mean(scores) if scores else 0
-
-    return MatchingData(
-        perfect_matches=perfect_matches,
-        partial_matches=partial_matches,
-        failed_matches=failed_matches,
-        average_score=round(avg_score, 3),
-        low_confidence_matches=sorted(low_confidence, key=lambda x: x.score)[:10],
-    )
-
-
-def process_search_failures(entries: list[LogEntry]) -> list[SearchFailureData]:
-    """Process search failure analytics"""
-    failures = defaultdict(lambda: {"count": 0, "last_attempt": "", "sources": set()})
-
-    for entry in entries:
-        if "search" in entry.message.lower() and "failed" in entry.message.lower():
-            title = entry.media_info.get("title", "Unknown") if entry.media_info else "Unknown"
-            source = entry.media_info.get("source", "unknown") if entry.media_info else "unknown"
-
-            failures[title]["count"] += 1
-            failures[title]["last_attempt"] = entry.timestamp
-            failures[title]["sources"].add(source)
-
-    result = []
-    for title, data in failures.items():
-        result.append(
-            SearchFailureData(
-                title=title,
-                search_count=data["count"],
-                last_attempt=data["last_attempt"],
-                sources=list(data["sources"]),
-                type="movie",  # Default
-            )
-        )
-
-    return sorted(result, key=lambda x: x.search_count, reverse=True)[:10]
-
-
-def process_scraping_performance(entries: list[LogEntry]) -> list[ScrapingPerformanceData]:
-    """Process scraping performance analytics"""
-    performance_by_time = defaultdict(lambda: {"items": 0, "time": 0, "sources": set()})
-
-    for entry in entries:
-        if entry.category == "scraping":
-            timestamp = entry.timestamp[:16]  # Group by hour
-            source = entry.media_info.get("source", "unknown") if entry.media_info else "unknown"
-
-            performance_by_time[timestamp]["items"] += 1
-            performance_by_time[timestamp]["sources"].add(source)
-
-            # Estimate processing time (simplified)
-            performance_by_time[timestamp]["time"] += 1  # 1 second per item estimate
-
-    result = []
-    for timestamp, data in performance_by_time.items():
-        items_per_minute = (data["items"] / max(data["time"], 1)) * 60
-
-        for source in data["sources"]:
-            result.append(
-                ScrapingPerformanceData(
-                    timestamp=timestamp,
-                    items_per_minute=round(items_per_minute, 1),
-                    source=source,
-                    total_items=data["items"],
-                    processing_time=data["time"],
-                )
-            )
-
-    return sorted(result, key=lambda x: x.timestamp, reverse=True)[:20]
-
-
-def process_source_distribution(entries: list[LogEntry]) -> list[SourceDistributionData]:
-    """Process source distribution analytics"""
-    sources = defaultdict(lambda: {"items": 0, "pages": set(), "success": 0, "total": 0})
-
-    for entry in entries:
-        if entry.media_info and "source" in entry.media_info:
-            source = entry.media_info["source"]
-            sources[source]["items"] += 1
-            sources[source]["total"] += 1
-
-            if "page" in entry.media_info:
-                sources[source]["pages"].add(entry.media_info["page"])
-
-            if "success" in entry.message.lower():
-                sources[source]["success"] += 1
-
-    result = []
-    for source, data in sources.items():
-        total_pages = len(data["pages"]) if data["pages"] else 1
-        avg_items_per_page = data["items"] / total_pages
-        success_rate = (data["success"] / data["total"] * 100) if data["total"] > 0 else 0
-
-        result.append(
-            SourceDistributionData(
-                source=source,
-                items_found=data["items"],
-                average_items_per_page=round(avg_items_per_page, 1),
-                total_pages=total_pages,
-                success_rate=round(success_rate, 1),
-            )
-        )
-
-    return sorted(result, key=lambda x: x.items_found, reverse=True)[:10]
-
-
-def process_selector_performance(entries: list[LogEntry]) -> list[SelectorPerformanceData]:
-    """Process selector performance analytics"""
-    selectors = defaultdict(lambda: {"success": 0, "total": 0, "last_used": ""})
-
-    # Mock selector data since we don't have detailed selector info in logs
-    mock_selectors = [
-        {"website": "trakt.tv", "selector": ".list-item", "success_rate": 95, "attempts": 150, "status": "working"},
-        {"website": "imdb.com", "selector": ".titleColumn", "success_rate": 88, "attempts": 120, "status": "working"},
-        {
-            "website": "letterboxd.com",
-            "selector": ".film-poster",
-            "success_rate": 92,
-            "attempts": 80,
-            "status": "working",
-        },
-        {"website": "mubi.com", "selector": ".film-title", "success_rate": 45, "attempts": 30, "status": "failing"},
-        {
-            "website": "criterion.com",
-            "selector": ".spine-title",
-            "success_rate": 78,
-            "attempts": 60,
-            "status": "working",
-        },
-        {
-            "website": "rottentomatoes.com",
-            "selector": ".movie-title",
-            "success_rate": 15,
-            "attempts": 25,
-            "status": "deprecated",
-        },
-    ]
-
-    result = []
-    for selector in mock_selectors:
-        result.append(
-            SelectorPerformanceData(
-                website=selector["website"],
-                selector=selector["selector"],
-                success_rate=selector["success_rate"],
-                total_attempts=selector["attempts"],
-                last_used=datetime.now().isoformat(),
-                status=selector["status"],
-            )
-        )
-
-    return result
-
-
-def process_genre_distribution(entries: list[LogEntry]) -> list[GenreDistributionData]:
-    """Process genre distribution analytics"""
-    # Mock genre data since we don't extract genres from logs
-    mock_genres = [
-        {"genre": "Drama", "count": 45},
-        {"genre": "Comedy", "count": 38},
-        {"genre": "Action", "count": 32},
-        {"genre": "Thriller", "count": 28},
-        {"genre": "Horror", "count": 22},
-        {"genre": "Romance", "count": 18},
-        {"genre": "Sci-Fi", "count": 15},
-        {"genre": "Documentary", "count": 12},
-    ]
-
-    total = sum(g["count"] for g in mock_genres)
-
-    result = []
-    for genre in mock_genres:
-        percentage = (genre["count"] / total * 100) if total > 0 else 0
-        result.append(
-            GenreDistributionData(
-                genre=genre["genre"],
-                count=genre["count"],
-                percentage=round(percentage, 1),
-            )
-        )
-
-    return result
-
-
-def process_year_distribution(entries: list[LogEntry]) -> list[YearDistributionData]:
-    """Process year distribution analytics"""
-    years = defaultdict(int)
-
-    for entry in entries:
-        if entry.media_info and "year" in entry.media_info:
-            year = entry.media_info["year"]
-            if isinstance(year, int) and 1900 <= year <= 2024:
-                years[year] += 1
-
-    # Add some mock data if no years found
-    if not years:
-        current_year = datetime.now().year
-        for i in range(5):
-            years[current_year - i] = 10 - i * 2
-
-    result = []
-    for year, count in years.items():
-        result.append(
-            YearDistributionData(
-                year=year,
-                count=count,
-                type="movie",  # Default
-            )
-        )
-
-    return sorted(result, key=lambda x: x.year, reverse=True)[:10]
 
 
 @app.get("/api/analytics")
@@ -6646,216 +4807,16 @@ async def get_year_distribution(time_range: str = Query("24h", regex="^(1h|24h|7
         raise HTTPException(status_code=500, detail=f"Error generating year distribution: {e!s}")
 
 
-def parse_recent_activity_from_structured_log(limit: int = 50) -> list[dict[str, Any]]:
-    """Parse recent sync activity from the structured log file (data/list_sync.log)"""
-    try:
-        log_path = "data/list_sync.log"
-
-        if not os.path.exists(log_path):
-            logging.info(f"Structured log file not found: {log_path}")
-            return []
-
-        # Get recent log entries using the existing function
-        log_response = get_log_entries(
-            log_path=log_path,
-            limit=1000,  # Get more entries to find sync activity
-            offset=0,
-            sort_order="desc",  # Most recent first
-        )
-
-        recent_items = []
-
-        # Look for sync-related entries in the structured log
-        for entry in log_response.entries:
-            # Skip if no media info
-            if not entry.media_info:
-                continue
-
-            # Look for item addition patterns (Pattern 3, 4, 5)
-            if entry.media_info.get("type") in ["item_added_imdb", "item_added_simple", "item_added_position"]:
-                title = entry.media_info.get("title", "Unknown")
-                media_type = entry.media_info.get("media_type", "movie")
-                source = entry.media_info.get("source", "unknown")
-
-                # Determine status based on the log message
-                status = "requested"
-                status_text = "Added"
-
-                if "already" in entry.message.lower():
-                    status = "available"
-                    status_text = "Already Available"
-                elif "skipped" in entry.message.lower():
-                    status = "skipped"
-                    status_text = "Skipped"
-                elif "error" in entry.message.lower() or "failed" in entry.message.lower():
-                    status = "not_found"
-                    status_text = "Error"
-
-                # Extract position info if available
-                position = entry.media_info.get("position", 0)
-                total = entry.media_info.get("total", 0)
-
-                recent_items.append(
-                    {
-                        "title": title,
-                        "status": status,
-                        "status_text": status_text,
-                        "timestamp": entry.timestamp,
-                        "position": position,
-                        "total": total,
-                        "media_type": media_type,
-                        "source": source,
-                        "log_entry_id": entry.id,
-                    }
-                )
-
-            # Look for search results and matching patterns
-            elif entry.media_info.get("type") == "final_match":
-                title = entry.media_info.get("original_title", "Unknown")
-                matched_title = entry.media_info.get("matched_title", title)
-                score = entry.media_info.get("score", 0)
-
-                # Determine status based on match score
-                if score >= 1.0:
-                    status = "available"
-                    status_text = "Found Match"
-                elif score >= 0.7:
-                    status = "requested"
-                    status_text = "Partial Match"
-                else:
-                    status = "not_found"
-                    status_text = "Poor Match"
-
-                recent_items.append(
-                    {
-                        "title": title,
-                        "status": status,
-                        "status_text": f"{status_text} ({score:.2f})",
-                        "timestamp": entry.timestamp,
-                        "position": 0,
-                        "total": 0,
-                        "media_type": "unknown",
-                        "source": "matching",
-                        "log_entry_id": entry.id,
-                        "matched_title": matched_title,
-                        "match_score": score,
-                    }
-                )
-
-            # Look for list fetch completion
-            elif entry.media_info.get("type") == "list_fetch_complete":
-                service = entry.media_info.get("service", "unknown")
-                list_id = entry.media_info.get("list_id", "unknown")
-                item_count = entry.media_info.get("item_count", 0)
-
-                recent_items.append(
-                    {
-                        "title": f"{service.upper()}: {list_id}",
-                        "status": "available",
-                        "status_text": f"Fetched {item_count} items",
-                        "timestamp": entry.timestamp,
-                        "position": 0,
-                        "total": item_count,
-                        "media_type": "list",
-                        "source": service,
-                        "log_entry_id": entry.id,
-                    }
-                )
-
-            # Look for sync operations
-            elif entry.media_info.get("type") in ["sync_start", "sync_complete"]:
-                sync_type = entry.media_info.get("type")
-
-                if sync_type == "sync_start":
-                    interval = entry.media_info.get("interval_hours", 0)
-                    recent_items.append(
-                        {
-                            "title": "Sync Operation",
-                            "status": "requested",
-                            "status_text": f"Started (every {interval}h)",
-                            "timestamp": entry.timestamp,
-                            "position": 0,
-                            "total": 0,
-                            "media_type": "system",
-                            "source": "sync",
-                            "log_entry_id": entry.id,
-                        }
-                    )
-                else:  # sync_complete
-                    recent_items.append(
-                        {
-                            "title": "Sync Operation",
-                            "status": "available",
-                            "status_text": "Completed",
-                            "timestamp": entry.timestamp,
-                            "position": 0,
-                            "total": 0,
-                            "media_type": "system",
-                            "source": "sync",
-                            "log_entry_id": entry.id,
-                        }
-                    )
-
-        # Sort by timestamp (most recent first)
-        recent_items.sort(key=lambda x: x["timestamp"], reverse=True)
-
-        # Limit results
-        return recent_items[:limit]
-
-    except Exception as e:
-        logging.exception(f"Error parsing recent activity from structured log: {e}")
-        import traceback
-
-        traceback.print_exc()
-        return []
-
-
 @app.get("/api/recent-activity")
 async def get_recent_activity(
     page: int = Query(1, ge=1, description="Page number (1-based)"),
     limit: int = Query(5, ge=1, le=20, description="Items per page (max 20)"),
     media_only: bool = Query(False, description="Filter to only show media items with position/total info"),
 ):
-    """Get recent sync activity from log files with pagination"""
+    """Get recent sync activity from structured sync records with pagination"""
     try:
-        # Use the direct log parsing method that reads from logs/listsync-core.log
-        all_items = parse_docker_logs_for_activity(limit=100)  # Get more items for pagination
+        formatted_items = get_recent_sync_items(limit=500)
 
-        # Convert the format to match what the frontend expects
-        formatted_items = []
-        for item in all_items:
-            # Map the status from parse_docker_logs_for_activity to our expected format
-            status_mapping = {
-                "already_available": "available",
-                "already_requested": "requested",
-                "requested": "requested",
-                "skipped": "skipped",
-                "error": "not_found",
-            }
-
-            status_text_mapping = {
-                "already_available": "Already Available",
-                "already_requested": "Already Requested",
-                "requested": "Requested",
-                "skipped": "Skipped",
-                "error": "Not Found",
-            }
-
-            mapped_status = status_mapping.get(item["status"], item["status"])
-            mapped_status_text = status_text_mapping.get(item["status"], item.get("action", "Unknown"))
-
-            formatted_items.append(
-                {
-                    "title": item["title"],
-                    "status": mapped_status,
-                    "status_text": mapped_status_text,
-                    "timestamp": item["last_synced"],
-                    "position": item.get("item_number", 0),
-                    "total": item.get("total_items", 0),
-                }
-            )
-
-        # Filter to only media items if requested (items with position/total info)
         if media_only:
             formatted_items = [
                 item for item in formatted_items if item.get("position", 0) > 0 and item.get("total", 0) > 0
@@ -6870,17 +4831,14 @@ async def get_recent_activity(
                 "total_pages": 0,
                 "has_next": False,
                 "has_prev": False,
-                "log_file_used": "logs/listsync-core.log",
-                "error": "No recent activity found in log files",
+                "log_file_used": "database",
+                "error": "No recent activity found",
             }
 
-        # Calculate pagination
         total_items = len(formatted_items)
         total_pages = (total_items + limit - 1) // limit if total_items > 0 else 0
         start_index = (page - 1) * limit
         end_index = start_index + limit
-
-        # Get paginated items
         paginated_items = formatted_items[start_index:end_index]
 
         return {
@@ -6891,10 +4849,11 @@ async def get_recent_activity(
             "total_pages": total_pages,
             "has_next": page < total_pages,
             "has_prev": page > 1,
-            "log_file_used": "logs/listsync-core.log",
+            "log_file_used": "database",
         }
 
     except Exception as e:
+        logging.exception(f"Error loading recent activity: {e}")
         return {
             "items": [],
             "total_items": 0,
@@ -6903,7 +4862,7 @@ async def get_recent_activity(
             "total_pages": 0,
             "has_next": False,
             "has_prev": False,
-            "error": f"Failed to parse log files: {e!s}",
+            "error": f"Failed to load recent activity: {e!s}",
         }
 
 
@@ -7404,634 +5363,6 @@ async def test_notification(payload: dict = None):
         raise HTTPException(status_code=500, detail=f"Failed to send test notification: {e!s}")
 
 
-def enrich_historic_data_with_database(historic_items):
-    """Enrich historic log data with database fields (overseerr_id, imdb_id, year, media_type)"""
-    if not os.path.exists(DB_FILE):
-        return historic_items
-
-    try:
-        db_items = get_historic_enrichment_rows()
-
-        # Create lookup dictionaries for database items
-        # Try both possible media types since log parsing might be wrong
-        db_lookup = {}
-        db_lookup_by_title = {}  # Fallback lookup by title only
-
-        for title, media_type, imdb_id, overseerr_id, status, year, source_list_type, source_list_id in db_items:
-            key = f"{title.lower().strip()}_{media_type}"
-            title_key = title.lower().strip()
-
-            if key not in db_lookup:
-                db_lookup[key] = {
-                    "media_type": media_type,
-                    "imdb_id": imdb_id,
-                    "overseerr_id": overseerr_id,
-                    "db_status": status,
-                    "year": year,
-                    "source_list_type": source_list_type,
-                    "source_list_id": source_list_id,
-                }
-
-            # Store by title only as fallback (prefer more recent entries)
-            if title_key not in db_lookup_by_title:
-                db_lookup_by_title[title_key] = {
-                    "media_type": media_type,
-                    "imdb_id": imdb_id,
-                    "overseerr_id": overseerr_id,
-                    "db_status": status,
-                    "year": year,
-                    "source_list_type": source_list_type,
-                    "source_list_id": source_list_id,
-                }
-
-        logging.debug(
-            f"DEBUG: Loaded {len(db_lookup)} items from database, sample years: {[v['year'] for v in list(db_lookup.values())[:5]]}"
-        )
-
-        # Enrich historic items with database information
-        for item in historic_items:
-            lookup_key = f"{item['title'].lower().strip()}_{item['media_type']}"
-            title_only_key = item["title"].lower().strip()
-
-            db_data = None
-
-            # First try exact match (title + media_type)
-            if lookup_key in db_lookup:
-                db_data = db_lookup[lookup_key]
-            # Fallback to title-only match (media_type might be wrong from log parsing)
-            elif title_only_key in db_lookup_by_title:
-                db_data = db_lookup_by_title[title_only_key]
-                logging.debug(
-                    f"DEBUG: Using title-only match for '{item['title']}': log={item['media_type']}, db={db_data['media_type']}"
-                )
-
-            if db_data:
-                # Use database media_type as the authoritative source
-                item["media_type"] = db_data["media_type"]
-                item["imdb_id"] = db_data["imdb_id"]
-                item["overseerr_id"] = db_data["overseerr_id"]
-                item["db_status"] = db_data["db_status"]
-                item["source_list_type"] = db_data.get("source_list_type")
-                item["source_list_id"] = db_data.get("source_list_id")
-                # Use database year if available (it's more reliable than log parsing)
-                if db_data["year"]:
-                    item["year"] = db_data["year"]
-            else:
-                item["imdb_id"] = None
-                item["overseerr_id"] = None
-                item["db_status"] = None
-                item["source_list_type"] = None
-                item["source_list_id"] = None
-                # Keep the media_type and year from log parsing if no database match
-
-        return historic_items
-
-    except Exception as e:
-        logging.exception(f"Error enriching historic data with database: {e}")
-        import traceback
-
-        traceback.print_exc()
-        # Return original data if enrichment fails
-        for item in historic_items:
-            if not item.get("imdb_id"):
-                item["imdb_id"] = None
-            if not item.get("overseerr_id"):
-                item["overseerr_id"] = None
-            if not item.get("db_status"):
-                item["db_status"] = None
-            if not item.get("source_list_type"):
-                item["source_list_type"] = None
-            if not item.get("source_list_id"):
-                item["source_list_id"] = None
-        return historic_items
-
-
-# ==========================================
-# SYNC HISTORY - Log Parser
-# ==========================================
-
-from dataclasses import asdict, dataclass, field
-from enum import Enum
-
-
-class SyncType(Enum):
-    FULL = "full"
-    SINGLE = "single"
-
-
-class ItemStatus(Enum):
-    REQUESTED = "requested"
-    ALREADY_AVAILABLE = "already_available"
-    ALREADY_REQUESTED = "already_requested"
-    SKIPPED = "skipped"
-    NOT_FOUND = "not_found"
-    ERROR = "error"
-
-
-@dataclass
-class SyncList:
-    """Represents a list that was synced."""
-
-    type: str
-    id: str
-    url: str | None = None
-    item_count: int = 0
-
-
-@dataclass
-class SyncItem:
-    """Represents an individual item processed during sync."""
-
-    title: str
-    status: str
-    progress_number: int
-    progress_total: int
-    timestamp: str
-    year: int | None = None
-    media_type: str = "movie"
-    error_details: str | None = None
-
-
-@dataclass
-class SyncResults:
-    """Results summary for a sync session."""
-
-    requested: int = 0
-    already_available: int = 0
-    already_requested: int = 0
-    skipped: int = 0
-    not_found: int = 0
-    error: int = 0
-
-
-@dataclass
-class SyncSession:
-    """Complete sync session data."""
-
-    id: str
-    type: SyncType
-    start_timestamp: str
-    end_timestamp: str | None = None
-    duration: float | None = None
-    version: str | None = None
-    total_items: int = 0
-    processed_items: int = 0
-    lists: list[SyncList] = field(default_factory=list)
-    results: SyncResults = field(default_factory=SyncResults)
-    items: list[SyncItem] = field(default_factory=list)
-    errors: list[dict[str, str]] = field(default_factory=list)
-    not_found_items: list[str] = field(default_factory=list)
-    average_time_ms: float | None = None
-    total_time_seconds: float | None = None
-    status: str = "in_progress"
-
-    def to_dict(self) -> dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        data = asdict(self)
-        data["type"] = self.type.value
-        return data
-
-
-class SyncLogParser:
-    """Parser for sync log files."""
-
-    # Patterns for detecting log elements
-    TIMESTAMP_PATTERN = r"^(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}(?:,\d+)?)"
-
-    # Session markers
-    FULL_SYNC_START = r"📊\s+Total unique media items ready for sync:\s*(\d+)"
-    SINGLE_SYNC_START = r"🎯\s+Single List Sync:\s*(.+)"
-    # Alternative patterns for different log formats
-    SINGLE_SYNC_START_ALT = r"Starting single list sync for\s+(.+)"
-    SYNC_SUMMARY_START = r"(Soluify - List Sync Summary|={50,})"
-    SYNC_SUMMARY_DASHES = r"^[-─═]{50,}$"
-    # Sync complete markers (new format)
-    SYNC_COMPLETE_PATTERN = r"==========\s+SYNC COMPLETE\s+\[(FULL|SINGLE)\]\s+- Session:\s+([^\s]+)\s+(?:- List:\s+[^\s]+\s+)?- Status:\s+(\w+)\s+=========="
-    # Pattern to detect "Not Found Items" section header (optional - only if there are failures)
-    NOT_FOUND_SECTION = r"Not Found Items \((\d+)\)"
-
-    # List fetching
-    # Updated to handle the new message format with "(check backend logs...)" suffix
-    LIST_FETCH_START = r"🔍\s+Fetching items from (\w+) list:\s+(.+?)(?:\.\.\.|\.\.\.?\s+\(check backend logs|$)"
-    LIST_FETCH_SUCCESS = r"✅\s+Found (\d+) items in (\w+) list:\s+(.+?)$"
-
-    # Processing
-    PROCESSING_START = r"🎬\s+Processing (\d+) media items"
-
-    # Item status patterns with emojis
-    ITEM_PATTERNS = [
-        (r"✅\s+(.+?):\s*(?:Successfully\s+)?Requested\s*\((\d+)/(\d+)\)", ItemStatus.REQUESTED.value),
-        (r"☑️\s+(.+?):\s*Already Available\s*\((\d+)/(\d+)\)", ItemStatus.ALREADY_AVAILABLE.value),
-        (r"📌\s+(.+?):\s*Already Requested\s*\((\d+)/(\d+)\)", ItemStatus.ALREADY_REQUESTED.value),
-        (r"⏭️\s+(.+?):\s*Skipped\s*\((\d+)/(\d+)\)", ItemStatus.SKIPPED.value),
-        (r"❓\s+(.+?):\s*Not Found\s*\((\d+)/(\d+)\)", ItemStatus.NOT_FOUND.value),
-        (r"❌\s+(.+?):\s*(?:Error|Failed)\s*\((\d+)/(\d+)\)", ItemStatus.ERROR.value),
-    ]
-
-    # Alternative item status patterns for different log formats (after timestamp stripping)
-    ITEM_PATTERNS_ALT = [
-        (r"-\s+\w+\s+-\s+(.+?):\s*(?:Successfully\s+)?Requested\s*\((\d+)/(\d+)\)", ItemStatus.REQUESTED.value),
-        (r"-\s+\w+\s+-\s+(.+?):\s*Already Available\s*\((\d+)/(\d+)\)", ItemStatus.ALREADY_AVAILABLE.value),
-        (r"-\s+\w+\s+-\s+(.+?):\s*Already Requested\s*\((\d+)/(\d+)\)", ItemStatus.ALREADY_REQUESTED.value),
-        (r"-\s+\w+\s+-\s+(.+?):\s*Skipped\s*\((\d+)/(\d+)\)", ItemStatus.SKIPPED.value),
-        (r"-\s+\w+\s+-\s+(.+?):\s*Not Found\s*\((\d+)/(\d+)\)", ItemStatus.NOT_FOUND.value),
-        (r"-\s+\w+\s+-\s+(.+?):\s*(?:Error|Failed)\s*\((\d+)/(\d+)\)", ItemStatus.ERROR.value),
-    ]
-
-    # Summary patterns
-    TOTAL_TIME_PATTERN = r"Total Time:\s*(\d+)m\s*(\d+)s"
-    AVG_TIME_PATTERN = r"Avg Time:\s*([\d.]+)ms/item"
-    RESULT_PATTERN = r"[✅☑️📌⏭️❌]\s*(\w+(?:\s+\w+)?):\s*(\d+)"
-    MEDIA_TYPE_PATTERN = r"(Movies|TV Shows):\s*(\d+)\s*\(([\d.]+)%\)"
-    SYNCED_LIST_PATTERN = r"📋\s+(\w+):\s+(https?://\S+)"
-    NOT_FOUND_ITEM_PATTERN = r"•\s+(.+?)\s*\((Error:|Not Found)"
-
-    # Version
-    VERSION_PATTERN = r"Soluify\s*-\s*\{(.+?)\}"
-
-    def __init__(self):
-        self.sessions: list[SyncSession] = []
-
-    def extract_timestamp(self, line: str) -> str | None:
-        """Extract timestamp from log line."""
-        match = re.match(self.TIMESTAMP_PATTERN, line)
-        if match:
-            try:
-                # Handle both formats: with and without milliseconds
-                timestamp_str = match.group(1)
-                if "," in timestamp_str:
-                    # Format: YYYY-MM-DD HH:MM:SS,mmm
-                    dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S,%f")
-                else:
-                    # Format: YYYY-MM-DD HH:MM:SS
-                    dt = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-                return dt.isoformat()
-            except (ValueError, TypeError):
-                return None  # best-effort; unparsable timestamp ignored
-        return None
-
-    def detect_session_start(self, line: str) -> tuple | None:
-        """Detect if line marks start of a sync session."""
-        full_match = re.search(self.FULL_SYNC_START, line)
-        if full_match:
-            return (SyncType.FULL, {"total_items": int(full_match.group(1))})
-
-        # Try emoji-based pattern first
-        single_match = re.search(self.SINGLE_SYNC_START, line)
-        if single_match:
-            # Capture everything after "Single List Sync:"
-            list_info = single_match.group(1).strip()
-
-            # Try to parse as TYPE:ID format, but accept any format
-            if ":" in list_info:
-                parts = list_info.split(":", 1)
-                list_type = parts[0].strip()
-                list_id = parts[1].strip()
-            else:
-                # If no colon, use the whole string as list_id
-                list_type = "UNKNOWN"
-                list_id = list_info
-
-            return (SyncType.SINGLE, {"list_type": list_type, "list_id": list_id})
-
-        # Try alternative pattern for different log formats
-        single_match_alt = re.search(self.SINGLE_SYNC_START_ALT, line)
-        if single_match_alt:
-            # Capture everything after "Starting single list sync for"
-            list_info = single_match_alt.group(1).strip()
-
-            # Try to parse as TYPE:ID format, but accept any format
-            if ":" in list_info:
-                parts = list_info.split(":", 1)
-                list_type = parts[0].strip()
-                list_id = parts[1].strip()
-            else:
-                # If no colon, use the whole string as list_id
-                list_type = "UNKNOWN"
-                list_id = list_info
-
-            return (SyncType.SINGLE, {"list_type": list_type, "list_id": list_id})
-
-        return None
-
-    def detect_session_end(self, line: str, session_type: SyncType) -> bool:
-        """Detect if line marks end of a sync session."""
-        # Check for new SYNC COMPLETE marker first (most reliable)
-        if re.search(self.SYNC_COMPLETE_PATTERN, line):
-            return True
-        # Fallback to old patterns: "Soluify - List Sync Summary" or the dashed line separator
-        return bool(re.search(self.SYNC_SUMMARY_START, line) or re.search(self.SYNC_SUMMARY_DASHES, line))
-
-    def parse_list_fetch(self, line: str) -> tuple | None:
-        """Parse list fetching line."""
-        # Try the updated pattern first (handles new message format)
-        fetch_match = re.search(self.LIST_FETCH_START, line)
-        if fetch_match:
-            list_type = fetch_match.group(1)
-            list_id = fetch_match.group(2).strip()
-            # Clean up list_id - remove trailing dots and any parenthetical text
-            list_id = re.sub(r"\.\.\.+.*$", "", list_id).strip()
-            list_id = re.sub(r"\s*\(.*$", "", list_id).strip()
-            return (list_type, list_id, None)
-
-        success_match = re.search(self.LIST_FETCH_SUCCESS, line)
-        if success_match:
-            return (success_match.group(2), success_match.group(3), int(success_match.group(1)))
-
-        return None
-
-    def parse_item_status(self, line: str, timestamp: str) -> SyncItem | None:
-        """Parse an item processing line."""
-        # Try emoji-based patterns first
-        for pattern, status in self.ITEM_PATTERNS:
-            match = re.search(pattern, line)
-            if match:
-                title = match.group(1).strip()
-                progress_num = int(match.group(2))
-                progress_total = int(match.group(3))
-
-                # Extract year from title
-                year = None
-                year_match = re.search(r"\((\d{4})\)|\s(\d{4})$", title)
-                if year_match:
-                    year = int(year_match.group(1) or year_match.group(2))
-                    title = re.sub(r"\s*\(?\d{4}\)?$", "", title).strip()
-
-                # Extract error details for error status
-                error_details = None
-                if status == ItemStatus.ERROR.value:
-                    error_match = re.search(r"Error:\s*(.+)$", line)
-                    if error_match:
-                        error_details = error_match.group(1).strip()
-
-                return SyncItem(
-                    title=title,
-                    status=status,
-                    progress_number=progress_num,
-                    progress_total=progress_total,
-                    timestamp=timestamp,
-                    year=year,
-                    error_details=error_details,
-                )
-
-        # Try alternative patterns for different log formats
-        for pattern, status in self.ITEM_PATTERNS_ALT:
-            match = re.search(pattern, line)
-            if match:
-                title = match.group(1).strip()  # Group 1 is the title in alternative patterns
-                progress_num = int(match.group(2))  # Group 2 is progress number
-                progress_total = int(match.group(3))  # Group 3 is progress total
-
-                # Extract year from title
-                year = None
-                year_match = re.search(r"\((\d{4})\)|\s(\d{4})$", title)
-                if year_match:
-                    year = int(year_match.group(1) or year_match.group(2))
-                    title = re.sub(r"\s*\(?\d{4}\)?$", "", title).strip()
-
-                # Extract error details for error status
-                error_details = None
-                if status == ItemStatus.ERROR.value:
-                    error_match = re.search(r"Error:\s*(.+)$", line)
-                    if error_match:
-                        error_details = error_match.group(1).strip()
-
-                return SyncItem(
-                    title=title,
-                    status=status,
-                    progress_number=progress_num,
-                    progress_total=progress_total,
-                    timestamp=timestamp,
-                    year=year,
-                    error_details=error_details,
-                )
-
-        return None
-
-    def parse_log_file(self, log_path: str) -> list[SyncSession]:
-        """Parse entire log file and extract all sync sessions."""
-        try:
-            with open(log_path, encoding="utf-8", errors="ignore") as f:
-                lines = f.readlines()
-        except Exception as e:
-            logging.exception(f"Error reading log file: {e}")
-            return []
-
-        sessions = []
-        current_session: SyncSession | None = None
-        current_lists: dict[str, SyncList] = {}
-        summary_lines: list[str] = []
-        in_summary = False
-        last_timestamp_in_session: str | None = None
-
-        for i, line in enumerate(lines):
-            line = line.strip()
-            if not line:
-                continue
-
-            timestamp = self.extract_timestamp(line)
-
-            # Strip timestamp from line content for pattern matching
-            line_content = line
-            if timestamp:
-                # Remove the timestamp prefix (format: "YYYY-MM-DD HH:MM:SS ")
-                line_content = re.sub(self.TIMESTAMP_PATTERN, "", line).strip()
-
-            # Track last timestamp for current session (but don't set as end yet)
-            if current_session and timestamp:
-                last_timestamp_in_session = timestamp
-
-            # Detect session start
-            session_start = self.detect_session_start(line_content)
-            if session_start:
-                # Save previous session if exists
-                if current_session:
-                    # Calculate duration before saving
-                    if current_session.start_timestamp and current_session.end_timestamp:
-                        try:
-                            start = datetime.fromisoformat(current_session.start_timestamp)
-                            end = datetime.fromisoformat(current_session.end_timestamp)
-                            current_session.duration = (end - start).total_seconds()
-                        except (ValueError, TypeError):
-                            logging.debug(
-                                "Skipping unparsable duration timestamp"
-                            )  # best-effort duration calc; invalid timestamp ignored
-
-                    current_session.status = "completed"
-                    current_session.processed_items = len(current_session.items)
-                    sessions.append(current_session)
-
-                # Start new session
-                session_type, metadata = session_start
-                session_id = f"sync_{timestamp}_{session_type.value}"
-
-                current_session = SyncSession(
-                    id=session_id,
-                    type=session_type,
-                    start_timestamp=timestamp or datetime.now().isoformat(),
-                    total_items=metadata.get("total_items", 0),
-                )
-
-                current_lists = {}
-                in_summary = False
-                summary_lines = []
-                last_timestamp_in_session = timestamp
-                continue
-
-            if not current_session:
-                continue
-
-            # Extract version
-            if not current_session.version:
-                version_match = re.search(self.VERSION_PATTERN, line_content)
-                if version_match:
-                    current_session.version = version_match.group(1)
-
-            # Parse processing start to get total items for single syncs
-            processing_match = re.search(self.PROCESSING_START, line_content)
-            if processing_match and current_session.type == SyncType.SINGLE:
-                total_items = int(processing_match.group(1))
-                current_session.total_items = total_items
-                logging.debug(f"DEBUG - Single sync total items: {total_items}")
-
-            # Parse list fetching
-            list_info = self.parse_list_fetch(line_content)
-            if list_info:
-                list_type, list_id, item_count = list_info
-
-                list_key = f"{list_type}:{list_id}"
-                if list_key not in current_lists:
-                    current_lists[list_key] = SyncList(
-                        type=list_type,
-                        id=list_id,
-                        item_count=0,
-                    )
-
-                if item_count is not None:
-                    current_lists[list_key].item_count = item_count
-                    if current_lists[list_key] not in current_session.lists:
-                        current_session.lists.append(current_lists[list_key])
-
-            # Parse item status
-            item = self.parse_item_status(line_content, timestamp or datetime.now().isoformat())
-            if item:
-                current_session.items.append(item)
-                # Debug output removed for production
-
-                # Update results
-                if item.status == ItemStatus.REQUESTED.value:
-                    current_session.results.requested += 1
-                elif item.status == ItemStatus.ALREADY_AVAILABLE.value:
-                    current_session.results.already_available += 1
-                elif item.status == ItemStatus.ALREADY_REQUESTED.value:
-                    current_session.results.already_requested += 1
-                elif item.status == ItemStatus.SKIPPED.value:
-                    current_session.results.skipped += 1
-                elif item.status == ItemStatus.NOT_FOUND.value:
-                    current_session.results.not_found += 1
-                elif item.status == ItemStatus.ERROR.value:
-                    current_session.results.error += 1
-                    current_session.errors.append(
-                        {
-                            "title": item.title,
-                            "error": item.error_details or "Unknown error",
-                            "timestamp": item.timestamp,
-                        }
-                    )
-            # Item parsing completed
-
-            # Detect summary section start
-            if re.search(self.SYNC_SUMMARY_START, line_content) or re.search(self.SYNC_SUMMARY_DASHES, line_content):
-                in_summary = True
-                summary_lines = []
-                continue
-
-            if in_summary:
-                summary_lines.append(line_content)
-
-            # Detect session end
-            if self.detect_session_end(line_content, current_session.type):
-                # Session end detected
-                # Set end timestamp to the current line's timestamp (preferred) or last seen
-                # The SYNC COMPLETE marker should have a timestamp, so use it if available
-                if timestamp:
-                    current_session.end_timestamp = timestamp
-                elif last_timestamp_in_session:
-                    current_session.end_timestamp = last_timestamp_in_session
-                else:
-                    # Fallback to current time if no timestamp found
-                    current_session.end_timestamp = datetime.now().isoformat()
-
-                # Calculate duration if both timestamps exist
-                if current_session.start_timestamp and current_session.end_timestamp:
-                    try:
-                        start = datetime.fromisoformat(current_session.start_timestamp)
-                        end = datetime.fromisoformat(current_session.end_timestamp)
-                        current_session.duration = (end - start).total_seconds()
-                    except Exception as e:
-                        logging.warning(f"Failed to calculate duration: {e}")
-
-                current_session.status = "completed"
-                current_session.processed_items = len(current_session.items)
-                sessions.append(current_session)
-                current_session = None
-                in_summary = False
-                last_timestamp_in_session = None
-
-        # Handle unclosed session
-        if current_session:
-            # Calculate duration if both timestamps exist
-            if current_session.start_timestamp and current_session.end_timestamp:
-                try:
-                    start = datetime.fromisoformat(current_session.start_timestamp)
-                    end = datetime.fromisoformat(current_session.end_timestamp)
-                    current_session.duration = (end - start).total_seconds()
-
-                    # If session has an end timestamp and it's been more than 2 minutes since then,
-                    # and we have processed items, consider it completed
-                    time_since_end = (datetime.now() - end).total_seconds()
-                    if time_since_end > 120 and len(current_session.items) > 0:
-                        current_session.status = "completed"
-                    else:
-                        current_session.status = "in_progress"
-                except (ValueError, TypeError):
-                    current_session.status = "in_progress"  # best-effort; invalid timestamp, treat as in-progress
-            elif len(current_session.items) > 0 and current_session.start_timestamp:
-                try:
-                    start = datetime.fromisoformat(current_session.start_timestamp)
-                    time_since_start = (datetime.now() - start).total_seconds()
-
-                    # If session has results tallied (indicating summary was parsed)
-                    # OR it's been more than 10 minutes and we have items processed
-                    # consider it completed
-                    has_results = (
-                        current_session.results.requested > 0
-                        or current_session.results.already_available > 0
-                        or current_session.results.skipped > 0
-                        or current_session.results.not_found > 0
-                    )
-
-                    if has_results or time_since_start > 600:
-                        current_session.status = "completed"
-                    else:
-                        current_session.status = "in_progress"
-                except (ValueError, TypeError):
-                    current_session.status = "in_progress"  # best-effort; invalid timestamp, treat as in-progress
-            else:
-                current_session.status = "in_progress"
-
-            current_session.processed_items = len(current_session.items)
-            # Session completed
-            sessions.append(current_session)
-
-        return sessions
-
-
-# ==========================================
-# SYNC HISTORY - API Endpoints
-# ==========================================
-
-
 @app.get("/api/sync-history")
 async def get_sync_history(
     limit: int = Query(50, ge=1, le=100),
@@ -8050,214 +5381,63 @@ async def get_sync_history(
     - start_date: Filter sessions after this date (ISO format)
     - end_date: Filter sessions before this date (ISO format)
     """
-    parser = SyncLogParser()
+    try:
+        sessions = get_sync_sessions(sync_type=type)["sessions"]
 
-    # Try different log locations (check most recent first)
-    log_paths = [
-        "/var/log/supervisor/listsync-core.log",
-        "logs/listsync-core.log",
-        "/usr/src/app/logs/listsync-core.log",
-        "data/list_sync.log",
-    ]
-
-    sessions = []
-    for log_path in log_paths:
-        if os.path.exists(log_path):
+        if start_date:
             try:
-                # Force fresh read by checking file modification time
-                # This ensures we get the latest sync data
-                sessions = parser.parse_log_file(log_path)
-                break
-            except Exception as e:
-                logging.exception(f"Error parsing log file {log_path}: {e}")
-                continue
+                start_dt = datetime.fromisoformat(start_date)
+                sessions = [s for s in sessions if datetime.fromisoformat(s["start_timestamp"]) >= start_dt]
+            except (ValueError, TypeError) as e:
+                logging.debug("Invalid start_date filter %s: %s", start_date, e)
 
-    # Filter by type
-    if type:
-        sessions = [s for s in sessions if s.type.value == type]
+        if end_date:
+            try:
+                end_dt = datetime.fromisoformat(end_date)
+                sessions = [s for s in sessions if datetime.fromisoformat(s["start_timestamp"]) <= end_dt]
+            except (ValueError, TypeError) as e:
+                logging.debug("Invalid end_date filter %s: %s", end_date, e)
 
-    # Filter by date range
-    if start_date:
-        try:
-            start_dt = datetime.fromisoformat(start_date)
-            sessions = [s for s in sessions if datetime.fromisoformat(s.start_timestamp) >= start_dt]
-        except (ValueError, TypeError) as e:
-            logging.debug("Invalid start_date filter %s: %s", start_date, e)
+        def is_valid_session(session):
+            has_lists = bool(session.get("lists"))
+            has_items = bool(session.get("items"))
+            has_results = any(session.get("results", {}).values())
+            return has_lists or has_items or has_results
 
-    if end_date:
-        try:
-            end_dt = datetime.fromisoformat(end_date)
-            sessions = [s for s in sessions if datetime.fromisoformat(s.start_timestamp) <= end_dt]
-        except (ValueError, TypeError) as e:
-            logging.debug("Invalid end_date filter %s: %s", end_date, e)
+        sessions = [s for s in sessions if is_valid_session(s)]
+        sessions.sort(key=lambda x: x.get("start_timestamp") or "", reverse=True)
 
-    # Don't filter out sessions - show all syncs even if lists weren't parsed correctly
-    # The stats endpoint counts all sessions, so we should too for consistency
-    # If a session doesn't have lists but has items/results, it's still a valid sync
-    # Only filter out completely empty sessions (no items, no results, no lists)
-    def is_valid_session(session):
-        # Session is valid if it has lists, items, or results
-        has_lists = session.lists and len(session.lists) > 0
-        has_items = len(session.items) > 0
-        has_results = (
-            session.results.requested > 0
-            or session.results.already_available > 0
-            or session.results.already_requested > 0
-            or session.results.skipped > 0
-            or session.results.not_found > 0
-            or session.results.error > 0
-        )
-        return has_lists or has_items or has_results
+        total = len(sessions)
+        sessions = sessions[offset : offset + limit]
 
-    sessions = [s for s in sessions if is_valid_session(s)]
-
-    # Sort by most recent first
-    sessions.sort(key=lambda x: x.start_timestamp, reverse=True)
-
-    # Pagination
-    total = len(sessions)
-    sessions = sessions[offset : offset + limit]
-
-    return {
-        "sessions": [s.to_dict() for s in sessions],
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-    }
+        return {
+            "sessions": sessions,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+        }
+    except Exception as e:
+        logging.exception(f"Error loading sync history: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/sync-history/stats")
 async def get_sync_history_stats():
     """Get aggregate statistics about sync history."""
-    parser = SyncLogParser()
-
-    log_paths = [
-        "/var/log/supervisor/listsync-core.log",
-        "logs/listsync-core.log",
-        "/usr/src/app/logs/listsync-core.log",
-        "data/list_sync.log",
-    ]
-
-    sessions = []
-    for log_path in log_paths:
-        if os.path.exists(log_path):
-            try:
-                sessions = parser.parse_log_file(log_path)
-                break
-            except Exception as e:
-                logging.exception(f"Error parsing log file {log_path} for stats: {e}")
-                continue
-
-    if not sessions:
-        return {"error": "No sync sessions found"}
-
-    # Apply same filtering as main endpoint for consistency
-    def is_valid_session(session):
-        has_lists = session.lists and len(session.lists) > 0
-        has_items = len(session.items) > 0
-        has_results = (
-            session.results.requested > 0
-            or session.results.already_available > 0
-            or session.results.already_requested > 0
-            or session.results.skipped > 0
-            or session.results.not_found > 0
-            or session.results.error > 0
-        )
-        return has_lists or has_items or has_results
-
-    sessions = [s for s in sessions if is_valid_session(s)]
-
-    if not sessions:
-        return {"error": "No valid sync sessions found"}
-
-    # Calculate statistics
-    total_sessions = len(sessions)
-    full_syncs = len([s for s in sessions if s.type.value == "full"])
-    single_syncs = len([s for s in sessions if s.type.value == "single"])
-
-    total_items = sum(s.processed_items for s in sessions)
-    total_requested = sum(s.results.requested for s in sessions)
-    total_errors = sum(s.results.error for s in sessions)
-
-    # Success rate
-    success_rate = ((total_items - total_errors) / total_items * 100) if total_items > 0 else 0
-
-    # Average per sync
-    avg_items = total_items / total_sessions if total_sessions > 0 else 0
-
-    # Recent syncs (last 24h, 7d, 30d) - use timedelta for accurate time comparison
-    from datetime import timedelta
-
-    now = datetime.now()
-    last_24h = [s for s in sessions if (now - datetime.fromisoformat(s.start_timestamp)) < timedelta(days=1)]
-    last_7d = [s for s in sessions if (now - datetime.fromisoformat(s.start_timestamp)) < timedelta(days=7)]
-    last_30d = [s for s in sessions if (now - datetime.fromisoformat(s.start_timestamp)) < timedelta(days=30)]
-
-    # Most synced lists
-    list_counts = {}
-    for session in sessions:
-        if session.lists:  # Only iterate if lists exist
-            for lst in session.lists:
-                key = f"{lst.type}:{lst.id}"
-                list_counts[key] = list_counts.get(key, 0) + 1
-
-    most_synced = sorted(list_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-
-    # Average duration - try to calculate for sessions that don't have it
-    for session in sessions:
-        if session.duration is None and session.start_timestamp and session.end_timestamp:
-            try:
-                start = datetime.fromisoformat(session.start_timestamp)
-                end = datetime.fromisoformat(session.end_timestamp)
-                session.duration = (end - start).total_seconds()
-            except (ValueError, TypeError) as e:
-                logging.debug("Skipping unparsable duration timestamp: %s", e)
-
-    # Filter valid durations
-    durations = [s.duration for s in sessions if s.duration is not None and s.duration > 0]
-    avg_duration = sum(durations) / len(durations) if durations else None
-
-    return {
-        "total_sessions": total_sessions,
-        "full_syncs": full_syncs,
-        "single_syncs": single_syncs,
-        "total_items_processed": total_items,
-        "total_requested": total_requested,
-        "total_errors": total_errors,
-        "success_rate": round(success_rate, 2),
-        "avg_items_per_sync": round(avg_items, 2),
-        "avg_duration_seconds": round(avg_duration, 2) if avg_duration is not None else None,
-        "recent_stats": {
-            "last_24h": len(last_24h),
-            "last_7d": len(last_7d),
-            "last_30d": len(last_30d),
-        },
-        "most_synced_lists": [{"list": lst, "count": count} for lst, count in most_synced],
-    }
+    try:
+        return query_sync_history_stats()
+    except Exception as e:
+        logging.exception(f"Error loading sync history stats: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/sync-history/{session_id}")
 async def get_sync_session(session_id: str):
     """Get detailed information about a specific sync session."""
-    parser = SyncLogParser()
-
-    log_paths = [
-        "/var/log/supervisor/listsync-core.log",
-        "logs/listsync-core.log",
-        "/usr/src/app/logs/listsync-core.log",
-        "data/list_sync.log",
-    ]
-
-    for log_path in log_paths:
-        if os.path.exists(log_path):
-            sessions = parser.parse_log_file(log_path)
-            session = next((s for s in sessions if s.id == session_id), None)
-
-            if session:
-                return session.to_dict()
-            break
-
-    raise HTTPException(status_code=404, detail="Session not found")
+    session = get_sync_session_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return session
 
 
 @app.get("/api/logs/live")
@@ -8465,62 +5645,39 @@ async def rotate_logs():
 
 @app.get("/api/sync-history/{session_id}/raw-logs")
 async def get_sync_session_raw_logs(session_id: str):
-    """Get raw log lines for a specific sync session."""
-    parser = SyncLogParser()
+    """Get raw log lines for a specific sync session using the live-tail reader."""
+    session = get_sync_session_by_id(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
 
-    log_paths = [
-        "/var/log/supervisor/listsync-core.log",
-        "logs/listsync-core.log",
-        "/usr/src/app/logs/listsync-core.log",
-        "data/list_sync.log",
-    ]
+    start_timestamp = session.get("start_timestamp")
+    end_timestamp = session.get("end_timestamp")
+    try:
+        start_time = datetime.fromisoformat(start_timestamp) if start_timestamp else None
+        end_time = datetime.fromisoformat(end_timestamp) if end_timestamp else None
+    except (ValueError, TypeError):
+        start_time = end_time = None
 
-    for log_path in log_paths:
-        if os.path.exists(log_path):
-            try:
-                with open(log_path, encoding="utf-8", errors="ignore") as f:
-                    lines = f.readlines()
+    response = get_log_entries(limit=1000000, offset=0, sort_order="asc")
+    session_lines = []
+    for entry in response.entries:
+        try:
+            line_time = datetime.fromisoformat(entry.timestamp)
+        except (ValueError, TypeError):
+            continue
+        if start_time and line_time < start_time:
+            continue
+        if end_time and line_time > end_time:
+            continue
+        session_lines.append(entry.raw_line)
 
-                # Parse to find the session
-                sessions = parser.parse_log_file(log_path)
-                session = next((s for s in sessions if s.id == session_id), None)
-
-                if not session:
-                    continue
-
-                # Find log lines that belong to this session by timestamp range
-                session_lines = []
-                in_session = False
-                start_time = datetime.fromisoformat(session.start_timestamp) if session.start_timestamp else None
-                end_time = datetime.fromisoformat(session.end_timestamp) if session.end_timestamp else None
-
-                for line in lines:
-                    timestamp_match = re.match(parser.TIMESTAMP_PATTERN, line.strip())
-                    if timestamp_match:
-                        line_time = datetime.fromisoformat(timestamp_match.group(1))
-
-                        if start_time and line_time >= start_time:
-                            in_session = True
-
-                        if end_time and line_time > end_time:
-                            in_session = False
-                            break
-
-                    if in_session:
-                        session_lines.append(line.rstrip("\n"))
-
-                return {
-                    "session_id": session_id,
-                    "lines": session_lines,
-                    "line_count": len(session_lines),
-                    "start_timestamp": session.start_timestamp,
-                    "end_timestamp": session.end_timestamp,
-                }
-
-            except Exception as e:
-                raise HTTPException(status_code=500, detail=f"Error reading logs: {e!s}")
-
-    raise HTTPException(status_code=404, detail="Session or log file not found")
+    return {
+        "session_id": session_id,
+        "lines": session_lines,
+        "line_count": len(session_lines),
+        "start_timestamp": start_timestamp,
+        "end_timestamp": end_timestamp,
+    }
 
 
 # ============================================================================

@@ -16,6 +16,7 @@ from .api import tmdb as tmdb_api
 from .api.seerr import SeerrClient
 from .config import CONFIG_FILE, load_config, load_env_config, load_env_lists, save_config
 from .database import (
+    add_item_to_sync,
     cancel_sync_in_db,
     configure_sync_interval,
     end_sync_in_db,
@@ -620,7 +621,17 @@ def process_media_item(
         title = item.get("title", "Unknown Title").strip()
         media_type = item.get("media_type", "unknown")
         year = item.get("year")
-        return {"title": title, "status": "cancelled", "year": year, "media_type": media_type}
+        return {
+            "title": title,
+            "status": "cancelled",
+            "year": year,
+            "media_type": media_type,
+            "item_id": None,
+            "imdb_id": item.get("imdb_id"),
+            "tmdb_id": item.get("tmdb_id"),
+            "overseerr_id": None,
+            "error_message": None,
+        }
 
     title = item.get("title", "Unknown Title").strip()
     # Clean up backslashes and other problematic characters
@@ -651,7 +662,25 @@ def process_media_item(
         "year": year,
         "media_type": media_type,
         "error_message": None,
+        "item_id": None,
+        "imdb_id": imdb_id,
+        "tmdb_id": tmdb_id,
+        "overseerr_id": None,
     }
+
+    def finish(status, item_db_id=None, overseerr_id=None, error_message=None):
+        """Attach the fields reporting needs to the result before returning it."""
+        result.update(
+            {
+                "status": status,
+                "item_id": item_db_id,
+                "imdb_id": imdb_id,
+                "tmdb_id": tmdb_id,
+                "overseerr_id": overseerr_id,
+                "error_message": error_message,
+            }
+        )
+        return result
 
     if dry_run:
         result["status"] = "would_be_synced"
@@ -771,7 +800,7 @@ def process_media_item(
                 overseerr_id = int(overseerr_id)
             except (ValueError, TypeError):
                 logging.exception(f"Invalid Seerr ID format: {overseerr_id} (type: {type(overseerr_id)})")
-                return {"title": title, "status": "error", "year": year, "media_type": media_type}
+                return finish("error", error_message=f"Invalid Seerr ID format: {overseerr_id}")
 
             logging.info(f"📊 MATCH SUMMARY: Method={match_method}, Overseerr_ID={overseerr_id}")
 
@@ -797,8 +826,9 @@ def process_media_item(
             if not should_sync_item(overseerr_id):
                 logging.info("⏭️  SKIP: Recently synced (within skip window)")
                 # Save relationship for all source lists
+                item_db_id = None
                 for source_list in source_lists:
-                    save_sync_result(
+                    item_db_id = save_sync_result(
                         title,
                         media_type,
                         imdb_id,
@@ -809,7 +839,7 @@ def process_media_item(
                         source_list["type"],
                         source_list["id"],
                     )
-                return {"title": title, "status": "skipped", "year": year, "media_type": media_type}
+                return finish("skipped", item_db_id, overseerr_id=overseerr_id)
 
             logging.info("🔍 Checking media status in Seerr...")
             media_state = seerr_client.get_media_state(overseerr_id, search_result["mediaType"], is_4k)
@@ -820,8 +850,9 @@ def process_media_item(
             if is_available:
                 logging.info("☑️ STATUS: Already available in library")
                 # Save relationship for all source lists
+                item_db_id = None
                 for source_list in source_lists:
-                    save_sync_result(
+                    item_db_id = save_sync_result(
                         title,
                         media_type,
                         imdb_id,
@@ -832,7 +863,7 @@ def process_media_item(
                         source_list["type"],
                         source_list["id"],
                     )
-                return {"title": title, "status": "already_available", "year": year, "media_type": media_type}
+                return finish("already_available", item_db_id, overseerr_id=overseerr_id)
 
             # Skip the users who already have a request on this item, so a
             # pending request by one person doesn't block everyone else's list.
@@ -842,8 +873,9 @@ def process_media_item(
                 logging.info(
                     f"📌 STATUS: Already requested by {', '.join(sorted(existing_requesters & set(requester_user_ids)))}",
                 )
+                item_db_id = None
                 for source_list in source_lists:
-                    save_sync_result(
+                    item_db_id = save_sync_result(
                         title,
                         media_type,
                         imdb_id,
@@ -854,7 +886,7 @@ def process_media_item(
                         source_list["type"],
                         source_list["id"],
                     )
-                return {"title": title, "status": "already_requested", "year": year, "media_type": media_type}
+                return finish("already_requested", item_db_id, overseerr_id=overseerr_id)
 
             if existing_requesters:
                 logging.info(
@@ -901,8 +933,9 @@ def process_media_item(
                 final_status = "request_failed"
 
             # Save relationship for all source lists
+            item_db_id = None
             for source_list in source_lists:
-                save_sync_result(
+                item_db_id = save_sync_result(
                     title,
                     media_type,
                     imdb_id,
@@ -913,25 +946,27 @@ def process_media_item(
                     source_list["type"],
                     source_list["id"],
                 )
-            return {"title": title, "status": final_status, "year": year, "media_type": media_type}
+            return finish(final_status, item_db_id, overseerr_id=overseerr_id)
         logging.error("❌ ERROR: Could not find match using any method")
         # Get list information from item using helper function
         source_lists = get_source_lists_from_item(item, list_type, list_id)
         # Save relationship for all source lists
+        item_db_id = None
         if source_lists:
             for source_list in source_lists:
-                save_sync_result(
+                item_db_id = save_sync_result(
                     title, media_type, imdb_id, None, "not_found", year, tmdb_id, source_list["type"], source_list["id"]
                 )
         else:
             logging.error("❌ CRITICAL: Cannot save 'not_found' item without list information!")
-        return {"title": title, "status": "not_found", "year": year, "media_type": media_type}
+        return finish("not_found", item_db_id)
     except Exception as e:
         logging.exception(f"❌ ERROR: Exception during processing: {e!s}")
         logging.debug("Exception details:", exc_info=True)
         result["status"] = "error"
         result["error_message"] = str(e)
         # Try to save error status with list information if available
+        item_db_id = None
         try:
             source_lists = get_source_lists_from_item(item, list_type, list_id)
             if source_lists:
@@ -941,12 +976,12 @@ def process_media_item(
                 year = item.get("year")
                 tmdb_id = item.get("tmdb_id")
                 for source_list in source_lists:
-                    save_sync_result(
+                    item_db_id = save_sync_result(
                         title, media_type, imdb_id, None, "error", year, tmdb_id, source_list["type"], source_list["id"]
                     )
         except Exception as save_error:
             logging.exception(f"Failed to save error status: {save_error}")
-        return result
+        return finish("error", item_db_id, error_message=str(e))
 
 
 def verify_list_requesters(synced_lists: list[dict[str, Any]], seerr_client: SeerrClient) -> None:
@@ -993,6 +1028,8 @@ def sync_media_to_overseerr(
     automated_mode: bool = False,
     sync_id: int | None = None,
     session_id: str | None = None,
+    list_type: str | None = None,
+    list_id: str | None = None,
 ) -> SyncResults:
     """
     Sync media items to Seerr using ThreadPoolExecutor for concurrent processing.
@@ -1004,6 +1041,10 @@ def sync_media_to_overseerr(
         is_4k (bool, optional): Whether to request 4K. Defaults to False.
         dry_run (bool, optional): Whether to perform a dry run. Defaults to False.
         automated_mode (bool, optional): Whether to run in automated mode. Defaults to False.
+        sync_id (int, optional): sync_history id to record per-item outcomes against
+        session_id (str, optional): session id, used for cancellation
+        list_type (str, optional): Source list type for single-list syncs
+        list_id (str, optional): Source list id for single-list syncs
 
     Returns:
         SyncResults: Sync results
@@ -1012,6 +1053,35 @@ def sync_media_to_overseerr(
     sync_results.total_items = len(media_items)
     sync_results.synced_lists = synced_lists or []
     current_item = 0
+
+    def persist_item(result, item):
+        """Record the outcome in sync_items so reporting never reads the log."""
+        if not sync_id:
+            return
+        status = result.get("status", "error")
+        if dry_run or status == "would_be_synced":
+            return
+        source_lists = get_source_lists_from_item(item, list_type, list_id)
+        if not source_lists:
+            source_lists = [{"type": None, "id": None}]
+        for src in source_lists:
+            try:
+                add_item_to_sync(
+                    sync_id,
+                    result.get("item_id"),
+                    result.get("title") or item.get("title", "Unknown"),
+                    result.get("media_type") or item.get("media_type", "unknown"),
+                    status,
+                    src.get("type"),
+                    src.get("id"),
+                    result.get("year"),
+                    result.get("imdb_id") or item.get("imdb_id"),
+                    result.get("tmdb_id") or item.get("tmdb_id"),
+                    result.get("overseerr_id"),
+                    result.get("error_message"),
+                )
+            except Exception as e:
+                logging.exception(f"Failed to persist sync item outcome: {e}")
 
     if not dry_run:
         verify_list_requesters(sync_results.synced_lists, seerr_client)
@@ -1038,9 +1108,10 @@ def sync_media_to_overseerr(
                 return sync_results
 
             try:
-                result = process_media_item(item, seerr_client, dry_run, is_4k)
+                result = process_media_item(item, seerr_client, dry_run, is_4k, list_type, list_id)
                 status = result["status"]
                 sync_results.results[status] += 1
+                persist_item(result, item)
 
                 # Display progress
                 title = item.get("title", "Unknown")
@@ -1064,6 +1135,15 @@ def sync_media_to_overseerr(
                 logging.exception(f"❌ ERROR: Exception during processing: {e!s}")
                 sync_results.results["error"] += 1
                 current_item += 1
+                persist_item(
+                    {
+                        "title": item.get("title", "Unknown"),
+                        "media_type": item.get("media_type", "unknown"),
+                        "status": "error",
+                        "error_message": str(e),
+                    },
+                    item,
+                )
     else:
         logging.info(f"⚡ Intelligent batching mode enabled (batch size: {batch_size})")
         console.info(f"⚡ Intelligent batching mode enabled - processing {batch_size} items at a time")
@@ -1093,9 +1173,10 @@ def sync_media_to_overseerr(
                 logging.info(f"{'='*80}")
 
                 try:
-                    result = process_media_item(item, seerr_client, dry_run, is_4k)
+                    result = process_media_item(item, seerr_client, dry_run, is_4k, list_type, list_id)
                     status = result["status"]
                     sync_results.results[status] += 1
+                    persist_item(result, item)
 
                     # Add clear log boundary after each item
                     logging.info(f"{'='*80}")
@@ -1179,6 +1260,15 @@ def sync_media_to_overseerr(
                     logging.exception(f"{'='*80}\n")
                     sync_results.results["error"] += 1
                     current_item += 1
+                    persist_item(
+                        {
+                            "title": item.get("title", "Unknown"),
+                            "media_type": item.get("media_type", "unknown"),
+                            "status": "error",
+                            "error_message": str(e),
+                        },
+                        item,
+                    )
 
             # Display progress
             logging.info(f"📊 PROGRESS: {current_item}/{sync_results.total_items} items processed")
@@ -1881,6 +1971,8 @@ def sync_single_list(
                 automated_mode=True,  # Treat single sync as automated to avoid interactive prompts
                 sync_id=sync_id,
                 session_id=session_id,
+                list_type=list_type,
+                list_id=list_id,
             )
 
             # Update item count for the synced list

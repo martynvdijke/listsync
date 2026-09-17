@@ -20,7 +20,7 @@
     "@pinia/nuxt": "^0.11.2",
     "@vee-validate/nuxt": "^4.15.1",
     "@vee-validate/zod": "^4.15.1",
-    "@vueuse/nuxt": "^13.9.0",
+    "@vueuse/nuxt": "^15.0.0",
     "date-fns": "^4.1.0",
     "lucide-vue-next": "^0.545.0",
     "nuxt": "^3.15.1",

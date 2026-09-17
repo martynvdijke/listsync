@@ -1,3 +1,10 @@
+## [1.3.4](https://github.com/martynvdijke/listsync/compare/v1.3.3...v1.3.4) (2026-09-17)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @nuxtjs/color-mode to v4 ([#16](https://github.com/martynvdijke/listsync/issues/16)) ([36174f3](https://github.com/martynvdijke/listsync/commit/36174f330d2698088d8499789da6f893e61fa5e6))
+
 ## [1.3.3](https://github.com/martynvdijke/listsync/compare/v1.3.2...v1.3.3) (2026-09-17)
 
 ## [1.3.2](https://github.com/martynvdijke/listsync/compare/v1.3.1...v1.3.2) (2026-09-16)

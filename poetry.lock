@@ -507,21 +507,21 @@ files = [
 
 [[package]]
 name = "discord-webhook"
-version = "1.3.0"
+version = "1.4.1"
 description = "Easily send Discord webhooks with Python"
 optional = false
-python-versions = ">=3.8,<4.0"
+python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "discord_webhook-1.3.0-py3-none-any.whl", hash = "sha256:666d57037620feff6fd0f6930714201eee8ca279003d3d217c1ad0ca0049e93b"},
-    {file = "discord_webhook-1.3.0.tar.gz", hash = "sha256:1d44e6caf81810c5ebe6e2363a6fefee2cab915ad4c2e843a0ec088b0e54ed51"},
+    {file = "discord_webhook-1.4.1-py3-none-any.whl", hash = "sha256:1ed6a07d16ca0e6e6b1a91536c2fc34d0ba8251e5be37fe8850189aaf1155ee8"},
+    {file = "discord_webhook-1.4.1.tar.gz", hash = "sha256:2913c3ccb216e7d82911f96296f78b6b28b68a6f33a6fa5a61fc2da697b34a4d"},
 ]
 
 [package.dependencies]
-requests = ">=2.28.1,<3.0.0"
+requests = ">=2.32.3,<3.0.0"
 
 [package.extras]
-async = ["httpx (>=0.23.0,<0.24.0)"]
+async = ["httpx (>=0.28.1,<0.29.0)"]
 
 [[package]]
 name = "exceptiongroup"
@@ -594,14 +594,14 @@ files = [
 
 [[package]]
 name = "filelock"
-version = "3.32.4"
+version = "4.0.1"
 description = "A platform independent file lock."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "filelock-3.32.4-py3-none-any.whl", hash = "sha256:22e58ca3b1ae3b98993b762d7338367ae64fe50252bf78d59da3bfebcdf1cedd"},
-    {file = "filelock-3.32.4.tar.gz", hash = "sha256:2bde2e4cf732e0153406d8a7bc80620ecf5e621fe0d25e41143c4e3b4733ff30"},
+    {file = "filelock-4.0.1-py3-none-any.whl", hash = "sha256:481a321a27bef441e23c53371c6abc8d7d16e26b97090074ba44f7538a3fd55a"},
+    {file = "filelock-4.0.1.tar.gz", hash = "sha256:fdefc3f3e87716d855ae2b732c1cfd521dd99799ef2b4d00e8c0d4dcdc7cc94b"},
 ]
 
 [[package]]
@@ -700,14 +700,14 @@ files = [
 
 [[package]]
 name = "idna"
-version = "3.19"
+version = "3.20"
 description = "Internationalized Domain Names in Applications (IDNA)"
 optional = false
 python-versions = ">=3.9"
 groups = ["main", "api"]
 files = [
-    {file = "idna-3.19-py3-none-any.whl", hash = "sha256:815e7be7a7806d54abb586dc943addc79e8b2ee16915059658cbeff4b1b43bf4"},
-    {file = "idna-3.19.tar.gz", hash = "sha256:5e0811a4383b21dc5838069f801c4fb62113b7447663d2530d2bd6e77b49bf15"},
+    {file = "idna-3.20-py3-none-any.whl", hash = "sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c"},
+    {file = "idna-3.20.tar.gz", hash = "sha256:a7db850025b95ded1eae8a46181a1a6c56c92c96f0e2b005d9ff8dc0210cab44"},
 ]
 
 [package.extras]
@@ -998,20 +998,20 @@ testing = ["pytest (<5.0) ; python_version < \"3.0\"", "pytest (>=5.0) ; python_
 
 [[package]]
 name = "pdbp"
-version = "1.8.2"
+version = "1.8.3"
 description = "pdbp (Pdb+): A drop-in replacement for pdb and pdbpp."
 optional = false
 python-versions = ">=3.8"
 groups = ["main"]
 files = [
-    {file = "pdbp-1.8.2-py3-none-any.whl", hash = "sha256:d4fd05e177636b5ccd0b2e03e378cec57afc06149e5fd975de6f8ddb3d0109a8"},
-    {file = "pdbp-1.8.2.tar.gz", hash = "sha256:367c25c17555d3ac1f024b9ad494ff50e6e20f6494a84741487f3e6596d88f94"},
+    {file = "pdbp-1.8.3-py3-none-any.whl", hash = "sha256:a190833a4a049a0499b84f68616e363415d13d9e89e73191decf878f25ce1272"},
+    {file = "pdbp-1.8.3.tar.gz", hash = "sha256:a6da18c2e95c318a22635c30d55dd0fc03ee9397f89c87d5400abab3cba9bcd4"},
 ]
 
 [package.dependencies]
 colorama = {version = ">=0.4.6", markers = "platform_system == \"Windows\""}
 pygments = ">=2.19.2"
-tabcompleter = ">=1.4.0"
+tabcompleter = ">=1.4.1"
 
 [[package]]
 name = "pip"
@@ -1027,14 +1027,14 @@ files = [
 
 [[package]]
 name = "platformdirs"
-version = "4.11.4"
+version = "4.11.11"
 description = "A small Python package for determining appropriate platform-specific dirs, e.g. a `user data dir`."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "platformdirs-4.11.4-py3-none-any.whl", hash = "sha256:e34ff91a24bcddc6d939b878bdf3f5c437c9c46fe9e212b1bf455fdf1ee57586"},
-    {file = "platformdirs-4.11.4.tar.gz", hash = "sha256:f3373be828247211d0febabea97e238c3dfde8a60b3c90c32756fb52cb21556d"},
+    {file = "platformdirs-4.11.11-py3-none-any.whl", hash = "sha256:972ea6b2b387155a536226a0750e46923d731d459a387c4a255c583ed2f64547"},
+    {file = "platformdirs-4.11.11.tar.gz", hash = "sha256:b0befe8a90759e4a9a8b9820d434ae226a6549063210b596da0038a7a05aede4"},
 ]
 
 [[package]]
@@ -1491,14 +1491,14 @@ pytest = "*"
 
 [[package]]
 name = "pytest-rerunfailures"
-version = "16.6"
+version = "16.7"
 description = "pytest plugin to re-run tests to eliminate flaky failures"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "pytest_rerunfailures-16.6-py3-none-any.whl", hash = "sha256:6af2d1ebd6e5cb79666ac408942cd6a0672a49fefd8523664770718560795e13"},
-    {file = "pytest_rerunfailures-16.6.tar.gz", hash = "sha256:29dbfee46f542073c888e0ed4e81c51e15b9096f49a299eb1a759629c601684a"},
+    {file = "pytest_rerunfailures-16.7-py3-none-any.whl", hash = "sha256:edf1886209c2b7dafe35b5bf1708d6ec40ccf6c6b357f0f02807efcec0204c99"},
+    {file = "pytest_rerunfailures-16.7.tar.gz", hash = "sha256:6956ddfb65ca1d07e7e3d99e2c5359d82300f4cb062e6049563bd2c106f72d5c"},
 ]
 
 [package.dependencies]
@@ -1528,14 +1528,14 @@ testing = ["filelock"]
 
 [[package]]
 name = "python-dotenv"
-version = "1.1.0"
+version = "1.2.3"
 description = "Read key-value pairs from a .env file and set them as environment variables"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["main", "api"]
 files = [
-    {file = "python_dotenv-1.1.0-py3-none-any.whl", hash = "sha256:d7c01d9e2293916c18baf562d95698754b0dbbb5e74d457c45d4f6561fb9d55d"},
-    {file = "python_dotenv-1.1.0.tar.gz", hash = "sha256:41f90bc6f5f177fb41f53e87666db362025010eb28f60a01c9143bfa33a2b2d5"},
+    {file = "python_dotenv-1.2.3-py3-none-any.whl", hash = "sha256:904552145e8bfed22162c09dab1c2b9b54fefa7b23ba780f4f26ca0316b0f0d9"},
+    {file = "python_dotenv-1.2.3.tar.gz", hash = "sha256:a20a594dabeaa385725aa239d5244871c143ecb356add8a20fcf23773a6c3a35"},
 ]
 
 [package.extras]
@@ -1707,30 +1707,30 @@ jupyter = ["ipywidgets (>=7.5.1,<9)"]
 
 [[package]]
 name = "ruff"
-version = "0.6.7"
+version = "0.16.8"
 description = "An extremely fast Python linter and code formatter, written in Rust."
 optional = false
 python-versions = ">=3.7"
 groups = ["dev"]
 files = [
-    {file = "ruff-0.6.7-py3-none-linux_armv6l.whl", hash = "sha256:08277b217534bfdcc2e1377f7f933e1c7957453e8a79764d004e44c40db923f2"},
-    {file = "ruff-0.6.7-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:c6707a32e03b791f4448dc0dce24b636cbcdee4dd5607adc24e5ee73fd86c00a"},
-    {file = "ruff-0.6.7-py3-none-macosx_11_0_arm64.whl", hash = "sha256:533d66b7774ef224e7cf91506a7dafcc9e8ec7c059263ec46629e54e7b1f90ab"},
-    {file = "ruff-0.6.7-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:17a86aac6f915932d259f7bec79173e356165518859f94649d8c50b81ff087e9"},
-    {file = "ruff-0.6.7-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:b3f8822defd260ae2460ea3832b24d37d203c3577f48b055590a426a722d50ef"},
-    {file = "ruff-0.6.7-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:9ba4efe5c6dbbb58be58dd83feedb83b5e95c00091bf09987b4baf510fee5c99"},
-    {file = "ruff-0.6.7-py3-none-manylinux_2_17_ppc64.manylinux2014_ppc64.whl", hash = "sha256:525201b77f94d2b54868f0cbe5edc018e64c22563da6c5c2e5c107a4e85c1c0d"},
-    {file = "ruff-0.6.7-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:8854450839f339e1049fdbe15d875384242b8e85d5c6947bb2faad33c651020b"},
-    {file = "ruff-0.6.7-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:2f0b62056246234d59cbf2ea66e84812dc9ec4540518e37553513392c171cb18"},
-    {file = "ruff-0.6.7-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6b1462fa56c832dc0cea5b4041cfc9c97813505d11cce74ebc6d1aae068de36b"},
-    {file = "ruff-0.6.7-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:02b083770e4cdb1495ed313f5694c62808e71764ec6ee5db84eedd82fd32d8f5"},
-    {file = "ruff-0.6.7-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:0c05fd37013de36dfa883a3854fae57b3113aaa8abf5dea79202675991d48624"},
-    {file = "ruff-0.6.7-py3-none-musllinux_1_2_i686.whl", hash = "sha256:f49c9caa28d9bbfac4a637ae10327b3db00f47d038f3fbb2195c4d682e925b14"},
-    {file = "ruff-0.6.7-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:a0e1655868164e114ba43a908fd2d64a271a23660195017c17691fb6355d59bb"},
-    {file = "ruff-0.6.7-py3-none-win32.whl", hash = "sha256:a939ca435b49f6966a7dd64b765c9df16f1faed0ca3b6f16acdf7731969deb35"},
-    {file = "ruff-0.6.7-py3-none-win_amd64.whl", hash = "sha256:590445eec5653f36248584579c06252ad2e110a5d1f32db5420de35fb0e1c977"},
-    {file = "ruff-0.6.7-py3-none-win_arm64.whl", hash = "sha256:b28f0d5e2f771c1fe3c7a45d3f53916fc74a480698c4b5731f0bea61e52137c8"},
-    {file = "ruff-0.6.7.tar.gz", hash = "sha256:44e52129d82266fa59b587e2cd74def5637b730a69c4542525dfdecfaae38bd5"},
+    {file = "ruff-0.16.8-py3-none-linux_armv6l.whl", hash = "sha256:6ffbd6d87383c1edf5f6fa890f10200950240d7c1a16052a19a09d3a2307dd38"},
+    {file = "ruff-0.16.8-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:42ed6b878ed61e3acca92f2730a17acff39286944ea82398544696366a6f925e"},
+    {file = "ruff-0.16.8-py3-none-macosx_11_0_arm64.whl", hash = "sha256:7ea781c7f2afba8c6a505ea0fb3f994020249e0c450635f5381286fea6b46170"},
+    {file = "ruff-0.16.8-py3-none-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:8efeae3bbe414a5efefda11a792dfb51ef90ac48d50c4830de2f644caf3e8659"},
+    {file = "ruff-0.16.8-py3-none-manylinux_2_17_armv7l.manylinux2014_armv7l.whl", hash = "sha256:3a79b795469fef7fc6e908b218eed2eb17332afd85031db6480dc864560e69b2"},
+    {file = "ruff-0.16.8-py3-none-manylinux_2_17_i686.manylinux2014_i686.whl", hash = "sha256:3fdc5563cdc50555e6fba39322850860e9267c1b3d12c26a74729d8604c3c812"},
+    {file = "ruff-0.16.8-py3-none-manylinux_2_17_ppc64le.manylinux2014_ppc64le.whl", hash = "sha256:34508983c70665578dab88f5223d8e6228307e1135398ca8bfc8b7e9501e282b"},
+    {file = "ruff-0.16.8-py3-none-manylinux_2_17_s390x.manylinux2014_s390x.whl", hash = "sha256:644bb578569e0ffc575741232bd385dacdd6fbe123f1a729e7a225f54aa3957f"},
+    {file = "ruff-0.16.8-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:15e7d226246961db9235098333caa13063906d3851136b84c2900b82f5daa1df"},
+    {file = "ruff-0.16.8-py3-none-manylinux_2_31_riscv64.whl", hash = "sha256:a2bf6bc3e9ebdd4449abc6f06cf64b98051a2c61cf94d2fe9596518c881f1a1e"},
+    {file = "ruff-0.16.8-py3-none-musllinux_1_2_aarch64.whl", hash = "sha256:6ca111ba0849539165e9e59d2b442542f3c1e8060ebbdea82494f1ffbccb1e1f"},
+    {file = "ruff-0.16.8-py3-none-musllinux_1_2_armv7l.whl", hash = "sha256:359a1e5b495448ee1e91018064382ebc86f90e8aac2fed222c7d0e4e8df85fd2"},
+    {file = "ruff-0.16.8-py3-none-musllinux_1_2_i686.whl", hash = "sha256:59e8f5681349474110b24d62e93cfda6593f5fa3473446ca3705200cac1a08b9"},
+    {file = "ruff-0.16.8-py3-none-musllinux_1_2_x86_64.whl", hash = "sha256:efa3e7a16d1baaa79957888dfdf8be9ef2e44db81cb032af06d76632ab59e773"},
+    {file = "ruff-0.16.8-py3-none-win32.whl", hash = "sha256:55793ba85c69921e89be061426d91a78652d6e50317c962240922747a4eb713f"},
+    {file = "ruff-0.16.8-py3-none-win_amd64.whl", hash = "sha256:a6b85621fd3c81e31fc5f5add09c9c078b430db3595ca632efafdec9e64ebfaa"},
+    {file = "ruff-0.16.8-py3-none-win_arm64.whl", hash = "sha256:d075e820af612102ce217f07cc93e69f9490b10ec13ea85fa87bd03d996cef8a"},
+    {file = "ruff-0.16.8.tar.gz", hash = "sha256:9247bf92b5f04d825c8639a4fe423ec2e4222acd9222e58412b0dab7e442798b"},
 ]
 
 [[package]]
@@ -1751,14 +1751,14 @@ flake8 = ["flake8 (==5.0.4) ; python_version < \"3.9\"", "flake8 (==7.1.1) ; pyt
 
 [[package]]
 name = "selenium"
-version = "4.47.0"
+version = "4.49.0"
 description = "Official Python bindings for Selenium WebDriver"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "selenium-4.47.0-py3-none-any.whl", hash = "sha256:2eac6b8e7c017f57ecc40820383da8881a6fd7a90ea555c1b0af322f2344b347"},
-    {file = "selenium-4.47.0.tar.gz", hash = "sha256:4f6667c23080646e045fb91d2039687e88f549d667961f6ce85832b17384b68e"},
+    {file = "selenium-4.49.0-py3-none-any.whl", hash = "sha256:0d1de9ec6977aa2d5f766d923d5076fdffa91681a8d4ffc9e3381a36839a20f2"},
+    {file = "selenium-4.49.0.tar.gz", hash = "sha256:c9d91274e5f55835e12b524adf1f231739ea811a8866d810e5bb42ba87cd8eda"},
 ]
 
 [package.dependencies]
@@ -1771,14 +1771,14 @@ websocket-client = ">=1.8.0,<2.0"
 
 [[package]]
 name = "seleniumbase"
-version = "4.52.4"
+version = "4.54.10"
 description = "SeleniumBase is a framework for web crawling, scraping, and testing. Supports pytest. CDP Mode adds stealth. Includes many tools."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "seleniumbase-4.52.4-py3-none-any.whl", hash = "sha256:1cde15f47bd71deefe6d8ea6318a7864ebda1f970861c736211c830aa3f28d20"},
-    {file = "seleniumbase-4.52.4.tar.gz", hash = "sha256:93bc048d63634c416f0e9a9326950f8c4b753fecea16fb95dd72f17217e4f22b"},
+    {file = "seleniumbase-4.54.10-py3-none-any.whl", hash = "sha256:c999d573c0111a4f094e460ed23bbf9d729ee8aebfd542a4ff2aec9b7039c634"},
+    {file = "seleniumbase-4.54.10.tar.gz", hash = "sha256:9ee6d1b05afaf947edcbea6af75147c2a3e68b77cadaa63151f02111d9f35d05"},
 ]
 
 [package.dependencies]
@@ -1792,9 +1792,9 @@ cssselect = ">=1.5.0,<2"
 exceptiongroup = ">=1.3.1"
 execnet = "2.1.2"
 fasteners = ">=0.20"
-filelock = ">=3.32.4"
+filelock = ">=4.0.0"
 h11 = "0.16.0"
-idna = ">=3.19"
+idna = ">=3.20"
 iniconfig = "2.3.0"
 Jinja2 = ">=3.1.6"
 markdown-it-py = "4.2.0"
@@ -1806,9 +1806,9 @@ packaging = ">=26.3"
 parameterized = "0.9.0"
 parse = ">=1.22.1"
 parse-type = ">=0.6.6"
-pdbp = ">=1.8.2"
+pdbp = ">=1.8.3"
 pip = ">=26.2.1"
-platformdirs = ">=4.11.4"
+platformdirs = ">=4.11.10"
 pluggy = "1.6.0"
 psutil = ">=7.2.2"
 PyAutoGUI = {version = ">=0.9.54", markers = "platform_system == \"Linux\""}
@@ -1820,14 +1820,14 @@ pytest = {version = "9.1.1", markers = "python_version >= \"3.11\""}
 pytest-html = "4.0.2"
 pytest-metadata = "3.1.1"
 pytest-ordering = "0.6"
-pytest-rerunfailures = {version = "16.6", markers = "python_version >= \"3.11\""}
+pytest-rerunfailures = {version = "16.7", markers = "python_version >= \"3.11\""}
 pytest-xdist = "3.8.0"
 python-xlib = {version = "0.33", markers = "platform_system == \"Linux\""}
 pyyaml = ">=6.0.3"
 requests = ">=2.34.2,<2.35.0"
 rich = ">=15.0.0,<16"
 sbvirtualdisplay = ">=1.4.0"
-selenium = "4.47.0"
+selenium = "4.49.0"
 setuptools = ">=84.0.0"
 six = ">=1.17.0"
 sniffio = "1.3.1"
@@ -1837,25 +1837,25 @@ tabcompleter = ">=1.4.1"
 trio = ">=0.34.0,<1"
 trio-websocket = ">=0.12.2,<0.13.0"
 typing-extensions = ">=4.16.0"
-urllib3 = ">=2.7.0,<3"
-websocket-client = ">=1.9.0,<1.10.0"
+urllib3 = ">=2.8.0,<3"
+websocket-client = ">=1.9.2,<1.10.0"
 websockets = {version = ">=16.1.1", markers = "python_version >= \"3.11\""}
 wheel = ">=0.48.0"
 wsproto = ">=1.3.2,<1.4.0"
 
 [package.extras]
 allure = ["allure-behave (>=2.16.0)", "allure-pytest (>=2.16.0)", "allure-python-commons (>=2.16.0)"]
-coverage = ["coverage (>=7.15.4)", "pytest-cov (>=7.1.0)"]
+coverage = ["coverage (>=7.16.1)", "pytest-cov (>=7.1.0)"]
 flake8 = ["flake8 (==7.3.0)", "mccabe (==0.7.0)", "pycodestyle (==2.14.0)", "pyflakes (==3.4.0)"]
-mcp = ["mcp[cli] (>=2.0.0,<3.0.0)"]
+mcp = ["mcp[cli] (>=2.1.1,<3.0.0)"]
 mss = ["mss (==10.2.0)"]
-pdfminer = ["cffi (==2.1.1)", "cryptography (==50.0.0)", "pdfminer.six (==20260107)", "pycparser (==3.0)"]
+pdfminer = ["cffi (==2.1.1)", "cryptography (==50.0.1)", "pdfminer.six (==20260107)", "pycparser (==3.0)"]
 pillow = ["Pillow (>=12.3.0)"]
 pip-system-certs = ["pip-system-certs (>=4.0) ; platform_system == \"Windows\""]
-playwright = ["greenlet (>=3.5.5)", "playwright (>=1.62.0)", "pyee (>=13.0.1)"]
+playwright = ["greenlet (>=3.5.6)", "playwright (>=1.63.0)", "pyee (>=13.0.1)"]
 proxy = ["proxy.py (==2.4.3)"]
 pyautogui = ["PyAutoGUI (>=0.9.54) ; platform_system != \"Linux\""]
-uv = ["uv (>=0.12.5)"]
+uv = ["uv (>=0.12.15)"]
 
 [[package]]
 name = "setuptools"
@@ -2053,14 +2053,14 @@ typing-extensions = ">=4.15.0"
 
 [[package]]
 name = "urllib3"
-version = "2.7.0"
+version = "2.8.0"
 description = "HTTP library with thread-safe connection pooling, file post, and more."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "urllib3-2.7.0-py3-none-any.whl", hash = "sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897"},
-    {file = "urllib3-2.7.0.tar.gz", hash = "sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c"},
+    {file = "urllib3-2.8.0-py3-none-any.whl", hash = "sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3"},
+    {file = "urllib3-2.8.0.tar.gz", hash = "sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63"},
 ]
 
 [package.dependencies]
@@ -2284,14 +2284,14 @@ anyio = ">=3.0.0"
 
 [[package]]
 name = "websocket-client"
-version = "1.9.0"
+version = "1.9.2"
 description = "WebSocket client for Python with low level API options"
 optional = false
-python-versions = ">=3.9"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "websocket_client-1.9.0-py3-none-any.whl", hash = "sha256:af248a825037ef591efbf6ed20cc5faa03d3b47b9e5a2230a529eeee1c1fc3ef"},
-    {file = "websocket_client-1.9.0.tar.gz", hash = "sha256:9e813624b6eb619999a97dc7958469217c3176312b3a16a4bd1bc7e08a46ec98"},
+    {file = "websocket_client-1.9.2-py3-none-any.whl", hash = "sha256:e1a673830a9c7bfa47b1cd3d5e4178f4c9651d80a4eab02c9c23a1c3ec6250ce"},
+    {file = "websocket_client-1.9.2.tar.gz", hash = "sha256:0fcb57545848be86992e128218fd96dd87a6769ffdb1a968dff79632b85604d0"},
 ]
 
 [package.extras]
@@ -2450,4 +2450,4 @@ h11 = ">=0.16.0,<1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.12,<4.0"
-content-hash = "3d841699339e305c580b50c670966e745e2dcb0e3849a9da2dea4b03b59dcf73"
+content-hash = "647a5541188590c40611f7f536c58b7502fc86829f7391c5ad41edbe1c74dda0"

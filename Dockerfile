@@ -3,7 +3,7 @@
 
 # Use specific Python version
 ARG PYTHON_VERSION=3.12
-ARG NODE_VERSION=20
+ARG NODE_VERSION=24
 
 # Stage 1: Python Builder (ListSync + API)
 FROM python:${PYTHON_VERSION}-slim AS python-builder

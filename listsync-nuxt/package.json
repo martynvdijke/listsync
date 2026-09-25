@@ -23,9 +23,9 @@
     "@vueuse/nuxt": "^15.0.0",
     "date-fns": "^4.1.0",
     "lucide-vue-next": "^0.545.0",
-    "nuxt": "^3.15.1",
+    "nuxt": "^4.0.0",
     "vue": "^3.5.22",
-    "vue-router": "^5.0.0",
+    "vue-router": "^5.2.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

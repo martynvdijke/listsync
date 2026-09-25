@@ -24,11 +24,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
-        with:
-          platforms: linux/amd64,linux/arm64
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
@@ -65,12 +60,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push multi-arch image
+      - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -79,16 +74,13 @@ jobs:
           provenance: mode=max
           sbom: true
 
-      - name: Test multi-arch build
+      - name: Test build
         if: github.event_name == 'pull_request'
         run: |
           echo "Testing AMD64 build..."
           docker buildx build --platform linux/amd64 --load -t list-sync-test-amd64 .
           
-          echo "Testing ARM64 build..."
-          docker buildx build --platform linux/arm64 --load -t list-sync-test-arm64 .
-          
-          echo "✅ Multi-architecture builds completed successfully!"
+          echo "✅ Build completed successfully!"
 
       - name: Verify manifest
         if: github.event_name != 'pull_request'
@@ -97,5 +89,5 @@ jobs:
           docker buildx imagetools inspect ghcr.io/${{ steps.repo.outputs.owner }}/list-sync:main
           
           echo ""
-          echo "✅ Multi-architecture image published successfully!"
-          echo "AMD64 and ARM64 users can now pull and run the image."
+          echo "✅ Image published successfully!"
+          echo "AMD64 users can now pull and run the image."

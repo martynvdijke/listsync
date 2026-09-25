@@ -1,3 +1,10 @@
+## [1.3.5](https://github.com/martynvdijke/listsync/compare/v1.3.4...v1.3.5) (2026-09-17)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @vueuse/nuxt to v15 ([#18](https://github.com/martynvdijke/listsync/issues/18)) ([feb4857](https://github.com/martynvdijke/listsync/commit/feb4857856606003ff9edd5dfe83b049a5ee832f))
+
 ## [1.3.4](https://github.com/martynvdijke/listsync/compare/v1.3.3...v1.3.4) (2026-09-17)
 
 

@@ -316,3 +316,6 @@ pyrightconfig.json
 
 ### ListSync runtime data ###
 /data/
+
+# Zensical build output
+site/

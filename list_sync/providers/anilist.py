@@ -9,7 +9,7 @@ Supports:
 URL Format: https://anilist.co/user/{username}/animelist/{status}
             https://anilist.co/user/{username}/animelist
 
-The provider resolves anime titles to TMDB IDs via Trakt API for Seerr compatibility.
+The provider resolves anime titles to TMDB IDs via the TMDB API for Seerr compatibility.
 """
 
 import logging
@@ -18,8 +18,9 @@ from typing import Any
 
 import requests
 
+from list_sync.api import tmdb as tmdb_api
+
 from . import register_provider
-from .trakt import search_trakt_by_title
 
 # AniList GraphQL API endpoint
 ANILIST_GRAPHQL_URL = "https://graphql.anilist.co"
@@ -261,7 +262,7 @@ def extract_media_from_anilist_entry(entry: dict[str, Any]) -> dict[str, Any] | 
 @register_provider("anilist")
 def fetch_anilist_list(list_id: str) -> list[dict[str, Any]]:
     """
-    Fetch anime list from AniList and resolve to TMDB IDs via Trakt.
+    Fetch anime list from AniList and resolve to TMDB IDs via TMDB.
 
     This is the main entry point for the AniList provider, decorated with @register_provider.
 
@@ -303,25 +304,23 @@ def fetch_anilist_list(list_id: str) -> list[dict[str, Any]]:
         title = media["title"]
         year = media.get("year")
 
-        # Try to resolve TMDB ID via Trakt API
+        # Try to resolve TMDB ID via the TMDB search API
         # Try English title first, then Romaji if English fails
         tmdb_id = None
         imdb_id = None
 
         # Attempt 1: English title
         if media.get("title_english"):
-            trakt_result = search_trakt_by_title(media["title_english"], year, "tv")
-            if trakt_result and trakt_result.get("tmdb_id"):
-                tmdb_id = trakt_result["tmdb_id"]
-                imdb_id = trakt_result.get("imdb_id")
+            tmdb_result = tmdb_api.search_by_title(media["title_english"], year, "tv")
+            if tmdb_result and tmdb_result.get("tmdb_id"):
+                tmdb_id = tmdb_result["tmdb_id"]
                 logging.debug(f"  ✓ Resolved via English title: {title} -> TMDB {tmdb_id}")
 
         # Attempt 2: Romaji title (if English failed)
         if not tmdb_id and media.get("title_romaji") and media["title_romaji"] != media.get("title_english"):
-            trakt_result = search_trakt_by_title(media["title_romaji"], year, "tv")
-            if trakt_result and trakt_result.get("tmdb_id"):
-                tmdb_id = trakt_result["tmdb_id"]
-                imdb_id = trakt_result.get("imdb_id")
+            tmdb_result = tmdb_api.search_by_title(media["title_romaji"], year, "tv")
+            if tmdb_result and tmdb_result.get("tmdb_id"):
+                tmdb_id = tmdb_result["tmdb_id"]
                 logging.debug(f"  ✓ Resolved via Romaji title: {title} -> TMDB {tmdb_id}")
 
         # Add to results

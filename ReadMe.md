@@ -386,7 +386,7 @@ These special lists sync a configurable number of items (default: 20, can be set
 - ✅ **Dropped** - Dropped anime
 - ✅ **Custom Lists** - User-created custom lists
 
-**Note**: Anime titles are automatically resolved to TMDB IDs via Trakt API for Overseerr compatibility. Resolution works with both English and Romaji titles.
+**Note**: Anime titles are automatically resolved to TMDB IDs via the TMDB API for Overseerr compatibility. Resolution works with both English and Romaji titles.
 </details>
 
 <details>

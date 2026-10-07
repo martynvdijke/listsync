@@ -122,6 +122,7 @@ ignore = ["S101", "T201", "T203", "PLR0913", "PLR0915", "S603", "S607", "FBT002"
 "tests/test_sync_status.py" = ["ARG005", "E402", "FBT003", "INP001", "PTH100", "PTH118", "PTH120", "SLF001"]
 "tests/test_route_inventory.py" = ["ARG005", "E402", "FBT003", "INP001", "PTH100", "PTH118", "PTH120"]
 "tests/test_sync_reporting.py" = ["ARG001", "ARG005", "E402", "E501", "FBT003", "INP001", "PTH100", "PTH118", "PTH120", "SLF001"]
+"tests/test_tmdb_lookup.py" = ["ARG001", "ARG005", "E402", "EM101", "FBT003", "INP001", "PTH100", "PTH120", "TRY003"]
 "tests/test_tmdb_resolve.py" = ["ARG001", "ARG005", "E402", "EM101", "FBT003", "INP001", "PTH100", "PTH120", "TRY003"]
 "tests/test_url_safety.py" = ["ARG001", "C408", "E402", "FBT003", "INP001", "PTH100", "PTH120"]
 

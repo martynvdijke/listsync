@@ -126,7 +126,7 @@ fake_get.response = R(200, MOVIE)
 check("rejects non-imdb id", tmdb.resolve_imdb_id("12345", "movie"), None)
 check("rejects empty", tmdb.resolve_imdb_id("", "movie"), None)
 
-# --- no api key configured: must be a clean no-op so Trakt still runs ---
+# --- no api key configured: must be a clean no-op so the title search still runs ---
 cfg.get_tmdb_api_key = lambda: None
 check("no key -> unavailable", tmdb.is_available(), False)
 check("no key -> None", tmdb.resolve_imdb_id("tt0111161", "movie"), None)

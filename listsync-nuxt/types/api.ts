@@ -413,7 +413,7 @@ export interface paths {
         };
         /**
          * Get Collection Poster
-         * @description Get poster URL for collection (uses most voted movie's poster from Trakt)
+         * @description Get poster URL for collection (uses most voted movie's poster from TMDB)
          */
         get: operations["get_collection_poster_api_collections__franchise_name__poster_get"];
         put?: never;
@@ -605,7 +605,7 @@ export interface paths {
         };
         /**
          * Get Enriched Items
-         * @description Get synced items enriched with Trakt metadata (poster, rating, etc.)
+         * @description Get synced items enriched with TMDB metadata (poster, rating, etc.)
          */
         get: operations["get_enriched_items_api_items_enriched_get"];
         put?: never;

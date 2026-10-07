@@ -389,11 +389,11 @@ async def get_enriched_items(
     limit: int = Query(50, ge=1, le=100),
     list_source: str = Query("", description="Filter by list source in format 'list_type:list_id'"),
 ):
-    """Get synced items enriched with Trakt metadata (poster, rating, etc.)"""
+    """Get synced items enriched with TMDB metadata (poster, rating, etc.)"""
     try:
         import time
 
-        from list_sync.providers.trakt import get_trakt_metadata
+        from list_sync.api.tmdb import get_metadata as get_tmdb_metadata
 
         # Debug: Check item_lists table
         try:
@@ -578,7 +578,7 @@ async def get_enriched_items(
 
             # Fetch from API if not in cache or cache expired
             try:
-                metadata = get_trakt_metadata(
+                metadata = get_tmdb_metadata(
                     tmdb_id=tmdb_id,
                     imdb_id=imdb_id,
                     media_type=media_type,

@@ -275,12 +275,12 @@ async def get_collection_movies(franchise_name: str):
 
 @router.get("/api/collections/{franchise_name}/poster", responses=response(CollectionPosterResponse))
 async def get_collection_poster(franchise_name: str):
-    """Get poster URL for collection (uses most voted movie's poster from Trakt)"""
+    """Get poster URL for collection (uses most voted movie's poster from TMDB)"""
     try:
         from urllib.parse import unquote
 
+        from list_sync.api.tmdb import get_metadata as get_tmdb_metadata
         from list_sync.providers.collections import get_collection_by_name, get_oldest_movie_id
-        from list_sync.providers.trakt import get_trakt_metadata
 
         # URL decode the franchise name
         decoded_name = unquote(franchise_name)
@@ -296,8 +296,8 @@ async def get_collection_poster(franchise_name: str):
         if not oldest_movie_id:
             return {"poster_url": None}
 
-        # Fetch poster from Trakt
-        metadata = get_trakt_metadata(tmdb_id=oldest_movie_id, media_type="movie")
+        # Fetch poster from TMDB
+        metadata = get_tmdb_metadata(tmdb_id=oldest_movie_id, media_type="movie")
 
         poster_url = metadata.get("poster_url") if metadata else None
 
@@ -319,8 +319,8 @@ async def get_collection_posters_batch(request: Request):
         import asyncio
         from urllib.parse import unquote
 
+        from list_sync.api.tmdb import get_metadata as get_tmdb_metadata
         from list_sync.providers.collections import get_collection_by_name, get_oldest_movie_id
-        from list_sync.providers.trakt import get_trakt_metadata
 
         body = await request.json()
         franchise_names = body.get("franchise_names", [])
@@ -353,11 +353,11 @@ async def get_collection_posters_batch(request: Request):
                         "movie_id": None,
                     }
 
-                # Fetch poster from Trakt (run in thread pool to avoid blocking)
+                # Fetch poster from TMDB (run in thread pool to avoid blocking)
                 loop = asyncio.get_event_loop()
                 metadata = await loop.run_in_executor(
                     None,
-                    lambda: get_trakt_metadata(tmdb_id=oldest_movie_id, media_type="movie"),
+                    lambda: get_tmdb_metadata(tmdb_id=oldest_movie_id, media_type="movie"),
                 )
 
                 poster_url = metadata.get("poster_url") if metadata else None

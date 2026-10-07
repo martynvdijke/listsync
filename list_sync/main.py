@@ -602,9 +602,9 @@ def process_media_item(
     Process a single media item for sync to Seerr using smart ID-based matching.
 
     Workflow:
-    1. Try direct TMDB ID lookup (if available)
-    2. Try IMDB ID → Trakt → TMDB ID (if IMDB ID available)
-    3. Try Title/Year → Trakt → TMDB ID
+    1. Direct TMDB ID lookup (if available)
+    2. IMDb ID → TMDB /find (if IMDb ID available)
+    3. Title/Year → TMDB search
     4. Fallback to Seerr title search (less reliable)
 
     Args:
@@ -687,9 +687,6 @@ def process_media_item(
         return result
 
     try:
-        # Import Trakt search functions
-        from .providers.trakt import search_trakt_by_imdb_id, search_trakt_by_title
-
         search_result = None
         match_method = None
 
@@ -730,59 +727,24 @@ def process_media_item(
             else:
                 logging.info(f"⚠️  TMDB could not resolve IMDB ID {imdb_id}")
 
-        # METHOD 3: IMDB ID → Trakt → TMDB ID
-        if not search_result and imdb_id:
-            logging.info(f"🔍 METHOD 3: IMDB ID → Trakt → TMDB ID (IMDB: {imdb_id})")
-            trakt_result = search_trakt_by_imdb_id(imdb_id)
-            if trakt_result and trakt_result.get("tmdb_id"):
-                resolved_tmdb_id = trakt_result["tmdb_id"]
-                # Ensure it's an integer
-                try:
-                    resolved_tmdb_id = int(resolved_tmdb_id)
-                except (ValueError, TypeError):
-                    logging.warning(f"Invalid resolved TMDB ID format: {resolved_tmdb_id}")
-                    resolved_tmdb_id = None
-
-                if resolved_tmdb_id:
-                    logging.info(f"✅ Trakt resolved IMDB {imdb_id} → TMDB {resolved_tmdb_id}")
-                    search_result = seerr_client.get_media_by_tmdb_id(resolved_tmdb_id, media_type)
-                if search_result:
-                    match_method = "IMDB_TO_TMDB"
-                    logging.info("✅ SUCCESS: IMDB→Trakt→TMDB chain")
-                    # Update tmdb_id for database storage
-                    tmdb_id = resolved_tmdb_id
-            else:
-                logging.info(f"⚠️  WARNING: Trakt could not resolve IMDB ID {imdb_id} to TMDB ID")
-
-        # METHOD 4: Title/Year → Trakt → TMDB ID
-        if not search_result:
-            logging.info("🔍 METHOD 4: Title/Year → Trakt → TMDB ID")
-            trakt_result = search_trakt_by_title(search_title, year, media_type)
-            if trakt_result and trakt_result.get("tmdb_id"):
-                resolved_tmdb_id = trakt_result["tmdb_id"]
-                # Ensure it's an integer
-                try:
-                    resolved_tmdb_id = int(resolved_tmdb_id)
-                except (ValueError, TypeError):
-                    logging.warning(f"Invalid resolved TMDB ID format: {resolved_tmdb_id}")
-                    resolved_tmdb_id = None
-
-                if resolved_tmdb_id:
-                    logging.info(f"✅ Trakt resolved '{search_title}' ({year}) → TMDB {resolved_tmdb_id}")
-                    search_result = seerr_client.get_media_by_tmdb_id(resolved_tmdb_id, media_type)
+        # METHOD 3: Title/Year → TMDB search
+        if not search_result and tmdb_api.is_available():
+            logging.info("🔍 METHOD 3: Title/Year → TMDB search")
+            tmdb_match = tmdb_api.search_by_title(search_title, year, media_type)
+            if tmdb_match:
+                resolved_tmdb_id = tmdb_match["tmdb_id"]
+                logging.info(f"✅ TMDB resolved '{search_title}' ({year}) → TMDB {resolved_tmdb_id}")
+                search_result = seerr_client.get_media_by_tmdb_id(resolved_tmdb_id, media_type)
                 if search_result:
                     match_method = "TITLE_TO_TMDB"
-                    logging.info("✅ SUCCESS: Title→Trakt→TMDB chain")
-                    # Update IDs for database storage
+                    logging.info("✅ SUCCESS: Title→TMDB search")
                     tmdb_id = resolved_tmdb_id
-                    if trakt_result.get("imdb_id") and not imdb_id:
-                        imdb_id = trakt_result["imdb_id"]
             else:
-                logging.info(f"⚠️  Trakt could not find TMDB ID for '{search_title}' ({year})")
+                logging.info(f"⚠️  TMDB could not find TMDB ID for '{search_title}' ({year})")
 
-        # METHOD 5: Fallback to Seerr title search (least reliable)
+        # METHOD 4: Fallback to Seerr title search (least reliable)
         if not search_result:
-            logging.warning("⚠️  METHOD 5: Falling back to Seerr title search (less reliable)")
+            logging.warning("⚠️  METHOD 4: Falling back to Seerr title search (less reliable)")
             search_result = seerr_client.search_media(
                 search_title,  # Use cleaned title for search
                 media_type,

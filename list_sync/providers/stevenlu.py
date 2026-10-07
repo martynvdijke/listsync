@@ -50,10 +50,11 @@ def fetch_stevenlu_list(list_id=None) -> list[dict[str, Any]]:
         movies_data = response.json()
         logging.info(f"Found {len(movies_data)} movies in Steven Lu's list")
 
-        # Import Trakt search function for enrichment
-        from .trakt import search_trakt_by_imdb_id
+        # Enrich missing years via TMDB. The StevenLu payload carries a TMDB
+        # (and IMDb) ID but no release year, so one details lookup fills it in.
+        from list_sync.api import tmdb as tmdb_api
 
-        logging.info("Enriching items with year data from Trakt API...")
+        logging.info("Enriching items with year data from TMDB API...")
         items_enriched = 0
 
         for idx, movie in enumerate(movies_data):
@@ -66,16 +67,15 @@ def fetch_stevenlu_list(list_id=None) -> list[dict[str, Any]]:
                     logging.warning(f"Skipping movie with empty title: {movie}")
                     continue
 
-                # Enrich with year data from Trakt if imdb_id is available
+                # Enrich with year data from TMDB when any ID is available
                 year = None
-                if imdb_id:
+                if tmdb_api.is_available() and (tmdb_id or imdb_id):
                     try:
-                        trakt_result = search_trakt_by_imdb_id(imdb_id)
-                        if trakt_result and trakt_result.get("year"):
-                            year = trakt_result["year"]
+                        year = tmdb_api.get_year(tmdb_id=tmdb_id, imdb_id=imdb_id, media_type="movie")
+                        if year:
                             items_enriched += 1
                     except Exception as e:
-                        logging.debug(f"Could not enrich '{title}' (IMDB: {imdb_id}) with Trakt: {e}")
+                        logging.debug(f"Could not enrich '{title}' (TMDB: {tmdb_id}, IMDB: {imdb_id}) with year: {e}")
 
                 # All items from this source are movies
                 media_items.append(
@@ -103,7 +103,7 @@ def fetch_stevenlu_list(list_id=None) -> list[dict[str, Any]]:
                 continue
 
         logging.info(f"Steven Lu list fetched successfully. Found {len(media_items)} movies.")
-        logging.info(f"Successfully enriched {items_enriched}/{len(media_items)} items with year data from Trakt API")
+        logging.info(f"Successfully enriched {items_enriched}/{len(media_items)} items with year data from TMDB API")
         return media_items
 
     except Exception as e:

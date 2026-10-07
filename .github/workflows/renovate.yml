@@ -15,6 +15,11 @@ jobs:
 
       - name: Self-hosted Renovate
         uses: renovatebot/github-action@c314dda4a9a93b08239ec978f2043b9a433b9ac4 # v46.3.0
+        env:
+          # The action forwards RENOVATE_* env to the CLI. Supplying the repo
+          # here keeps it out of renovate.json, where "repositories" is a
+          # global-only option and triggers a config warning.
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
         with:
           configurationFile: renovate.json
           token: ${{ secrets.RENOVATE_TOKEN }}

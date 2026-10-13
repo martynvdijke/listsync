@@ -1,3 +1,11 @@
+## [1.3.6](https://github.com/martynvdijke/listsync/compare/v1.3.5...v1.3.6) (2026-10-13)
+
+
+### Bug Fixes
+
+* **ci:** sync package-lock.json with lucide-vue-next bump ([334c0c1](https://github.com/martynvdijke/listsync/commit/334c0c10831d826c3d5c2a5ab4b61c66a5424a3d))
+* **deps:** update all non-major dependencies ([a64267e](https://github.com/martynvdijke/listsync/commit/a64267e7ededca0284367b3af53c45997afac4fd))
+
 ## [1.3.5](https://github.com/martynvdijke/listsync/compare/v1.3.4...v1.3.5) (2026-09-17)
 
 

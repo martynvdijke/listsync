@@ -166,7 +166,7 @@ check("query_sync_items joins source list", joined["source_list_type"], "imdb")
 
 sessions = db.get_sync_sessions()
 check("get_sync_sessions total", sessions["total"], 2)
-session = sessions["sessions"][0]
+session = next(s for s in sessions["sessions"] if s["id"] == "sess_full")
 check_true(
     "get_sync_sessions to_dict shape",
     {

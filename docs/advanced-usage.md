@@ -285,7 +285,7 @@ automation:
         entity_id: input_select.movie_interest
     action:
       - service: shell_command.trigger_listsync
-      - service: notify.discord
+      - service: notify.gotify
         data:
           message: "Triggered ListSync due to new movie interest"
 ```

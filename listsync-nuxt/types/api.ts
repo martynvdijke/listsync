@@ -931,7 +931,7 @@ export interface paths {
         put?: never;
         /**
          * Test Notification
-         * @description Send a test notification to verify webhook configuration (Discord or Gotify)
+         * @description Send a test notification to verify the Gotify configuration
          */
         post: operations["test_notification_api_notifications_test_post"];
         delete?: never;
@@ -1219,8 +1219,6 @@ export interface paths {
          *         - sync_interval: int
          *         - auto_sync: bool
          *         - timezone: str
-         *         - discord_webhook: str (optional)
-         *         - discord_enabled: bool
          *         - gotify_url: str (optional)
          *         - gotify_token: str (optional)
          *         - gotify_enabled: bool (optional)

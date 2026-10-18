@@ -8,7 +8,6 @@ cloud metadata endpoints the caller could never reach directly.
 
 Policy differs by sink, so the caller says what it needs:
 
-  * a Discord webhook only ever lives on Discord, so pass allowed_hosts
   * poster images only ever come from public CDNs, so private addresses are
     rejected outright
   * Seerr legitimately runs on a private address, so private is allowed
@@ -48,17 +47,6 @@ _METADATA_HOSTNAMES = frozenset(
 )
 
 _ALLOWED_SCHEMES = frozenset({"http", "https"})
-
-# Discord's webhook hosts. Anything else claiming to be a Discord webhook
-# isn't one.
-DISCORD_WEBHOOK_HOSTS = frozenset(
-    {
-        "discord.com",
-        "discordapp.com",
-        "ptb.discord.com",
-        "canary.discord.com",
-    }
-)
 
 
 def _address_is_private(ip: ipaddress._BaseAddress) -> bool:

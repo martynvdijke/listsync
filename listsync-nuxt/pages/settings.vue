@@ -100,7 +100,6 @@
           <!-- Notification Settings -->
           <NotificationSettings
             v-model="settings.notifications"
-            @test-discord="testDiscordNotification"
             @test-gotify="testGotifyNotification"
           />
         </div>
@@ -192,7 +191,7 @@ const tabs = [
     id: 'integrations',
     label: 'Integrations',
     icon: BellIcon,
-    description: 'Discord and Gotify notifications',
+    description: 'Gotify notifications',
   },
   {
     id: 'users',
@@ -237,8 +236,6 @@ const settings = ref({
     timezone: 'UTC',
   },
   notifications: {
-    discordWebhook: '',
-    discordEnabled: false,
     gotifyUrl: '',
     gotifyToken: '',
     gotifyEnabled: false,
@@ -292,8 +289,6 @@ const loadSettings = async () => {
       }
       
       settings.value.notifications = {
-        discordWebhook: config.discord_webhook || '',
-        discordEnabled: config.discord_enabled || false,
         gotifyUrl: config.gotify_url || '',
         gotifyToken: config.gotify_token || '',
         gotifyEnabled: config.gotify_enabled || false,
@@ -344,8 +339,6 @@ const handleSave = async () => {
       timezone: settings.value.sync.timezone,
       
       // Notifications
-      discord_webhook: settings.value.notifications.discordWebhook,
-      discord_enabled: settings.value.notifications.discordEnabled,
       gotify_url: settings.value.notifications.gotifyUrl,
       gotify_token: settings.value.notifications.gotifyToken,
       gotify_enabled: settings.value.notifications.gotifyEnabled,
@@ -385,22 +378,6 @@ const testOverseerrConnection = async () => {
     }
   } catch (error: any) {
     showError('Connection Failed', error.message)
-  }
-}
-
-// Test Discord notification
-const testDiscordNotification = async () => {
-  try {
-    if (!settings.value.notifications.discordWebhook || !settings.value.notifications.discordWebhook.trim()) {
-      showError('Webhook URL Required', 'Please enter a Discord webhook URL before testing')
-      return
-    }
-    showInfo('Sending Test', 'Sending test notification...')
-    const api = useApiService()
-    await api.testDiscordNotification(settings.value.notifications.discordWebhook)
-    showSuccess('Test Sent', 'Check your Discord channel for the test notification')
-  } catch (error: any) {
-    showError('Test Failed', error.message || 'Unable to send test notification')
   }
 }
 

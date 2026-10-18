@@ -41,7 +41,7 @@ for DNS.
 | `test_startup` | recovery from a slow Seerr, interactivity detection, clean exit |
 | `test_url_safety` | SSRF validator: schemes, private ranges, metadata, DNS evasion, allowlists |
 | `test_ssrf_endpoints` | the guards rejecting at the HTTP layer, with a sentinel asserting nothing escapes |
-| `test_settings_validation` | settings writes rejecting what the wizard rejects, masked values round-tripping, the Discord sink |
+| `test_settings_validation` | settings writes rejecting what the wizard rejects, masked values round-tripping, the Gotify sink |
 | `test_config_encryption` | `config.enc` salt and key derivation, and files from before it still opening |
 | `test_image_sniff` | image type detection, cross-checked against `imghdr` where it still exists |
 

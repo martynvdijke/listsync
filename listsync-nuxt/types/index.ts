@@ -128,7 +128,6 @@ export interface Config {
   syncInterval: number
   automatedMode: boolean
   overseerr4K: boolean
-  discordWebhookUrl?: string
   gotifyUrl?: string
   gotifyToken?: string
   gotifyEnabled?: boolean
@@ -153,7 +152,6 @@ export interface UpdateConfigRequest {
   syncInterval?: number
   automatedMode?: boolean
   overseerr4K?: boolean
-  discordWebhookUrl?: string
   gotifyUrl?: string
   gotifyToken?: string
   gotifyEnabled?: boolean

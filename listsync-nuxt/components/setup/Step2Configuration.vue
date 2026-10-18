@@ -6,7 +6,7 @@
         Configure Your Settings
       </h2>
       <p class="text-xs sm:text-sm text-muted-foreground max-w-xl mx-auto">
-        Set up Trakt integration, sync schedule, and optional Discord notifications.
+        Set up Trakt integration, sync schedule, and optional Gotify notifications.
       </p>
     </div>
 
@@ -124,63 +124,6 @@
             ]"
           />
         </button>
-      </div>
-    </div>
-
-    <!-- Discord Notifications (Optional) -->
-    <div class="p-3 sm:p-4 rounded-lg bg-gradient-to-br from-purple-600/20 to-purple-500/10 border border-purple-500/25 space-y-2.5 sm:space-y-3">
-      <div class="flex items-center justify-between mb-1">
-        <div class="flex items-center gap-2">
-          <component :is="BellIcon" :size="16" class="text-purple-400" />
-          <span class="text-xs font-bold text-purple-300 uppercase tracking-wide">Discord (Optional)</span>
-        </div>
-        <button
-          type="button"
-          class="touch-manipulation"
-          :class="[
-            'relative inline-flex h-6 w-11 items-center rounded-full transition-colors',
-            localValue.discord_enabled ? 'bg-green-500' : 'bg-purple-500/20'
-          ]"
-          @click="localValue.discord_enabled = !localValue.discord_enabled"
-        >
-          <span
-            :class="[
-              'inline-block h-5 w-5 transform rounded-full bg-white transition-transform',
-              localValue.discord_enabled ? 'translate-x-5' : 'translate-x-0.5'
-            ]"
-          />
-        </button>
-      </div>
-      
-      <div v-if="localValue.discord_enabled">
-        <div class="flex items-center gap-1.5 mb-2">
-          <label class="text-xs font-semibold text-foreground">
-            Webhook URL
-            <span class="text-red-400 ml-1">*</span>
-          </label>
-          <Tooltip content="Your Discord webhook URL. Create a webhook in your Discord server settings to get notifications about syncs.">
-            <HelpCircleIcon :size="14" class="text-purple-400/60 hover:text-purple-400 cursor-help transition-colors" />
-          </Tooltip>
-        </div>
-        <Input
-          v-model="localValue.discord_webhook"
-          type="url"
-          placeholder="https://discord.com/api/webhooks/..."
-          :icon="MessageSquareIcon"
-          :disabled="isValidating || isTesting"
-        />
-        <p v-if="errors.discord_webhook" class="text-xs text-red-400 mt-2 flex items-center gap-1.5 animate-fade-in">
-          <component :is="AlertCircleIcon" :size="14" />
-          {{ errors.discord_webhook }}
-        </p>
-        <p v-else-if="isTesting" class="text-xs text-purple-400 mt-2 flex items-center gap-1.5">
-          <span class="w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-          Validating webhook...
-        </p>
-        <p v-else-if="discordValidated" class="text-xs text-green-400 mt-2 flex items-center gap-1.5 animate-fade-in">
-          <component :is="CheckCircleIcon" :size="14" />
-          <span class="font-medium">Webhook validated successfully</span>
-        </p>
       </div>
     </div>
 
@@ -308,8 +251,6 @@
 <script setup lang="ts">
 import {
   Clock as ClockIcon,
-  Bell as BellIcon,
-  MessageSquare as MessageSquareIcon,
   Film as FilmIcon,
   Key as KeyIcon,
   CheckCircle as CheckCircleIcon,
@@ -325,8 +266,6 @@ interface Props {
     sync_interval: number
     auto_sync: boolean
     timezone: string
-    discord_webhook: string
-    discord_enabled: boolean
     gotify_url: string
     gotify_token: string
     gotify_enabled: boolean
@@ -350,17 +289,10 @@ const localValue = computed({
 const isTesting = ref(false)
 const isTestingTrakt = ref(false)
 const isTestingGotify = ref(false)
-const discordValidated = ref(false)
 const traktValidated = ref(false)
 const gotifyValidated = ref(false)
 
 // Reset validation state when values change
-watch(() => localValue.value.discord_webhook, () => {
-  discordValidated.value = false
-})
-watch(() => localValue.value.discord_enabled, () => {
-  discordValidated.value = false
-})
 watch(() => localValue.value.gotify_url, () => {
   gotifyValidated.value = false
 })
@@ -408,11 +340,6 @@ const canProceed = computed(() => {
     return false
   }
   
-  // If Discord is enabled, webhook must be provided
-  if (localValue.value.discord_enabled && !localValue.value.discord_webhook?.trim()) {
-    return false
-  }
-
   // If Gotify is enabled, url+token must be provided
   if (localValue.value.gotify_enabled && (!localValue.value.gotify_url?.trim() || !localValue.value.gotify_token?.trim())) {
     return false
@@ -450,26 +377,6 @@ const testTrakt = async () => {
   }
 }
 
-// Test Discord webhook
-const testDiscord = async () => {
-  if (!localValue.value.discord_webhook) return
-  
-  isTesting.value = true
-  discordValidated.value = false
-  
-  try {
-    await api.testDiscordWebhook(localValue.value.discord_webhook)
-    discordValidated.value = true
-    return true
-  } catch (error: any) {
-    discordValidated.value = false
-    showError('Discord Webhook Failed', error.message || 'Failed to send test message')
-    return false
-  } finally {
-    isTesting.value = false
-  }
-}
-
 // Test Gotify
 const testGotify = async () => {
   if (!localValue.value.gotify_url?.trim() || !localValue.value.gotify_token?.trim()) return false
@@ -490,7 +397,7 @@ const testGotify = async () => {
   }
 }
 
-// Handle next button click - always validate Trakt and Discord/Gotify if enabled
+// Handle next button click - always validate Trakt and Gotify if enabled
 const handleNext = async () => {
   // Always validate Trakt Client ID
   const traktResult = await testTrakt()
@@ -498,16 +405,6 @@ const handleNext = async () => {
   // If Trakt validation failed, don't proceed
   if (!traktResult) {
     return
-  }
-  
-  // If Discord is enabled, always validate webhook
-  if (localValue.value.discord_enabled && localValue.value.discord_webhook?.trim()) {
-    const discordResult = await testDiscord()
-    
-    // If validation failed, don't proceed
-    if (!discordResult) {
-      return
-    }
   }
 
   // If Gotify is enabled, always validate
@@ -519,9 +416,8 @@ const handleNext = async () => {
   }
   
   // Only proceed if validation passes
-  const discordOk = !localValue.value.discord_enabled || discordValidated.value
   const gotifyOk = !localValue.value.gotify_enabled || gotifyValidated.value
-  if (canProceed.value && traktValidated.value && discordOk && gotifyOk) {
+  if (canProceed.value && traktValidated.value && gotifyOk) {
     emit('next')
   }
 }

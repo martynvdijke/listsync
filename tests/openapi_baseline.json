@@ -2056,7 +2056,7 @@
     },
     "/api/notifications/test": {
       "post": {
-        "description": "Send a test notification to verify webhook configuration (Discord or Gotify)",
+        "description": "Send a test notification to verify the Gotify configuration",
         "operationId": "test_notification_api_notifications_test_post",
         "requestBody": {
           "content": {
@@ -2562,7 +2562,7 @@
     },
     "/api/setup/step2/configuration": {
       "post": {
-        "description": "Save and validate Step 2: Configuration (Trakt + Sync settings + Notifications).\n\nExpected data:\n    - trakt_client_id: str\n    - sync_interval: int\n    - auto_sync: bool\n    - timezone: str\n    - discord_webhook: str (optional)\n    - discord_enabled: bool\n    - gotify_url: str (optional)\n    - gotify_token: str (optional)\n    - gotify_enabled: bool (optional)",
+        "description": "Save and validate Step 2: Configuration (Trakt + Sync settings + Notifications).\n\nExpected data:\n    - trakt_client_id: str\n    - sync_interval: int\n    - auto_sync: bool\n    - timezone: str\n    - gotify_url: str (optional)\n    - gotify_token: str (optional)\n    - gotify_enabled: bool (optional)",
         "operationId": "save_step2_configuration_api_setup_step2_configuration_post",
         "requestBody": {
           "content": {

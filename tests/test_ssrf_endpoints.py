@@ -81,17 +81,15 @@ for target, name in [
     check(f"proxy blocks {name}", r.status_code, 400)
 
 print()
-print("=== discord webhook test: issue #79 ===")
-for body, name, want in [
-    ({"webhook_url": "http://attacker-controlled-domain/"}, "issue #79 PoC", 400),
-    ({"webhook_url": "http://169.254.169.254/"}, "metadata", 400),
-    ({"webhook_url": "http://127.0.0.1:5055/"}, "loopback", 400),
-    ({"webhook_url": "https://notdiscord.com/api/webhooks/1/x"}, "lookalike host", 400),
-    ({"webhook_url": "https://discord.com.evil.example/x"}, "suffix trick", 400),
-    ({"webhook_url": "file:///etc/passwd"}, "file scheme", 400),
-]:
-    r = client.post("/api/notifications/test", json=body)
-    check(f"discord blocks {name}", r.status_code, want)
+print("=== notification test: only Gotify is supported ===")
+# The endpoint is Gotify-only now; anything else is refused before any request
+# is built, so it cannot be turned into a request proxy for another service.
+r = client.post("/api/notifications/test", json={"service": "unknown"})
+check("unknown service refused", r.status_code, 400)
+check("  and names the service", r.json().get("detail"), "Unsupported notification service: unknown")
+r = client.post("/api/notifications/test", json={})
+check("gotify without a url refused", r.status_code, 400)
+check("  and says the url is required", "URL is required" in r.json().get("detail", ""), True)
 
 print()
 print("=== seerr connection test ===")

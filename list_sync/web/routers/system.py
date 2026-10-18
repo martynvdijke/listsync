@@ -772,8 +772,6 @@ async def save_step2_configuration(data: dict):
         - sync_interval: int
         - auto_sync: bool
         - timezone: str
-        - discord_webhook: str (optional)
-        - discord_enabled: bool
         - gotify_url: str (optional)
         - gotify_token: str (optional)
         - gotify_enabled: bool (optional)
@@ -896,21 +894,6 @@ async def save_step2_configuration(data: dict):
         except Exception as e:
             errors["timezone"] = f"Invalid timezone: {e!s}"
 
-        # Validate Discord webhook if provided
-        discord_webhook = data.get("discord_webhook", "").strip()
-        discord_enabled = data.get("discord_enabled", False)
-
-        # Checked whenever a webhook is supplied, not only when notifications are
-        # switched on. The save below stores it either way, and switching Discord
-        # on later is a separate request that carries no URL to check - so a
-        # webhook saved while disabled would never be validated at all.
-        if discord_webhook:
-            from list_sync.utils.settings_validation import validate_discord_webhook
-
-            webhook_error = validate_discord_webhook(discord_webhook)
-            if webhook_error:
-                errors["discord_webhook"] = webhook_error
-
         # Validate Gotify URL if provided
         gotify_url = data.get("gotify_url", "").strip()
         gotify_token = data.get("gotify_token", "").strip()
@@ -940,12 +923,8 @@ async def save_step2_configuration(data: dict):
         config.save_setting("auto_sync", data.get("auto_sync", True))
         config.save_setting("timezone", timezone)
 
-        if discord_webhook:
-            config.save_setting("discord_webhook", discord_webhook)
-            config.save_setting("discord_enabled", discord_enabled)
-
-        # Persist Gotify settings only when a URL is supplied, mirroring the
-        # Discord pattern above — no URL means nothing to store.
+        # Persist Gotify settings only when a URL is supplied — no URL means
+        # nothing to store.
         if gotify_url:
             config.save_setting("gotify_url", gotify_url)
             config.save_setting("gotify_token", gotify_token)

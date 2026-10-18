@@ -12,7 +12,7 @@
     ["Update Status", "storage", "Mark as existing"],
     ["Record Result", "storage", "Save sync outcome"],
     ["More Items?", "security", "Loop check"],
-    ["Send Notifications", "email", "Discord webhook alert"],
+    ["Send Notifications", "email", "Gotify push alert"],
     ["Update Database", "storage", "Persist changes"],
     ["Sync Complete", "monitor", "Operation finished"]
   ],

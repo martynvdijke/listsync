@@ -47,11 +47,6 @@ async def get_settings():
 
         timezone = get_setting_safe("timezone", "UTC")
 
-        discord_webhook = get_setting_safe("discord_webhook", "", mask=True)
-        discord_enabled = get_setting_safe("discord_enabled", False)
-        if isinstance(discord_enabled, str):
-            discord_enabled = discord_enabled.lower() in ("true", "1", "yes")
-
         gotify_url = get_setting_safe("gotify_url", "")
         gotify_token = get_setting_safe("gotify_token", "", mask=True)
         gotify_enabled = get_setting_safe("gotify_enabled", False)
@@ -92,8 +87,6 @@ async def get_settings():
             "auto_sync": automated_mode,
             "timezone": timezone,
             # Notifications
-            "discord_webhook": discord_webhook,
-            "discord_enabled": bool(discord_webhook),
             "gotify_url": gotify_url or "",
             "gotify_token": gotify_token or "",
             "gotify_enabled": bool(gotify_url),
@@ -130,8 +123,6 @@ async def get_settings():
             "auto_sync": True,
             "timezone": "UTC",
             # Notifications
-            "discord_webhook": "",
-            "discord_enabled": False,
             "gotify_url": "",
             "gotify_token": "",
             "gotify_enabled": False,
@@ -224,10 +215,10 @@ async def update_settings(settings: dict):
 
 @router.post("/api/notifications/test")
 async def test_notification(payload: dict = None):
-    """Send a test notification to verify webhook configuration (Discord or Gotify)"""
+    """Send a test notification to verify the Gotify configuration"""
     try:
         payload = payload or {}
-        service = str(payload.get("service") or "discord").lower()
+        service = str(payload.get("service") or "gotify").lower()
 
         if service == "gotify":
             url = (payload.get("url") or os.getenv("GOTIFY_URL", "")).strip()
@@ -282,123 +273,7 @@ async def test_notification(payload: dict = None):
                     error_msg += f" (Status: {e.response.status_code})"
                 raise HTTPException(status_code=500, detail=error_msg)
 
-        # Get Discord webhook URL from request body or environment
-        webhook_url = None
-        if payload and "webhook_url" in payload:
-            webhook_url = payload["webhook_url"]
-
-        if not webhook_url:
-            webhook_url = os.getenv("DISCORD_WEBHOOK_URL", "")
-
-        if not webhook_url:
-            raise HTTPException(
-                status_code=400,
-                detail="Discord webhook URL is required. Please provide a webhook URL or set DISCORD_WEBHOOK_URL in your environment variables.",
-            )
-
-        # The URL arrives from the caller and the server then requests it, so
-        # anything other than a real Discord webhook host turns this endpoint
-        # into an open request proxy. Discord webhooks only live on Discord.
-        from list_sync.utils.settings_validation import validate_discord_webhook
-
-        webhook_error = validate_discord_webhook(webhook_url)
-        if webhook_error:
-            logging.warning(f"Blocked Discord webhook test: {webhook_error}")
-            raise HTTPException(status_code=400, detail=webhook_error)
-
-        # Try to use the discord-webhook library if available
-        try:
-            from datetime import datetime
-
-            from discord_webhook import DiscordEmbed, DiscordWebhook
-
-            # Create webhook instance - explicitly set content to None to avoid duplicate messages
-            webhook = DiscordWebhook(url=webhook_url, username="ListSync Test", content=None)
-
-            # Create embed with test message
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            embed = DiscordEmbed(
-                title="🧪 Discord Integration Test",
-                description="If you see this message, Discord notifications are working correctly! ✅",
-                color=10181046,  # Purple color
-            )
-
-            embed.add_embed_field(
-                name="Test Time",
-                value=current_time,
-                inline=True,
-            )
-
-            embed.add_embed_field(
-                name="Status",
-                value="✅ Connected",
-                inline=True,
-            )
-
-            embed.set_footer(text="ListSync Notification System")
-            embed.set_timestamp()
-
-            # Add embed to webhook (only embed, no content)
-            webhook.add_embed(embed)
-
-            # Send webhook
-            response = webhook.execute()
-
-            return {
-                "success": True,
-                "message": "Test notification sent successfully! Check your Discord channel.",
-                "timestamp": current_time,
-            }
-
-        except ImportError:
-            # Fallback to using requests directly
-            from datetime import datetime
-
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-            # Only send embed, no content to avoid duplicate messages
-            payload = {
-                "embeds": [
-                    {
-                        "title": "🧪 Discord Integration Test",
-                        "description": "If you see this message, Discord notifications are working correctly! ✅",
-                        "color": 10181046,
-                        "fields": [
-                            {
-                                "name": "Test Time",
-                                "value": current_time,
-                                "inline": True,
-                            },
-                            {
-                                "name": "Status",
-                                "value": "✅ Connected",
-                                "inline": True,
-                            },
-                        ],
-                        "footer": {
-                            "text": "ListSync Notification System",
-                        },
-                        "timestamp": datetime.utcnow().isoformat(),
-                    }
-                ],
-            }
-
-            response = requests.post(webhook_url, json=payload, timeout=10)
-            response.raise_for_status()
-
-            return {
-                "success": True,
-                "message": "Test notification sent successfully! Check your Discord channel.",
-                "timestamp": current_time,
-            }
-
-    except requests.exceptions.Timeout:
-        raise HTTPException(status_code=504, detail="Discord webhook request timed out")
-    except requests.exceptions.RequestException as e:
-        error_msg = f"Failed to send Discord notification: {e!s}"
-        if hasattr(e, "response") and e.response is not None:
-            error_msg += f" (Status: {e.response.status_code})"
-        raise HTTPException(status_code=500, detail=error_msg)
+        raise HTTPException(status_code=400, detail=f"Unsupported notification service: {service}")
     except HTTPException:
         # A rejected webhook URL is a deliberate 400, not a server fault.
         raise

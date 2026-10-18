@@ -278,25 +278,9 @@ STEVENLU_LISTS=stevenlu
 
 ### Notification Configuration
 
-#### Discord Notifications
-```bash
-# Discord webhook for sync notifications
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/123456789/abcdef...
-
-# Custom Discord settings
-DISCORD_USERNAME=ListSync
-DISCORD_AVATAR_URL=https://example.com/avatar.png
-DISCORD_COLOR=0x00ff00
-```
-
-**Setting up Discord webhook:**
-1. In your Discord server, go to Server Settings → Integrations → Webhooks
-2. Create a new webhook for the channel you want notifications in
-3. Copy the webhook URL to `DISCORD_WEBHOOK_URL`
-
 #### Gotify Notifications
 
-Sync completion summaries are POSTed to `{GOTIFY_URL}/message?token=...`. Gotify is optional and independent of Discord — you may enable either or both. It can also be configured in the dashboard under Settings -> Integrations (Notification Settings), where Gotify sits alongside Discord.
+Sync completion summaries are POSTed to `{GOTIFY_URL}/message?token=...`. Gotify is optional. It can also be configured in the dashboard under Settings -> Integrations (Notification Settings).
 
 ```bash
 GOTIFY_URL=https://gotify.example.com  # Base URL of your self-hosted Gotify server
@@ -445,7 +429,7 @@ FETCH_RATE_LIMIT=60
 # Store sensitive data in environment variables
 export OVERSEERR_URL="https://overseerr.example.com"
 export OVERSEERR_API_KEY="your-secret-api-key"
-export DISCORD_WEBHOOK_URL="https://discord.com/api/webhooks/..."
+export GOTIFY_TOKEN="your-gotify-app-token"
 ```
 
 #### Encrypted File Storage
@@ -463,15 +447,15 @@ services:
     secrets:
       - overseerr_url
       - overseerr_api_key
-      - discord_webhook
+      - gotify_token
 
 secrets:
   overseerr_url:
     file: ./secrets/overseerr_url.txt
   overseerr_api_key:
     file: ./secrets/overseerr_api_key.txt
-  discord_webhook:
-    file: ./secrets/discord_webhook.txt
+  gotify_token:
+    file: ./secrets/gotify_token.txt
 ```
 
 ### Network Security
@@ -707,7 +691,8 @@ MDBLIST_LISTS=curator/best-movies,another/sci-fi-collection
 STEVENLU_LISTS=stevenlu
 
 # Notifications
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_TOKEN=your_gotify_app_token
 TZ=Europe/London
 
 # Performance tuning
@@ -744,7 +729,8 @@ MDBLIST_LISTS=company/featured,company/trending,company/classics
 STEVENLU_LISTS=stevenlu
 
 # Advanced notifications
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_TOKEN=your_gotify_app_token
 EMAIL_NOTIFICATIONS=true
 SMTP_SERVER=smtp.company.com
 SMTP_USERNAME=listsync@company.com
@@ -892,7 +878,8 @@ MDBLIST_LISTS=username/collection
 STEVENLU_LISTS=stevenlu
 
 # Notifications
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_TOKEN=your_gotify_app_token
 
 # Advanced settings
 MAX_WORKERS=4

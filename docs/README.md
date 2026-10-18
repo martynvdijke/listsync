@@ -163,7 +163,7 @@ TRAKT_SPECIAL_LISTS=trending:movies,popular:shows
 LETTERBOXD_LISTS=username/watchlist
 SYNC_INTERVAL=12
 OVERSEERR_4K=true
-DISCORD_WEBHOOK_URL=your-webhook-url
+GOTIFY_URL=https://gotify.example.com
 ```
 
 ## 📊 Supported List Providers

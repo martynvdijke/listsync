@@ -1,12 +1,12 @@
 """
 Settings written through the API get the same checks as the setup wizard.
 
-The wizard refused a Seerr URL pointing at cloud metadata, a webhook that isn't
-on Discord, an out-of-range sync interval and a timezone that doesn't exist.
-POST /api/settings/config wrote all of those with no checks at all, and the
-webhook it stored is POSTed to on every sync - so a stored setting became an
-outbound request to wherever it pointed. These check the write paths and the
-send path that reads them back.
+The wizard refused a Seerr URL pointing at cloud metadata, a notification URL
+pointing at cloud metadata, an out-of-range sync interval and a timezone that
+doesn't exist. POST /api/settings/config wrote all of those with no checks at
+all, and the Gotify URL it stored is POSTed to on every sync - so a stored
+setting became an outbound request to wherever it pointed. These check the write
+paths and the send path that reads them back.
 """
 
 import base64
@@ -119,12 +119,6 @@ def stored(key):
 
 print("=== POST /api/settings/config rejects what the wizard rejects ===")
 for payload, name in [
-    ({"discord_webhook": "http://169.254.169.254/latest/meta-data/"}, "webhook at metadata"),
-    ({"discord_webhook": "http://127.0.0.1:5055/api/webhooks/1/x"}, "webhook at loopback"),
-    ({"discord_webhook": "https://evil.example/api/webhooks/1/x"}, "webhook off Discord"),
-    ({"discord_webhook": "https://discord.com.evil.example/api/webhooks/1/x"}, "suffix trick"),
-    ({"discord_webhook": "https://discord.com/login"}, "Discord host, not a webhook"),
-    ({"discord_webhook": "file:///etc/passwd"}, "file scheme"),
     ({"overseerr_url": "http://169.254.169.254"}, "seerr url at metadata"),
     ({"overseerr_url": "http://metadata.google.internal/"}, "seerr url at gcp metadata"),
     ({"overseerr_url": "gopher://127.0.0.1:11211/"}, "seerr url with gopher scheme"),
@@ -146,9 +140,9 @@ print("=== legitimate settings still save ===")
 r = client.post(
     "/api/settings/config",
     json={
-        "discord_webhook": "https://discord.com/api/webhooks/123/abcdef",
         "overseerr_url": "http://192.168.1.50:5055",
         "gotify_url": "http://192.168.1.50:8080",
+        "gotify_token": "apptoken",
         "sync_interval": 24,
         "timezone": "Europe/London",
         "frontend_domain": "https://listsync.example.com",
@@ -156,7 +150,6 @@ r = client.post(
     },
 )
 check("valid batch accepted", r.status_code, 200)
-check("  webhook stored", stored("discord_webhook"), "https://discord.com/api/webhooks/123/abcdef")
 check("  private seerr stored", stored("overseerr_url"), "http://192.168.1.50:5055")
 # A self-hosted Gotify on a private address is legitimate, same as Seerr.
 check("  private gotify stored", stored("gotify_url"), "http://192.168.1.50:8080")
@@ -166,14 +159,11 @@ print()
 print("=== a masked placeholder is not mistaken for a bad value ===")
 # The settings page reads secrets back masked and posts them straight back.
 # save_setting skips those; validation must skip them too, or the round-trip
-# fails on a mask that stands for a URL already known to be good.
-masked = encryption.mask_sensitive_value("https://discord.com/api/webhooks/123/abcdef")
-r = client.post("/api/settings/config", json={"discord_webhook": masked})
-check("masked webhook accepted", r.status_code, 200)
-check("  real webhook preserved", stored("discord_webhook"), "https://discord.com/api/webhooks/123/abcdef")
-
-print()
-print("=== setup wizard step 2: a disabled webhook is still checked ===")
+# fails on a mask that stands for a value already known to be good.
+masked = encryption.mask_sensitive_value("apptoken")
+r = client.post("/api/settings/config", json={"gotify_token": masked})
+check("masked token accepted", r.status_code, 200)
+check("  real token preserved", stored("gotify_token"), "apptoken")
 
 
 class OKResponse:
@@ -188,23 +178,6 @@ class OKResponse:
     def raise_for_status(self):
         pass
 
-
-requests.get = lambda *a, **k: OKResponse()
-r = client.post(
-    "/api/setup/step2/configuration",
-    json={
-        "trakt_client_id": "0123456789abcdef0123",
-        "sync_interval": 24,
-        "timezone": "UTC",
-        "discord_webhook": "http://169.254.169.254/",
-        "discord_enabled": False,  # used to skip the check while still saving
-    },
-)
-body = r.json()
-check("step 2 refuses the webhook", body.get("valid"), False)
-check("  and names the field", "discord_webhook" in body.get("errors", {}), True)
-check("  and stores nothing new", stored("discord_webhook"), "https://discord.com/api/webhooks/123/abcdef")
-requests.get = record_get
 
 print()
 print("=== setup wizard step 2: Gotify is validated and saved ===")
@@ -241,22 +214,6 @@ check("  gotify url stored", stored("gotify_url"), "http://192.168.1.51:8080")
 check("  gotify token stored", stored("gotify_token"), "apptoken")
 check("  gotify enabled stored", str(stored("gotify_enabled")).lower() in ("true", "1"), True)
 requests.get = record_get
-
-print()
-print("=== the send path refuses a bad webhook however it got there ===")
-from list_sync.notifications import discord as notifications
-from list_sync.ui.display import SyncResults
-
-for url, name in [
-    ("http://169.254.169.254/", "metadata"),
-    ("http://127.0.0.1:5055/api/webhooks/1/x", "loopback"),
-    ("https://evil.example/api/webhooks/1/x", "off Discord"),
-    ("https://discord.com/login", "Discord host, not a webhook"),
-    ("file:///etc/passwd", "file scheme"),
-]:
-    outbound.clear()
-    notifications.send_to_discord_webhook("test", SyncResults(), webhook_url=url)
-    check(f"no request sent to {name}", outbound, [])
 
 print()
 print("=== the Gotify send path: metadata blocked, private allowed, test endpoint guarded ===")
@@ -296,7 +253,6 @@ for key in (
     "overseerr_api_key",
     "seerr_api_key",
     "trakt_client_id",
-    "discord_webhook",
     "gotify_token",
     "tmdb_key",
     "tvdb_key",

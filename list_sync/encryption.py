@@ -172,7 +172,6 @@ SENSITIVE_KEYS = {
     "overseerr_api_key",
     "seerr_api_key",  # the current name for overseerr_api_key
     "trakt_client_id",
-    "discord_webhook",  # the token is part of the webhook URL
     "tmdb_key",
     "tvdb_key",
     "simkl_client_id",

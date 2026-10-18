@@ -26,7 +26,7 @@ graph TB
         API[FastAPI Backend<br/>Port 4222]
         Frontend[Nuxt 3 Frontend<br/>Vue 3<br/>Port 3222]
         DB[(SQLite<br/>Database)]
-        Discord[Discord<br/>Notifications]
+        Gotify[Gotify<br/>Notifications]
         Selenium[Chrome/WebDriver<br/>Selenium]
         
         CoreSync --> DB
@@ -34,7 +34,7 @@ graph TB
         API --> DB
         API --> CoreSync
         Frontend --> API
-        CoreSync --> Discord
+        CoreSync --> Gotify
     end
     
     subgraph "External Services"
@@ -44,7 +44,7 @@ graph TB
         MDBList[MDBList]
         StevenLu[Steven Lu Lists]
         Seerr[Seerr]
-        DiscordWebhook[Discord Webhooks]
+        GotifyServer[Gotify Server]
     end
     
     Selenium --> IMDb
@@ -53,7 +53,7 @@ graph TB
     Selenium --> MDBList
     CoreSync --> StevenLu
     CoreSync --> Seerr
-    Discord --> DiscordWebhook
+    Gotify --> GotifyServer
     
     style Frontend fill:#42b883
     style API fill:#009688
@@ -1104,7 +1104,7 @@ graph TB
     end
     
     subgraph "Notification Services"
-        Discord[Discord]
+        Gotify[Gotify]
         Slack[Slack]
         Email[Email/SMTP]
         Pushover[Pushover]
@@ -1127,7 +1127,7 @@ graph TB
     SyncEngine --> MDBList
     SyncEngine --> StevenLu
     
-    SyncEngine --> Discord
+    SyncEngine --> Gotify
     SyncEngine --> Slack
     SyncEngine --> Email
     SyncEngine --> Pushover
@@ -1139,7 +1139,7 @@ graph TB
     style SyncEngine fill:#4CAF50
     style Seerr fill:#2196F3
     style IMDb fill:#FF9800
-    style Discord fill:#9C27B0
+    style Gotify fill:#9C27B0
     style Prometheus fill:#f44336
 ```
 

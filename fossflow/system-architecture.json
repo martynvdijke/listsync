@@ -5,7 +5,7 @@
     ["FastAPI Backend", "api", "REST API on port 4222"],
     ["Nuxt 3 Frontend", "web", "Vue 3 dashboard on port 3222"],
     ["SQLite Database", "storage", "Local data persistence"],
-    ["Discord Notifier", "email", "Webhook notifications"],
+    ["Gotify Notifier", "email", "Push notifications"],
     ["Chrome WebDriver", "monitor", "Selenium browser automation"],
     ["IMDb", "cloud", "Movie/TV lists source"],
     ["Trakt", "cloud", "Watchlist platform"],
@@ -13,7 +13,7 @@
     ["MDBList", "cloud", "Curated collections"],
     ["Steven Lu", "cloud", "Popular movies API"],
     ["Overseerr", "queue", "Media request manager"],
-    ["Discord Webhook", "network", "External notification endpoint"]
+    ["Gotify Webhook", "network", "External notification endpoint"]
   ],
   "v": [
     [

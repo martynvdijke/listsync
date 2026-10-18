@@ -29,7 +29,6 @@ from .database import (
     update_list_sync_info,
     update_sync_lists_in_db,
 )
-from .notifications.discord import send_to_discord_webhook
 from .notifications.gotify import send_to_gotify
 from .providers import SyncCancelledException, get_provider
 from .ui.cli import handle_menu_choice, manage_lists
@@ -1549,8 +1548,6 @@ def automated_sync(
             summary_text = str(sync_results)
             display_summary(sync_results)
             
-            # Send to Discord webhook if configured
-            send_to_discord_webhook(summary_text, sync_results, automated=automated_mode)
             send_to_gotify(summary_text, sync_results, automated=automated_mode)
             
             """
@@ -1763,9 +1760,7 @@ def run_sync(
         summary_text = str(sync_results)
         display_summary(sync_results)
 
-        # Send to Discord webhook if configured
         if not dry_run:
-            send_to_discord_webhook(summary_text, sync_results, automated=automated_mode)
             send_to_gotify(summary_text, sync_results, automated=automated_mode)
 
         # A cancelled sync must not be recorded as a successful one
@@ -1966,10 +1961,8 @@ def sync_single_list(
                 )
             )
 
-            # Send to Discord webhook if configured (only if not dry run)
             if not dry_run:
                 summary_text = f"Single list sync completed for {list_type}:{list_id}"
-                send_to_discord_webhook(summary_text, sync_results, automated=True, is_single_list=True)
                 send_to_gotify(summary_text, sync_results, automated=True, is_single_list=True)
 
             # Log sync complete with clear marker

@@ -176,7 +176,8 @@ IMDB_LISTS=top,ls123456789
 TRAKT_SPECIAL_LISTS=trending:movies,popular:shows
 LETTERBOXD_LISTS=username/watchlist
 
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_TOKEN=your_gotify_app_token
 ```
 
 #### Core Only (API + Sync)
@@ -231,7 +232,8 @@ MDBLIST_LISTS=username/collection
 STEVENLU_LISTS=stevenlu
 
 # Notifications
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_TOKEN=your_gotify_app_token
 ```
 
 #### Volume Mapping
@@ -661,8 +663,9 @@ SYNC_INTERVAL=24
 # Enable automated mode
 AUTOMATED_MODE=true
 
-# Optional: Add Discord notifications
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+# Optional: Add Gotify notifications
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_TOKEN=your_gotify_app_token
 ```
 
 #### 4. Test First Sync
@@ -676,21 +679,21 @@ curl -X POST http://localhost:4222/api/sync/trigger
 
 ### Optional Setup
 
-#### Discord Notifications
-1. **Create Discord webhook:**
-   - Go to your Discord server settings
-   - Navigate to Integrations → Webhooks
-   - Create a new webhook
-   - Copy the webhook URL
+#### Gotify Notifications
+1. **Create a Gotify application:**
+   - Install and run your self-hosted Gotify server
+   - Open Gotify and create an Application in the Apps tab
+   - Copy its application token
 
 2. **Add to configuration:**
    ```bash
-   DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/your-webhook-url
+   GOTIFY_URL=https://gotify.example.com
+   GOTIFY_TOKEN=your_gotify_app_token
    ```
 
 3. **Test notifications:**
    - Trigger a manual sync
-   - Check Discord for notification
+   - Check Gotify for notification
 
 #### Email Notifications (Advanced)
 ```bash

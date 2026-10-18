@@ -167,7 +167,7 @@ list-sync/
 │   │   └── stevenlu.py
 │   ├── notifications/        # Notification services
 │   │   ├── __init__.py
-│   │   └── discord.py
+│   │   └── gotify.py
 │   ├── ui/                   # CLI interface
 │   │   ├── __init__.py
 │   │   ├── cli.py
@@ -1409,13 +1409,11 @@ We are committed to providing a welcoming and inclusive environment for all cont
 #### Community Support
 - **GitHub Discussions**: General questions and community help
 - **GitHub Issues**: Bug reports and feature requests
-- **Discord**: Real-time chat and support
 - **Documentation**: Comprehensive guides and references
 
 #### Maintainer Contact
 - **GitHub**: @Woahai321
 - **Email**: maintainers@listsync.dev
-- **Discord**: ListSync Community Server
 
 ### Recognition
 

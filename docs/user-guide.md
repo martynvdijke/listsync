@@ -351,7 +351,7 @@ flowchart TD
     Processing -->|Error| CheckError[Check Error Details:<br/>- Error messages<br/>- Failed items<br/>- Provider issues]
     
     ViewResults --> Notification{Notifications<br/>Enabled?}
-    Notification -->|Yes| SendNotif[Send Notifications:<br/>- Discord webhook<br/>- Email alerts<br/>- Status updates]
+    Notification -->|Yes| SendNotif[Send Notifications:<br/>- Gotify<br/>- Email alerts<br/>- Status updates]
     Notification -->|No| Done[✅ Sync Complete!<br/>Results saved]
     
     CheckError --> FixError[Fix Issues:<br/>- Check configuration<br/>- Verify connections<br/>- Review logs]
@@ -409,7 +409,7 @@ SYNC_INTERVAL=0     # Manual sync only
 - **Smart Retry** - Automatic retry on failures
 - **Rate Limiting** - Respectful API usage
 - **Error Recovery** - Resume from interruptions
-- **Progress Notifications** - Discord/email updates
+- **Progress Notifications** - Gotify/email updates
 - **Resource Management** - Memory and CPU optimization
 
 ### Sync Status Monitoring
@@ -478,8 +478,9 @@ graph TB
 
 #### Notification Settings
 ```bash
-# Discord webhook for sync notifications
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/123456789/abcdef...
+# Gotify for sync notifications
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_TOKEN=your_gotify_app_token
 
 # Email alerts (if configured)
 EMAIL_NOTIFICATIONS=true
@@ -535,7 +536,7 @@ STEVENLU_LISTS=stevenlu
 - **Connection Settings** - Seerr configuration
 - **Sync Settings** - Intervals and automation
 - **Provider Settings** - List configuration
-- **Notification Settings** - Discord/email setup
+- **Notification Settings** - Gotify/email setup
 - **Advanced Settings** - Performance tuning
 
 #### Configuration Validation

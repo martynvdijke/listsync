@@ -37,9 +37,6 @@ services:
       - SIMKL_CLIENT_ID=${SIMKL_CLIENT_ID:-}
       - SIMKL_USER_TOKEN=${SIMKL_USER_TOKEN:-}
 
-      # Optional Discord webhook 
-      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
-      
       # Docker-specific settings
       - RUNNING_IN_DOCKER=true
       - NO_SANDBOX=1

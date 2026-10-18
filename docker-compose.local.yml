@@ -40,9 +40,6 @@ services:
       # Trakt API Configuration
       - TRAKT_CLIENT_ID=${TRAKT_CLIENT_ID:-}      
 
-      # Optional Discord webhook
-      - DISCORD_WEBHOOK_URL=${DISCORD_WEBHOOK_URL:-}
-      
       # Internal API URL for frontend (Nuxt Nitro proxy handles /api internally)
       - NUXT_PUBLIC_API_URL=${NUXT_PUBLIC_API_URL:-http://localhost:4222}
       

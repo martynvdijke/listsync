@@ -326,15 +326,6 @@ export class ApiService {
   // Notifications
   // ==========================================
 
-  async testDiscordNotification(webhookUrl: string): Promise<{ success: boolean; message: string; timestamp: string }> {
-    return this.request<{ success: boolean; message: string; timestamp: string }>('/notifications/test', {
-      method: 'POST',
-      body: JSON.stringify({
-        webhook_url: webhookUrl
-      })
-    })
-  }
-
   async testGotifyNotification(url: string, token: string): Promise<{ success: boolean; message: string; timestamp: string }> {
     return this.request<{ success: boolean; message: string; timestamp: string }>('/notifications/test', {
       method: 'POST',

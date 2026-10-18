@@ -2,8 +2,8 @@
 Validation for settings written through the API.
 
 The setup wizard checks what it is given: it refuses a Seerr URL that points at
-cloud metadata, a Discord webhook that isn't on Discord, a sync interval outside
-the supported range, a timezone that doesn't exist. POST /api/settings/config
+cloud metadata, a sync interval outside the supported range, a timezone that
+doesn't exist. POST /api/settings/config
 wrote the same settings with none of those checks, so anything the wizard
 refused could be stored by posting it to the settings endpoint instead - and
 several of those values are later fetched by the server, which turns a stored
@@ -20,7 +20,7 @@ unknown key would break any caller that saves one.
 
 from typing import Any
 
-from .url_safety import DISCORD_WEBHOOK_HOSTS, validate_outbound_url
+from .url_safety import validate_outbound_url
 
 # Settings that name a service this server will request. Each says whether a
 # private address is a legitimate target for that particular sink.
@@ -45,32 +45,6 @@ _DISPLAY_URL_SETTINGS = {
 # zero or negative value means a sync loop with no delay in it.
 MIN_SYNC_INTERVAL_HOURS = 1
 MAX_SYNC_INTERVAL_HOURS = 168  # a week
-
-
-def validate_discord_webhook(value: str) -> str:
-    """
-    Check that a Discord webhook URL is one.
-
-    Args:
-        value (str): The webhook URL to check
-
-    Returns:
-        str: An error message, or "" if the URL is acceptable
-    """
-    allowed, reason = validate_outbound_url(
-        value,
-        allow_private=False,
-        allowed_hosts=DISCORD_WEBHOOK_HOSTS,
-    )
-    if not allowed:
-        return f"Invalid Discord webhook URL: {reason}"
-
-    # Discord's own webhook path. A URL on discord.com that isn't a webhook is
-    # still somewhere this server should not be POSTing sync summaries.
-    if "/api/webhooks/" not in value:
-        return "Invalid Discord webhook URL: it should look like " "https://discord.com/api/webhooks/<id>/<token>"
-
-    return ""
 
 
 def validate_gotify_url(value: str) -> str:
@@ -120,15 +94,6 @@ def validate_settings(settings: dict[str, Any]) -> dict[str, str]:
         text = str(value).strip()
         if not text.lower().startswith(("http://", "https://")):
             errors[key] = f"{label} must start with http:// or https://"
-
-    # Checked whenever a webhook is supplied, not only when notifications are
-    # switched on: a webhook saved while disabled is still there to be enabled
-    # later, and enabling it is a separate request that sees no URL to check.
-    webhook = settings.get("discord_webhook")
-    if webhook and str(webhook).strip():
-        error = validate_discord_webhook(str(webhook).strip())
-        if error:
-            errors["discord_webhook"] = error
 
     if "sync_interval" in settings and settings["sync_interval"] not in (None, ""):
         try:

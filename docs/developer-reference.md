@@ -473,7 +473,8 @@ class Config:
     automated_mode: bool = False
     is_4k: bool = False
     trakt_special_limit: int = 20
-    discord_webhook: Optional[str] = None
+    gotify_url: Optional[str] = None
+    gotify_token: Optional[str] = None
     
     lists: Dict[str, List[str]] = {
         "imdb": [],
@@ -614,7 +615,7 @@ class NotificationHandler:
 
 # Register notification handlers
 handlers = [
-    DiscordNotificationHandler(),
+    GotifyNotificationHandler(),
     SlackNotificationHandler(),
     EmailNotificationHandler()
 ]

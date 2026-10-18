@@ -375,14 +375,15 @@ MDBLIST_LISTS=username/listname
 STEVENLU_LISTS=stevenlu
 
 # Notifications
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+GOTIFY_URL=https://gotify.example.com
+GOTIFY_TOKEN=your_gotify_app_token
 ```
 
 ## 🔍 Monitoring and Notifications
 
-### Discord Integration
+### Gotify Integration
 
-- **Webhook Support**: Real-time notifications via Discord webhooks
+- **Webhook Support**: Real-time notifications via Gotify
 - **Sync Summaries**: Detailed reports of sync operations
 - **Error Notifications**: Immediate alerts for failures
 - **Statistics**: Item counts and processing times

@@ -386,12 +386,6 @@ def load_env_config() -> tuple[str | None, str | None, str | None, float, bool, 
         else:
             is_4k = str(is_4k_val).lower() == "true"
 
-        discord_webhook_url = config_manager.get_setting("discord_webhook")
-
-        # Log if Discord webhook is configured
-        if discord_webhook_url:
-            logging.info("Discord webhook integration enabled")
-
         # Only return the config if required variables are present
         if url and api_key:
             try:
@@ -419,12 +413,6 @@ def load_env_config() -> tuple[str | None, str | None, str | None, float, bool, 
         sync_interval = os.getenv("SYNC_INTERVAL", "12")
         automated_mode = os.getenv("AUTOMATED_MODE", "true").lower() == "true"
         is_4k = get_seerr_env("SEERR_4K", "false").lower() == "true"
-        discord_webhook_url = os.getenv("DISCORD_WEBHOOK_URL")
-
-        # Log if Discord webhook is configured
-        if discord_webhook_url:
-            logging.info("Discord webhook integration enabled")
-
         # Only return the config if required variables are present
         if url and api_key:
             try:
@@ -858,8 +846,6 @@ class ConfigManager:
             "auto_sync": os.getenv("AUTOMATED_MODE", "true").lower() == "true",
             "timezone": os.getenv("TZ", "UTC"),
             # Notifications
-            "discord_webhook": os.getenv("DISCORD_WEBHOOK_URL", ""),
-            "discord_enabled": bool(os.getenv("DISCORD_WEBHOOK_URL", "")),
             "gotify_url": os.getenv("GOTIFY_URL", ""),
             "gotify_token": os.getenv("GOTIFY_TOKEN", ""),
             "gotify_enabled": bool(os.getenv("GOTIFY_URL") and os.getenv("GOTIFY_TOKEN")),

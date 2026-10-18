@@ -28,7 +28,6 @@ logging.disable(logging.CRITICAL)
 
 from list_sync.utils import url_safety as us
 from list_sync.utils.url_safety import (
-    DISCORD_WEBHOOK_HOSTS,
     assert_safe_url,
     validate_outbound_url,
 )
@@ -46,11 +45,8 @@ def check(label, got, want):
 # Deterministic DNS: names map to fixed addresses, unknown names fail.
 DNS = {
     "example.com": ["93.184.216.34"],
+    "cdn.example.com": ["93.184.216.34"],
     "image.tmdb.org": ["104.16.1.1"],
-    "discord.com": ["162.159.128.233"],
-    "ptb.discord.com": ["162.159.128.233"],
-    "notdiscord.com": ["93.184.216.34"],
-    "discord.com.evil.example": ["93.184.216.34"],
     "evil.example": ["127.0.0.1"],  # rebinding-style answer
     "split.example": ["93.184.216.34", "10.0.0.5"],  # one bad among good
     "meta.example": ["169.254.169.254"],
@@ -135,32 +131,27 @@ check("metadata by name, private allowed", allowed("http://ecs.example/", allow_
 
 # --- credentials and malformed ---
 check("embedded credentials", allowed("https://user:pass@example.com/"), False)
-check("credentials disguising host", allowed("https://discord.com@evil.example/"), False)
+check("credentials disguising host", allowed("https://example.com@evil.example/"), False)
 check("no host", allowed("https:///path"), False)
 check("empty", allowed(""), False)
 check("none", allowed(None), False)
 check("not a url", allowed("just some text"), False)
 check("unresolvable", allowed("https://nx.invalid/"), False)
 
-# --- host allowlist (Discord) ---
-D = dict(allowed_hosts=DISCORD_WEBHOOK_HOSTS)
-check("real discord webhook", allowed("https://discord.com/api/webhooks/123/abc", **D), True)
-check("discord subdomain", allowed("https://ptb.discord.com/api/webhooks/1/x", **D), True)
+# --- host allowlist (a neutral caller-supplied list) ---
+D = dict(allowed_hosts={"example.com"})
+check("allowed host", allowed("https://example.com/x.jpg", **D), True)
+check("allowed subdomain", allowed("https://cdn.example.com/x.jpg", **D), True)
 check("attacker host refused", allowed("http://attacker-controlled-domain/", **D), False)
-check("lookalike suffix refused", allowed("https://notdiscord.com/api", **D), False)
-check("suffix-append trick refused", allowed("https://discord.com.evil.example/", **D), False)
-check("host in path refused", allowed("https://evil.example/discord.com", **D), False)
+check("lookalike suffix refused", allowed("https://notexample.com/api", **D), False)
+check("suffix-append trick refused", allowed("https://example.com.evil.example/", **D), False)
+check("host in path refused", allowed("https://evil.example/example.com", **D), False)
 check("metadata with allowlist refused", allowed("http://169.254.169.254/", **D), False)
 
 # --- trailing dot and case normalisation must not bypass the allowlist ---
-check("trailing dot normalised", allowed("https://discord.com./api/webhooks/1/x", **D), True)
-check("uppercase host normalised", allowed("https://DISCORD.COM/api/webhooks/1/x", **D), True)
+check("trailing dot normalised", allowed("https://example.com./api/x", **D), True)
+check("uppercase host normalised", allowed("https://EXAMPLE.COM/api/x", **D), True)
 check("uppercase evil still refused", allowed("https://EVIL.EXAMPLE/", **D), False)
-
-# --- the PoC from the upstream issue ---
-check(
-    "issue #79 PoC blocked", allowed("http://attacker-controlled-domain/", allowed_hosts=DISCORD_WEBHOOK_HOSTS), False
-)
 
 # --- assert_safe_url raises with a reason ---
 try:

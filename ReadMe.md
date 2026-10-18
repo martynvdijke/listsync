@@ -451,7 +451,6 @@ IMDB_LISTS=top                              # Start with IMDb Top 250
 SYNC_INTERVAL=24          # Hours between syncs (default: 24)
 AUTOMATED_MODE=true       # Enable automatic syncing (default: true)
 OVERSEERR_4K=false        # Request 4K versions (default: false)
-DISCORD_WEBHOOK_URL=...   # Discord notifications (optional)
 GOTIFY_URL=                                             # Self-hosted Gotify base URL, e.g. https://gotify.example.com
 GOTIFY_TOKEN=                                           # Gotify application token (Apps page); set both to enable
 TZ=America/New_York       # Your timezone (default: GMT)
@@ -727,7 +726,7 @@ If you encounter any issues while using ListSync, please check our [Troubleshoot
 - **Sync not working?** Check your Overseerr API key and URL
 - **Lists not loading?** Verify list URLs are public and accessible
 - **Docker issues?** Ensure ports 3222 and 4222 are available
-- **Need help?** Join our [Discord community](https://discord.gg/Dy5xNzEHKw) for support
+- **Need help?** Open an issue on [GitHub](https://github.com/Woahai321/list-sync/issues) for support
 
 ---
 

@@ -37,22 +37,6 @@
         </a>
 
         <a
-          href="https://discord.gg/Dy5xNzEHKw"
-          target="_blank"
-          rel="noopener noreferrer"
-          class="flex items-center justify-between p-2 rounded-lg bg-purple-600/10 border border-purple-500/20 hover:border-purple-400/40 hover:bg-purple-600/15 transition-all group"
-        >
-          <div class="flex items-center gap-2">
-            <MessageSquareIcon class="w-4 h-4 text-purple-400" />
-            <div>
-              <p class="text-sm font-medium">Community Discord</p>
-              <p class="text-[10px] text-muted-foreground">Join our community</p>
-            </div>
-          </div>
-          <ExternalLinkIcon class="w-3 h-3 text-muted-foreground group-hover:text-purple-400 transition-colors" />
-        </a>
-
-        <a
           href="https://github.com/login?return_to=https://github.com/Woahai321/list-sync/issues"
           target="_blank"
           rel="noopener noreferrer"
@@ -112,7 +96,6 @@ import {
   Github as GithubIcon,
   BookOpen as BookOpenIcon,
   Bug as BugIcon,
-  MessageSquare as MessageSquareIcon,
   ExternalLink as ExternalLinkIcon,
   Heart as HeartIcon,
 } from 'lucide-vue-next'

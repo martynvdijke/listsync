@@ -244,7 +244,7 @@ _LOG_CATEGORY_KEYWORDS = (
     ("items", ("request", "skipped", "available", "not found", "added")),
     ("matching", ("match", "resolv")),
     ("api", ("seerr", "trakt", "tmdb", "api request", "http")),
-    ("webhook", ("webhook", "discord", "gotify")),
+    ("webhook", ("webhook", "gotify")),
     ("process", ("process", "pid", "signal", "cancel")),
 )
 

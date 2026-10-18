@@ -1,9 +1,11 @@
 # Multi-stage Dockerfile for Complete ListSync Web Application
-# Includes: ListSync Core Service + FastAPI Backend + Nuxt 3 Frontend 
+# Includes: ListSync Core Service + FastAPI Backend + Nuxt 4 Frontend 
 
 # Use specific Python version
 ARG PYTHON_VERSION=3.12
-ARG NODE_VERSION=20
+# Nuxt 4.6 requires Node ^22.22.3 || ^24.15.0 || >=26.0.0, so node 20 can no
+# longer build the frontend.
+ARG NODE_VERSION=24
 
 # Stage 1: Python Builder (ListSync + API)
 FROM python:${PYTHON_VERSION}-slim AS python-builder
@@ -137,8 +139,8 @@ RUN if [ "$TZ" = "UTC" ]; then \
     # Set the timezone (will be validated later when Python modules are available)
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Install Node.js
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+# Install Node.js (v24 matches NODE_VERSION and Nuxt 4's engine floor)
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - && \
     apt-get install -y nodejs
 
 # Install browser and driver based on architecture

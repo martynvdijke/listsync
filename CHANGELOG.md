@@ -1,3 +1,12 @@
+## [1.4.1](https://github.com/martynvdijke/listsync/compare/v1.4.0...v1.4.1) (2026-10-18)
+
+
+### Bug Fixes
+
+* **ci:** gate the required Tests check on the OpenAPI contract job ([f025d08](https://github.com/martynvdijke/listsync/commit/f025d08f2f7e46379b4898307b373b21b18d92ce)), closes [#20](https://github.com/martynvdijke/listsync/issues/20)
+* **deps:** finish the nuxt 4 upgrade with a consistent lockfile ([cc630a6](https://github.com/martynvdijke/listsync/commit/cc630a6b23a0e5babedf15459cd991752ce83af3)), closes [#20](https://github.com/martynvdijke/listsync/issues/20)
+* **deps:** update dependency nuxt to v4 ([#20](https://github.com/martynvdijke/listsync/issues/20)) ([125cc9b](https://github.com/martynvdijke/listsync/commit/125cc9be9a05cdc65562293d430a9a4707e3421c))
+
 # [1.4.0](https://github.com/martynvdijke/listsync/compare/v1.3.7...v1.4.0) (2026-10-18)
 
 

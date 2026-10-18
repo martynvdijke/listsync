@@ -40,8 +40,19 @@ jobs:
       new_release_version: ${{ steps.semantic.outputs.new_release_version }}
 
     steps:
+      # Checkout with a repo-admin token, not the default GITHUB_TOKEN.
+      # @semantic-release/git pushes the "chore(release): X.Y.Z [skip ci]"
+      # commit straight to main, and main requires the Tests/Ruff status
+      # checks, which the github-actions bot cannot satisfy or bypass - that
+      # push is rejected with "GH006: Protected branch update failed ...
+      # required status checks are expected". RENOVATE_TOKEN is a repo-scoped
+      # PAT owned by an admin, so it is allowed through, and because it is a
+      # user token the vX.Y.Z tag push it makes also triggers docker-build.yml
+      # (GITHUB_TOKEN pushes deliberately never start other workflows).
       - name: Checkout Repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          token: ${{ secrets.RENOVATE_TOKEN }}
 
       # Cuts the vX.Y.Z tag and CHANGELOG; the tag push then triggers
       # docker-build.yml, which owns the multi-arch image publish.
@@ -55,7 +66,10 @@ jobs:
             @semantic-release/git
             @semantic-release/github
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Same admin PAT as the checkout above: @semantic-release/github
+          # needs it to create the GitHub release and label the PRs whose
+          # commits went into it.
+          GITHUB_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
 
   notify:
     needs: [ci, release]

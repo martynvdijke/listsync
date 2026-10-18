@@ -1,3 +1,18 @@
+# [1.4.0](https://github.com/martynvdijke/listsync/compare/v1.3.7...v1.4.0) (2026-10-18)
+
+
+### Bug Fixes
+
+* **ci:** push the release commit with a token that can bypass main's checks ([c60410d](https://github.com/martynvdijke/listsync/commit/c60410d7afb599ea80538bceef0108909a48dddd))
+* **ci:** restore a consistent lockfile and pinned dependency ranges ([7ccb8d8](https://github.com/martynvdijke/listsync/commit/7ccb8d8f1d9fef798a55e1888a5f57137ee94a60))
+* **deps:** update dependency vue-router to v5 ([#21](https://github.com/martynvdijke/listsync/issues/21)) ([542bf69](https://github.com/martynvdijke/listsync/commit/542bf69087679c1a3a08dcf884b8b12308dd2a84))
+* **deps:** update dependency zod to v4 ([#25](https://github.com/martynvdijke/listsync/issues/25)) ([bd0526f](https://github.com/martynvdijke/listsync/commit/bd0526faf843ed654b5ebabe684f928416e8fbfc))
+
+
+### Features
+
+* remove Discord notification support ([9f19f88](https://github.com/martynvdijke/listsync/commit/9f19f88d4f91e1137684258210275afcb6146831))
+
 ## [1.3.7](https://github.com/martynvdijke/listsync/compare/v1.3.6...v1.3.7) (2026-10-13)
 
 ## [1.3.6](https://github.com/martynvdijke/listsync/compare/v1.3.5...v1.3.6) (2026-10-13)

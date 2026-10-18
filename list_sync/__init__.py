@@ -5,5 +5,5 @@ Authors: Soluify Team
 Version: 0.6.7
 """
 
-__version__ = "1.3.7"
+__version__ = "1.4.0"
 __author__ = "Soluify"

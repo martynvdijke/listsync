@@ -61,19 +61,27 @@ jobs:
   # 3.12 bump did. This name does not move when the matrix does.
   tests-passed:
     name: Tests
-    needs: test
-    # always(), so a failed, cancelled or skipped matrix still reports a result
+    # Branch protection only requires "Tests" and "Ruff". Folding the other
+    # gates in here means a failing contract or Docker build cannot be merged
+    # by automerge just because the Python matrix happened to pass - which is
+    # how the nuxt 4 bump landed with an out-of-sync package-lock.json.
+    needs: [test, lint, openapi-contract]
+    # always(), so a failed, cancelled or skipped job still reports a result
     # here. A required check that is skipped never reports at all, which blocks
     # a pull request the same way a renamed one does.
     if: always()
     runs-on: ubuntu-latest
     steps:
-      - name: Require every matrix leg to have passed
+      - name: Require every gated job to have passed
         # needs.test.result is the aggregate over the whole matrix: 'success'
         # only when every leg succeeded.
         run: |
           echo "test matrix result: ${{ needs.test.result }}"
+          echo "ruff result: ${{ needs.lint.result }}"
+          echo "openapi contract result: ${{ needs['openapi-contract'].result }}"
           [ "${{ needs.test.result }}" = "success" ]
+          [ "${{ needs.lint.result }}" = "success" ]
+          [ "${{ needs['openapi-contract'].result }}" = "success" ]
 
   lint:
     name: Ruff

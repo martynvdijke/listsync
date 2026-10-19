@@ -103,6 +103,7 @@ ignore = ["S101", "T201", "T203", "PLR0913", "PLR0915", "S603", "S607", "FBT002"
 "scripts/export_openapi.py" = ["INP001"]
 "tests/run_all.py" = ["EXE001", "PTH100", "PTH118", "PTH120"]
 "tests/test_api.py" = ["ARG005", "E402", "E741", "INP001", "PTH100", "PTH118", "PTH120"]
+"tests/test_api_auth.py" = ["ARG005", "E402", "INP001", "PTH100", "PTH118", "PTH120", "S105"]
 "tests/test_config_encryption.py" = ["ARG005", "BLE001", "E402", "E731", "EM101", "FBT003", "INP001", "PTH100", "PTH120", "SLF001", "TRY003"]
 "tests/test_db.py" = ["ARG005", "E402", "E741", "FBT003", "INP001", "PTH100", "PTH118", "PTH120", "RUF015"]
 "tests/test_env_lists.py" = ["ARG005", "E402", "E741", "FBT003", "INP001", "N818", "PTH100", "PTH118", "PTH120"]

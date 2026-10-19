@@ -410,6 +410,28 @@ CORS_ALLOWED_HEADERS=Content-Type,Authorization,X-Requested-With
 CORS_ALLOW_CREDENTIALS=true
 ```
 
+The allowlist is empty by default. The Nuxt dashboard reaches the API through
+its same-origin `/api/**` proxy, so no origins are needed unless you call the
+API directly from another origin.
+
+#### API Binding and Shared Token
+```bash
+# Bind the FastAPI backend to loopback only (default)
+LISTS_SYNC_HOST=127.0.0.1
+LISTS_SYNC_PORT=4222
+
+# Optional shared secret. When set, every /api/** request except
+# /api/system/health must send "Authorization: Bearer <token>".
+LISTS_SYNC_API_TOKEN=
+
+# Where the Nuxt server proxy forwards requests (server-side only)
+LISTS_SYNC_API_URL=http://127.0.0.1:4222
+```
+
+The Nuxt server injects `LISTS_SYNC_API_TOKEN` when proxying, so the browser
+never receives it. Set `LISTS_SYNC_HOST=0.0.0.0` only when the API must be
+reachable from outside the container/host, and always pair that with a token.
+
 #### Rate Limiting
 ```bash
 # API rate limiting (requests per minute)

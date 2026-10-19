@@ -100,16 +100,19 @@ def main():
     console.info("\n💡 Press Ctrl+C to stop the server")
     console.info("=" * 50)
 
-    # Start the API server
+    # Start the API server. Bind loopback by default: the Nuxt proxy reaches it
+    # from the same host, and an unauthenticated API is not exposed to the LAN.
     try:
         import uvicorn
 
         # Disable reload in Docker/production (causes issues with file watching)
         is_docker = os.environ.get("RUNNING_IN_DOCKER", "false").lower() == "true"
+        host = os.environ.get("LISTS_SYNC_HOST", "127.0.0.1")
+        port = int(os.environ.get("LISTS_SYNC_PORT", "4222"))
         uvicorn.run(
             "api_server:app",
-            host="0.0.0.0",
-            port=4222,
+            host=host,
+            port=port,
             reload=not is_docker,  # Only reload in development, not in Docker
             log_level="info",
         )

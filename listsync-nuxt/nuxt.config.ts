@@ -78,39 +78,22 @@ export default defineNuxtConfig({
     host: 'localhost',
   },
 
-  // Nitro configuration (for API proxy - NO CORS!)
+  // Nitro configuration. Browser traffic always goes to the same-origin
+  // `/api/**` route (server/routes/api/[...path].ts), which proxies to the
+  // backend and adds the bearer token server-side. No direct backend URL is
+  // exposed to the browser.
   nitro: {
-    // Development proxy
-    devProxy: {
-      '/api': {
-        target: 'http://localhost:4222',
-        changeOrigin: true,
-      },
-    },
-    
-    // Production server configuration
     experimental: {
       wasm: true,
-    },
-    
-    // Production proxy - works in built app too!
-    routeRules: {
-      '/api/**': {
-        proxy: process.env.NUXT_PUBLIC_API_URL 
-          ? `${process.env.NUXT_PUBLIC_API_URL}/api/**`
-          : 'http://localhost:4222/api/**',
-      },
     },
   },
 
   // Runtime config (public and private)
   runtimeConfig: {
-    // Private keys (only available on server)
-    // apiSecret: '',
-
-    // Public keys (exposed to the client)
+    // Public values are safe to ship to the browser. apiUrl is intentionally
+    // empty so all API calls stay same-origin and flow through the proxy.
     public: {
-      apiUrl: process.env.NUXT_PUBLIC_API_URL || 'http://localhost:4222',
+      apiUrl: '',
       apiBase: process.env.NUXT_PUBLIC_API_BASE || '/api',
     },
   },

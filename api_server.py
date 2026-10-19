@@ -9,6 +9,7 @@ change). It intentionally holds no routes.
 """
 
 import logging
+import os
 
 import uvicorn
 
@@ -37,8 +38,8 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "api_server:app",
-        host="0.0.0.0",
-        port=4222,
+        host=os.getenv("LISTS_SYNC_HOST", "127.0.0.1"),
+        port=int(os.getenv("LISTS_SYNC_PORT", "4222")),
         reload=True,
         log_level="info",
     )

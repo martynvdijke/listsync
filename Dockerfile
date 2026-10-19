@@ -41,9 +41,10 @@ FROM node:${NODE_VERSION}-slim AS node-builder
 
 WORKDIR /app/frontend
 
-# Accept API URL as build argument and set as environment variable
-ARG NUXT_PUBLIC_API_URL=${NUXT_PUBLIC_API_URL:-http://localhost:4222}
-ENV NUXT_PUBLIC_API_URL=${NUXT_PUBLIC_API_URL:-http://localhost:4222}
+# The browser only talks to the Nuxt origin; server/routes/api proxies to the
+# backend. NUXT_PUBLIC_API_URL is deliberately not set to a backend address.
+ARG NUXT_PUBLIC_API_URL=""
+ENV NUXT_PUBLIC_API_URL=""
 
 # Copy package files
 COPY listsync-nuxt/package*.json ./
@@ -57,6 +58,7 @@ COPY listsync-nuxt/components ./components
 COPY listsync-nuxt/composables ./composables
 COPY listsync-nuxt/stores ./stores
 COPY listsync-nuxt/services ./services
+COPY listsync-nuxt/server ./server
 COPY listsync-nuxt/types ./types
 COPY listsync-nuxt/utils ./utils
 COPY listsync-nuxt/layouts ./layouts

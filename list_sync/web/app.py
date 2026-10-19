@@ -41,33 +41,14 @@ async def startup_event():
 
 
 def get_allowed_origins():
-    """Get allowed origins from environment or use defaults"""
+    """Return the CORS allowlist configured through the environment.
+
+    The dashboard is served by Nuxt and reaches the API through the same-origin
+    Nitro proxy, so no origins are allowed by default. Cross-origin deployments
+    must opt in explicitly with a comma-separated ``CORS_ALLOWED_ORIGINS``.
+    """
     env_origins = os.getenv("CORS_ALLOWED_ORIGINS", "")
-
-    if env_origins:
-        # If environment variable is set, use it (comma-separated)
-        return [origin.strip() for origin in env_origins.split(",")]
-
-    # Default origins for development
-    default_origins = [
-        "http://localhost:3222",
-        "http://localhost:4222",
-        "http://0.0.0.0:3222",
-        "http://0.0.0.0:4222",
-        "http://127.0.0.1:3222",
-        "http://127.0.0.1:4222",
-    ]
-
-    # Add common local network patterns
-    for i in range(1, 255):
-        default_origins.extend(
-            [
-                f"http://192.168.1.{i}:3222",
-                f"http://192.168.1.{i}:4222",
-            ]
-        )
-
-    return default_origins
+    return [origin.strip() for origin in env_origins.split(",") if origin.strip()]
 
 
 async def unhandled_exception_handler(request: Request, exc: Exception):
@@ -100,10 +81,15 @@ def create_app() -> FastAPI:
         version="1.0.0",
     )
 
+    # Authentication runs inside CORS so preflight responses carry the CORS
+    # headers a browser needs before it sends the bearer token.
+    from list_sync.web.auth import ApiTokenMiddleware
+
+    app.add_middleware(ApiTokenMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=get_allowed_origins(),
-        allow_credentials=True,
+        allow_credentials=bool(get_allowed_origins()),
         allow_methods=["*"],
         allow_headers=["*"],
     )

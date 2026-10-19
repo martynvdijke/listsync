@@ -24,7 +24,7 @@ export const useSyncMonitor = (intervalMs: number = 5000) => {
 
   const poll = async () => {
     const config = useRuntimeConfig()
-    const apiUrl = config.public.apiUrl || 'http://localhost:4222'
+    const apiUrl = config.public.apiUrl || ''
     const apiBase = config.public.apiBase || '/api'
 
     try {

@@ -39,7 +39,11 @@ services:
       - TRAKT_CLIENT_ID=${TRAKT_CLIENT_ID:-}
 
       # Internal API URL for frontend (Nuxt Nitro proxy handles /api internally)
-      - NUXT_PUBLIC_API_URL=${NUXT_PUBLIC_API_URL:-http://0.0.0.0:4222}
+      # Browser traffic is proxied same-origin by Nuxt; no backend URL needed.
+      - NUXT_PUBLIC_API_URL=
+      # Optional shared secret. Nuxt injects it server-side; the browser never sees it.
+      - LISTS_SYNC_API_TOKEN=${LISTS_SYNC_API_TOKEN:-}
+      - LISTS_SYNC_API_URL=http://127.0.0.1:4222
       
       # Docker-specific settings
       - RUNNING_IN_DOCKER=true

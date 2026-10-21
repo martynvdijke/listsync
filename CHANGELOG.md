@@ -1,3 +1,10 @@
+## [1.4.2](https://github.com/martynvdijke/listsync/compare/v1.4.1...v1.4.2) (2026-10-21)
+
+
+### Bug Fixes
+
+* **deps:** update dependency @pinia/nuxt to v1 ([#17](https://github.com/martynvdijke/listsync/issues/17)) ([22c11ec](https://github.com/martynvdijke/listsync/commit/22c11ec42cdab2ab1a4fc726ebb35b16b55e4933))
+
 ## [1.4.1](https://github.com/martynvdijke/listsync/compare/v1.4.0...v1.4.1) (2026-10-18)
 
 

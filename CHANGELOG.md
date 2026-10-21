@@ -1,3 +1,11 @@
+## [1.4.3](https://github.com/martynvdijke/listsync/compare/v1.4.2...v1.4.3) (2026-10-21)
+
+
+### Bug Fixes
+
+* **deps:** update dependency lucide-vue-next to v1 ([#19](https://github.com/martynvdijke/listsync/issues/19)) ([27e6696](https://github.com/martynvdijke/listsync/commit/27e66965fc872a2241d6db6b701076d813174aa0))
+* **deps:** update dependency vue-router to v5 ([#28](https://github.com/martynvdijke/listsync/issues/28)) ([ccaee24](https://github.com/martynvdijke/listsync/commit/ccaee24bb7da5a2390701c3eac422745091c6810))
+
 ## [1.4.2](https://github.com/martynvdijke/listsync/compare/v1.4.1...v1.4.2) (2026-10-21)
 
 

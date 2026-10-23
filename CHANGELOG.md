@@ -1,3 +1,5 @@
+## [1.4.4](https://github.com/martynvdijke/listsync/compare/v1.4.3...v1.4.4) (2026-10-23)
+
 ## [1.4.3](https://github.com/martynvdijke/listsync/compare/v1.4.2...v1.4.3) (2026-10-21)
 
 

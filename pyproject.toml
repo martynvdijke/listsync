@@ -30,7 +30,7 @@ halo = ">=0.0.31"
 # pre-commit (.pre-commit-config.yaml). Bumping it is a deliberate, separate
 # change: a different ruff evaluates different rules, so the pinned version is
 # what makes "enabled" mean the same thing everywhere.
-ruff = "0.17.2"
+ruff = "0.17.3"
 
 # The FastAPI backend's own dependencies. Kept in a separate group so the
 # core-only image (`poetry install --only main`, see Dockerfile.core) does not

@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.14
+ARG PYTHON_VERSION=3.15
 FROM mcr.microsoft.com/devcontainers/python:${PYTHON_VERSION}
 
 USER root

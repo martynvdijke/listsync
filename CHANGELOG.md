@@ -1,3 +1,10 @@
+## [1.4.13](https://github.com/martynvdijke/listsync/compare/v1.4.12...v1.4.13) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** update dependency zod to v4 ([36aab5c](https://github.com/martynvdijke/listsync/commit/36aab5c437bef683820574b07fcccb9536d1f473))
+
 ## [1.4.12](https://github.com/martynvdijke/listsync/compare/v1.4.11...v1.4.12) (2026-10-30)
 
 ## [1.4.11](https://github.com/martynvdijke/listsync/compare/v1.4.10...v1.4.11) (2026-10-29)

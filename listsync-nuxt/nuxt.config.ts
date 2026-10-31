@@ -69,7 +69,6 @@ export default defineNuxtConfig({
     '@nuxtjs/tailwindcss',
     '@vueuse/nuxt',
     '@nuxtjs/color-mode',
-    '@vee-validate/nuxt',
   ],
 
   // Dev server configuration

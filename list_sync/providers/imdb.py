@@ -361,7 +361,8 @@ def fetch_imdb_list_via_http(url: str) -> list[dict[str, Any]] | None:
 
     state = _imdb_page_state(html)
     if state == "not_found":
-        raise ImdbListNotFoundError(f"IMDb list not found: {url}")
+        message = f"IMDb list not found: {url}"
+        raise ImdbListNotFoundError(message)
 
     items = _extract_titles_from_html(html)
     if state == "empty":
@@ -938,7 +939,8 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
         html = (sb.get_page_source() or "").encode("utf-8", "replace")
         state = _imdb_page_state(html)
         if state == "not_found":
-            raise ImdbListNotFoundError(f"IMDb list not found: {url}")
+            message = f"IMDb list not found: {url}"
+            raise ImdbListNotFoundError(message)
         if state == "empty":
             logging.info(f"IMDb list is empty: {url}")
             return []

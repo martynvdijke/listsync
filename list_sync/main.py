@@ -1735,7 +1735,9 @@ def run_sync(
                 logging.warning("No media items found in configured lists - all lists are empty")
                 console.info("\n⚠️  No media items found in configured lists - all lists are empty.")
                 final_status = "no_items"
-            sync_end_marker = f"========== SYNC COMPLETE [FULL] - Session: {session_id} - Status: {final_status.upper()} =========="
+            sync_end_marker = (
+                f"========== SYNC COMPLETE [FULL] - Session: {session_id} - Status: {final_status.upper()} =========="
+            )
             logging.info(sync_end_marker)
             try:
                 update_sync_lists_in_db(session_id=session_id, synced_lists=synced_lists)

@@ -294,10 +294,7 @@ def _imdb_page_state(html: bytes) -> str:
             return "empty" if total == 0 else "content"
 
     text = html.decode("utf-8", "replace").lower()
-    if (
-        "the requested url was not found on our server" in text
-        or "requested url was not found" in text
-    ):
+    if "the requested url was not found on our server" in text or "requested url was not found" in text:
         return "not_found"
     return "unknown"
 

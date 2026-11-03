@@ -1,3 +1,15 @@
+# [1.5.0](https://github.com/martynvdijke/listsync/compare/v1.4.15...v1.5.0) (2026-11-03)
+
+
+### Bug Fixes
+
+* satisfy ruff exception message rule ([b3eb43a](https://github.com/martynvdijke/listsync/commit/b3eb43a271bedbee81439b8f85254f29a0c5d6f9))
+
+
+### Features
+
+* add OIDC authentication and clarify IMDb list errors ([c0692c1](https://github.com/martynvdijke/listsync/commit/c0692c1b075d906a552d803948613feb2ae349cc))
+
 ## [1.4.15](https://github.com/martynvdijke/listsync/compare/v1.4.14...v1.4.15) (2026-11-03)
 
 ## [1.4.14](https://github.com/martynvdijke/listsync/compare/v1.4.13...v1.4.14) (2026-11-02)

@@ -46,10 +46,12 @@ const api = useApiService()
 const router = useRouter()
 const { showInfo } = useToast()
 
+const isPublicAuthRoute = (path: string) => path === '/login' || path.startsWith('/auth/')
+
 // Check setup status on mount (backup check in case middleware doesn't catch it)
 const checkSetup = async () => {
-  // Skip if already on setup page
-  if (router.currentRoute.value.path === '/setup') {
+  // Skip pages that must work before authentication or setup.
+  if (router.currentRoute.value.path === '/setup' || isPublicAuthRoute(router.currentRoute.value.path)) {
     return
   }
 

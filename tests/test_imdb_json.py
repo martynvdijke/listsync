@@ -34,7 +34,9 @@ logging.disable(logging.CRITICAL)
 
 from list_sync.providers import imdb
 from list_sync.providers.imdb import (
+    ImdbListNotFoundError,
     _extract_titles_from_html,
+    _imdb_page_state,
     _resolve_imdb_url,
     fetch_imdb_list_via_http,
 )
@@ -168,6 +170,41 @@ check("json without titles", _extract_titles_from_html(page({"a": {"b": [1, 2, 3
 # ids that merely look close are rejected
 check("rejects short ids", _extract_titles_from_html(page({"id": "tt123"})), [])
 check("rejects nm ids", _extract_titles_from_html(page({"id": "nm0000158"})), [])
+
+# --- empty vs missing lists -------------------------------------------------
+empty_list = {
+    "props": {
+        "pageProps": {
+            "mainColumnData": {
+                "list": {
+                    "id": "ls4112664986",
+                    "name": "Jellyfin",
+                    "items": {"total": 0},
+                    "titleListItemSearch": {"total": 0},
+                }
+            }
+        }
+    }
+}
+empty_html = page(empty_list)
+check("empty list state", _imdb_page_state(empty_html), "empty")
+check("empty list has no titles", _extract_titles_from_html(empty_html), [])
+
+missing_html = b"<html><body>The requested URL was not found on our server.</body></html>"
+check("missing list state", _imdb_page_state(missing_html), "not_found")
+check("unknown list state", _imdb_page_state(b"<html>no list metadata</html>"), "unknown")
+
+imdb._DIRECT_FETCH_BLOCKED_UNTIL = 0.0
+imdb._http_get = lambda url, timeout=30: empty_html
+check("empty direct fetch -> []", fetch_imdb_list_via_http("https://www.imdb.com/list/ls4112664986"), [])
+
+imdb._DIRECT_FETCH_BLOCKED_UNTIL = 0.0
+imdb._http_get = lambda url, timeout=30: missing_html
+try:
+    fetch_imdb_list_via_http("https://www.imdb.com/list/ls595015515")
+    check("missing direct fetch raises", "no raise", "ImdbListNotFoundError")
+except ImdbListNotFoundError:
+    check("missing direct fetch raises", "ImdbListNotFoundError", "ImdbListNotFoundError")
 
 # --- URL resolution ---------------------------------------------------------
 check("watchlist url", _resolve_imdb_url("ur171928620"), ("https://www.imdb.com/user/ur171928620/watchlist", False))

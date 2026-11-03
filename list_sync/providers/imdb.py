@@ -67,6 +67,10 @@ _DIRECT_FETCH_BACKOFF_SECONDS = 30 * 60
 _INTERSTITIAL_MAX_BYTES = 20_000
 
 
+class ImdbListNotFoundError(ValueError):
+    """Raised when IMDb explicitly reports that a list does not exist."""
+
+
 def _http_get(url: str, timeout: int = 30) -> bytes | None:
     """
     Fetch a URL with a browser-like User-Agent, returning None on any failure.
@@ -225,6 +229,79 @@ def _walk_for_titles(node: Any, found: dict[str, dict[str, Any]], depth: int = 0
         _walk_for_titles(child, found, depth + 1)
 
 
+def _embedded_json_blocks(html: bytes) -> list[Any]:
+    """Return every parseable JSON document embedded in an IMDb page."""
+    if not html:
+        return []
+
+    raw_blocks: list[bytes] = []
+    match = re.search(rb'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
+    if match:
+        raw_blocks.append(match.group(1))
+    raw_blocks.extend(
+        re.findall(rb'<script[^>]+type="application/(?:ld\+)?json"[^>]*>(.*?)</script>', html, re.DOTALL),
+    )
+    match = re.search(rb"IMDbReactInitialState[^=]*=\s*(\{.*?\});\s*</script>", html, re.DOTALL)
+    if match:
+        raw_blocks.append(match.group(1))
+
+    blocks: list[Any] = []
+    for block in raw_blocks:
+        try:
+            blocks.append(json.loads(block.decode("utf-8", "replace")))
+        except (ValueError, AttributeError):
+            continue
+    return blocks
+
+
+def _find_imdb_list_metadata(node: Any, depth: int = 0) -> dict[str, Any] | None:
+    """Find the list metadata object that says whether a list has items."""
+    if depth > 12:
+        return None
+    if isinstance(node, dict):
+        candidate = node.get("list")
+        if isinstance(candidate, dict):
+            items = candidate.get("items")
+            if isinstance(items, dict) and isinstance(items.get("total"), int):
+                return candidate
+        for value in node.values():
+            found = _find_imdb_list_metadata(value, depth + 1)
+            if found is not None:
+                return found
+    elif isinstance(node, list):
+        for value in node:
+            found = _find_imdb_list_metadata(value, depth + 1)
+            if found is not None:
+                return found
+    return None
+
+
+def _imdb_page_state(html: bytes) -> str:
+    """Classify an IMDb page as content, empty, missing, or unknown.
+
+    IMDb no longer renders a list container for an empty list, so the selector
+    based scraper sees the same page as a genuine rendering failure. The
+    embedded page state distinguishes the two cases without guessing from the
+    DOM.
+    """
+    if not html:
+        return "unknown"
+
+    for block in _embedded_json_blocks(html):
+        metadata = _find_imdb_list_metadata(block)
+        if metadata is not None:
+            total = metadata["items"]["total"]
+            return "empty" if total == 0 else "content"
+
+    text = html.decode("utf-8", "replace").lower()
+    if (
+        "the requested url was not found on our server" in text
+        or "requested url was not found" in text
+    ):
+        return "not_found"
+    return "unknown"
+
+
 def _extract_titles_from_html(html: bytes) -> list[dict[str, Any]]:
     """
     Pull every title out of the JSON IMDb embeds in a list page.
@@ -237,20 +314,7 @@ def _extract_titles_from_html(html: bytes) -> list[dict[str, Any]]:
 
     found: dict[str, dict[str, Any]] = {}
 
-    blocks = []
-    match = re.search(rb'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', html, re.DOTALL)
-    if match:
-        blocks.append(match.group(1))
-    blocks.extend(re.findall(rb'<script[^>]+type="application/(?:ld\+)?json"[^>]*>(.*?)</script>', html, re.DOTALL))
-    match = re.search(rb"IMDbReactInitialState[^=]*=\s*(\{.*?\});\s*</script>", html, re.DOTALL)
-    if match:
-        blocks.append(match.group(1))
-
-    for block in blocks:
-        try:
-            data = json.loads(block.decode("utf-8", "replace"))
-        except (ValueError, AttributeError):
-            continue
+    for data in _embedded_json_blocks(html):
         _walk_for_titles(data, found)
 
     if found:
@@ -295,7 +359,14 @@ def fetch_imdb_list_via_http(url: str) -> list[dict[str, Any]] | None:
         _DIRECT_FETCH_BLOCKED_UNTIL = now + _DIRECT_FETCH_BACKOFF_SECONDS
         return None
 
+    state = _imdb_page_state(html)
+    if state == "not_found":
+        raise ImdbListNotFoundError(f"IMDb list not found: {url}")
+
     items = _extract_titles_from_html(html)
+    if state == "empty":
+        logging.info(f"IMDb list is empty: {url}")
+        return []
     if not items:
         _DIRECT_FETCH_BLOCKED_UNTIL = now + _DIRECT_FETCH_BACKOFF_SECONDS
         return None
@@ -470,11 +541,13 @@ def fetch_imdb_list(list_id: str) -> list[dict[str, Any]]:
     # Anything less than a clean result falls through to Selenium below.
     try:
         direct_items = fetch_imdb_list_via_http(url)
+    except ImdbListNotFoundError:
+        raise
     except Exception as e:
         logging.warning(f"IMDb direct fetch raised, falling back to browser: {e}")
         direct_items = None
 
-    if direct_items:
+    if direct_items is not None:
         return direct_items
 
     logging.info("Falling back to browser-based IMDb scrape")
@@ -863,11 +936,19 @@ def _process_imdb_list(sb, url) -> list[dict[str, Any]]:
     # Fast path: lists also embed JSON-LD / __NEXT_DATA__; try it before selectors.
     try:
         html = (sb.get_page_source() or "").encode("utf-8", "replace")
+        state = _imdb_page_state(html)
+        if state == "not_found":
+            raise ImdbListNotFoundError(f"IMDb list not found: {url}")
+        if state == "empty":
+            logging.info(f"IMDb list is empty: {url}")
+            return []
         ld_items = _extract_titles_from_html(html)
         if ld_items:
             # For lists, require >0; log and return immediately.
             logging.info(f"IMDb list recovered {len(ld_items)} title(s) from embedded JSON - bypassing selectors")
             return ld_items
+    except ImdbListNotFoundError:
+        raise
     except Exception as e:
         logging.debug(f"JSON-LD fast path for list failed: {e}")
 

@@ -66,6 +66,46 @@
       </NuxtLink>
     </nav>
 
+    <!-- Signed-in user -->
+    <div v-if="authSession.authenticated && authSession.oidc_enabled" class="px-3 py-3 border-t border-purple-500/20">
+      <div v-if="!uiStore.sidebarCollapsed" :class="footerClasses">
+        <div class="flex items-center gap-2.5">
+          <div class="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-purple-500/20">
+            <UserRoundIcon :size="16" class="text-purple-300" />
+          </div>
+          <div class="min-w-0 flex-1">
+            <p class="truncate text-xs font-bold text-foreground">
+              {{ authSession.name || authSession.email }}
+            </p>
+            <p class="truncate text-[10px] font-medium text-muted-foreground">
+              {{ authSession.source === 'forward-auth' ? 'Signed in via Authelia' : 'Signed in with OIDC' }}
+            </p>
+          </div>
+          <button
+            type="button"
+            class="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground disabled:opacity-50"
+            :disabled="signingOut"
+            title="Sign out"
+            aria-label="Sign out"
+            @click="handleSignOut"
+          >
+            <LogOutIcon :size="15" />
+          </button>
+        </div>
+      </div>
+      <button
+        v-else
+        type="button"
+        class="mx-auto flex rounded-lg p-2 text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground disabled:opacity-50"
+        :disabled="signingOut"
+        title="Sign out"
+        aria-label="Sign out"
+        @click="handleSignOut"
+      >
+        <LogOutIcon :size="18" />
+      </button>
+    </div>
+
     <!-- Sync Status -->
     <div v-if="systemStore.health" class="px-3 py-3 border-t border-purple-500/20">
       <div :class="footerClasses">
@@ -111,6 +151,8 @@ import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   X as XIcon,
+  UserRound as UserRoundIcon,
+  LogOut as LogOutIcon,
 } from 'lucide-vue-next'
 import logoImage from '~/assets/images/list-sync-logo.webp'
 
@@ -118,8 +160,10 @@ const route = useRoute()
 const uiStore = useUIStore()
 const systemStore = useSystemStore()
 const syncStore = useSyncStore()
+const { session: authSession, loadAuth, signOut } = useAuth()
 
 const isMobile = ref(false)
+const signingOut = ref(false)
 
 const navigation = [
   {
@@ -291,6 +335,16 @@ const handleNavClick = () => {
   }
 }
 
+const handleSignOut = async () => {
+  if (signingOut.value) return
+  signingOut.value = true
+  try {
+    await signOut()
+  } finally {
+    signingOut.value = false
+  }
+}
+
 // Check if mobile on mount and resize
 const checkMobile = () => {
   if (process.client) {
@@ -305,6 +359,7 @@ onMounted(() => {
     
     // Fetch system health
     systemStore.checkHealth()
+    loadAuth()
   }
 })
 

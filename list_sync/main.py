@@ -31,6 +31,7 @@ from .database import (
 )
 from .notifications.gotify import send_to_gotify
 from .providers import SyncCancelledException, get_provider
+from .providers.imdb import ImdbListNotFoundError
 from .ui.cli import handle_menu_choice, manage_lists
 from .ui.display import (
     SyncResults,
@@ -392,6 +393,7 @@ def fetch_media_from_lists(
                         "url": list_url,
                         "item_count": len(media_items),
                         "user_id": list_user_id,
+                        "status": "ok",
                     }
                 )
             else:
@@ -399,7 +401,7 @@ def fetch_media_from_lists(
                 console.info(
                     color_gradient(f"⚠️   No items found in {list_type.upper()} list: {list_id}", "#ffaa00", "#ff5500")
                 )
-                logging.warning(f"No items found in {list_type.upper()} list: {list_id}")
+                logging.warning(f"{list_type.upper()} list {list_id} is empty")
 
                 # Still track the list even if no items found
                 synced_lists.append(
@@ -409,6 +411,7 @@ def fetch_media_from_lists(
                         "url": list_url,
                         "item_count": 0,
                         "user_id": list_user_id,
+                        "status": "empty",
                     }
                 )
         except SyncCancelledException:
@@ -432,6 +435,8 @@ def fetch_media_from_lists(
                     "url": list_url,
                     "item_count": 0,
                     "user_id": list_user_id,
+                    "status": "error",
+                    "error_type": "not_found" if isinstance(e, ImdbListNotFoundError) else "fetch_error",
                     "error": str(e),
                 }
             )
@@ -1719,13 +1724,24 @@ def run_sync(
         media_items, synced_lists = fetch_media_from_lists(list_ids)
 
         if not media_items:
-            logging.warning("No media items found in configured lists")
-            console.info("\n⚠️  No media items found in configured lists.")
-            # Log sync end marker for early exit
-            sync_end_marker = f"========== SYNC COMPLETE [FULL] - Session: {session_id} - Status: NO_ITEMS =========="
+            failed_lists = [lst for lst in synced_lists if lst.get("status") == "error"]
+            if failed_lists:
+                logging.warning(
+                    f"No media items found; {len(failed_lists)} of {len(synced_lists)} list(s) could not be read"
+                )
+                console.info("\n❌  No media items found - one or more lists could not be read.")
+                final_status = "failed"
+            else:
+                logging.warning("No media items found in configured lists - all lists are empty")
+                console.info("\n⚠️  No media items found in configured lists - all lists are empty.")
+                final_status = "no_items"
+            sync_end_marker = f"========== SYNC COMPLETE [FULL] - Session: {session_id} - Status: {final_status.upper()} =========="
             logging.info(sync_end_marker)
-            # Mark sync as ended in database
-            end_sync_in_db(session_id=session_id, status="no_items")
+            try:
+                update_sync_lists_in_db(session_id=session_id, synced_lists=synced_lists)
+            except Exception as e:
+                logging.warning(f"Failed to update sync lists in database: {e}")
+            end_sync_in_db(session_id=session_id, status=final_status)
             return
 
         # Update sync_history with list information for full syncs
@@ -1905,15 +1921,34 @@ def sync_single_list(
             media_items, synced_lists = fetch_media_from_lists(single_list_info, is_single_list=True)
 
             if not media_items:
+                list_info = synced_lists[0] if synced_lists else None
+                if list_info and list_info.get("status") == "error":
+                    error_type = list_info.get("error_type", "fetch_error")
+                    if error_type == "not_found":
+                        message = f"{list_type}:{list_id} was not found on the provider"
+                    else:
+                        message = f"Failed to fetch {list_type}:{list_id}: {list_info.get('error', 'unknown error')}"
+                    result = {
+                        "success": False,
+                        "message": message,
+                        "items_processed": 0,
+                        "items_requested": 0,
+                        "errors": 0,
+                        "list_info": list_info,
+                    }
+                    logging.error(f"Single list sync failed - {message}")
+                    end_sync_in_db(session_id=session_id, status="failed")
+                    return result
+
                 result = {
                     "success": True,
-                    "message": f"No items found in {list_type}:{list_id}",
+                    "message": f"No items found in {list_type}:{list_id} (the list is empty)",
                     "items_processed": 0,
                     "items_requested": 0,
                     "errors": 0,
-                    "list_info": synced_lists[0] if synced_lists else None,
+                    "list_info": list_info,
                 }
-                logging.info("Single list sync completed - no items found")
+                logging.info("Single list sync completed - the list is empty")
                 # Mark sync as ended in database
                 end_sync_in_db(session_id=session_id, status="no_items")
                 return result

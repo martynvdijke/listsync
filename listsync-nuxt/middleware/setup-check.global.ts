@@ -10,8 +10,8 @@
  */
 
 export default defineNuxtRouteMiddleware(async (to) => {
-  // Allow access to setup page itself
-  if (to.path === '/setup') {
+  // Allow access to setup page itself and unauthenticated auth pages.
+  if (to.path === '/setup' || to.path === '/login' || to.path.startsWith('/auth/')) {
     return
   }
 

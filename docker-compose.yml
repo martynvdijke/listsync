@@ -44,6 +44,20 @@ services:
       # Optional shared secret. Nuxt injects it server-side; the browser never sees it.
       - LISTS_SYNC_API_TOKEN=${LISTS_SYNC_API_TOKEN:-}
       - LISTS_SYNC_API_URL=http://127.0.0.1:4222
+
+      # Optional native OIDC login. Nginx Proxy Manager's Authelia
+      # forward-auth remains the external gate; these values enable login for
+      # direct/internal access and authorise the forward-auth identity.
+      - OIDC_ENABLED=${OIDC_ENABLED:-false}
+      - OIDC_ISSUER=${OIDC_ISSUER:-}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID:-}
+      - OIDC_CLIENT_SECRET=${OIDC_CLIENT_SECRET:-}
+      - OIDC_CLIENT_SECRET_FILE=${OIDC_CLIENT_SECRET_FILE:-}
+      - OIDC_REDIRECT_URI=${OIDC_REDIRECT_URI:-}
+      - OIDC_SCOPES=${OIDC_SCOPES:-openid email profile groups}
+      - OIDC_ALLOWED_EMAILS=${OIDC_ALLOWED_EMAILS:-}
+      - OIDC_SESSION_HOURS=${OIDC_SESSION_HOURS:-8}
+      - NUXT_SESSION_PASSWORD=${NUXT_SESSION_PASSWORD:-}
       
       # Docker-specific settings
       - RUNNING_IN_DOCKER=true

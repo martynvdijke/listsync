@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/martynvdijke/listsync/compare/v1.5.0...v1.6.0) (2026-11-04)
+
+
+### Features
+
+* add read-only Go backend slice ([c710762](https://github.com/martynvdijke/listsync/commit/c71076272845f5246f00077a00e2d44fb501ed0c))
+
 # [1.5.0](https://github.com/martynvdijke/listsync/compare/v1.4.15...v1.5.0) (2026-11-03)
 
 

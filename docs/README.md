@@ -41,6 +41,7 @@ open http://localhost:3222
 - **[Developer Reference](developer-reference.md)** - Provider API interface, Seerr client, database schema and extension points
 - **[How It Works](how-it-works.md)** - Detailed system workflow and internals
 - **[Advanced Usage](advanced-usage.md)** - Advanced usage patterns and tips
+- **[Go Backend Migration](go-backend-migration.md)** - Phased Python-to-Go backend plan and current status
 - **[Roadmap](roadmap.md)** - Project roadmap and planned features
 
 ## 🎯 User Journey Overview

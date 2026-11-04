@@ -53,6 +53,34 @@ jobs:
       - name: Run test suites
         run: python tests/run_all.py
 
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Check formatting
+        run: test -z "$(gofmt -l ./cmd ./internal)"
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./...
+
+      - name: Build
+        run: go build ./...
+
   # The check branch protection should require, rather than the matrix jobs
   # themselves. Those are named after the Python version they run, so every
   # version bump renames them and silently invalidates the required-check list:
@@ -65,7 +93,7 @@ jobs:
     # gates in here means a failing contract or Docker build cannot be merged
     # by automerge just because the Python matrix happened to pass - which is
     # how the nuxt 4 bump landed with an out-of-sync package-lock.json.
-    needs: [test, lint, openapi-contract]
+    needs: [test, lint, openapi-contract, go]
     # always(), so a failed, cancelled or skipped job still reports a result
     # here. A required check that is skipped never reports at all, which blocks
     # a pull request the same way a renamed one does.
@@ -79,9 +107,11 @@ jobs:
           echo "test matrix result: ${{ needs.test.result }}"
           echo "ruff result: ${{ needs.lint.result }}"
           echo "openapi contract result: ${{ needs['openapi-contract'].result }}"
+          echo "go result: ${{ needs.go.result }}"
           [ "${{ needs.test.result }}" = "success" ]
           [ "${{ needs.lint.result }}" = "success" ]
           [ "${{ needs['openapi-contract'].result }}" = "success" ]
+          [ "${{ needs.go.result }}" = "success" ]
 
   lint:
     name: Ruff

@@ -946,48 +946,39 @@ class TestListsAPI:
 
 #### Backend Tests
 ```bash
-# Run all tests
-pytest
+# Run all Python behavioral tests
+python tests/run_all.py
 
-# Run specific test file
-pytest tests/test_providers/test_imdb.py
+# Run a specific test file
+python tests/test_api.py
 
-# Run with coverage
-pytest --cov=list_sync --cov-report=html
+# Run only tests whose name contains "imdb"
+python tests/run_all.py imdb
 
-# Run with verbose output
-pytest -v
-
-# Run specific test
-pytest tests/test_providers/test_imdb.py::TestIMDbProvider::test_validate_list_id_chart
+# Run the Go backend tests
+cd backend && go test ./...
 ```
 
 #### Frontend Tests
+There is no frontend unit-test runner configured in this repository. Use the
+type checker and production build as the frontend verification step:
 ```bash
-# Run all tests
-npm test
-
-# Run with coverage
-npm run test:coverage
-
-# Run in watch mode
-npm run test:watch
-
-# Run specific test file
-npm test ListCard.test.ts
+cd listsync-nuxt
+npm run typecheck
+npm run build
 ```
 
-#### E2E Tests
+#### E2E / Integration Tests
+There is no browser E2E suite (Playwright/Cypress) in this repository. The Go
+backend has an HTTP integration test that runs the real store against a
+temporary SQLite database:
 ```bash
-# Run E2E tests
-npm run test:e2e
-
-# Run E2E tests in headed mode
-npm run test:e2e:headed
-
-# Run specific E2E test
-npm run test:e2e -- --grep "List Management"
+cd backend
+go test ./internal/api -run TestReadOnlyAPIWithSQLite -v
 ```
+
+The Python suites under `tests/` are behavioral/unit tests and do not drive a
+browser or reach the network.
 
 ## 📚 Documentation Standards
 

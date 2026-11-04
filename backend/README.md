@@ -83,7 +83,10 @@ go test ./...
 
 The store tests build a temporary SQLite database and exercise the same tables
 the Python service owns. The API tests use a fake store and a fake legacy
-server, so they do not need the real 29 MB database.
+server, so they do not need the real 29 MB database. The integration test in
+`internal/api/integration_test.go` opens a temporary SQLite schema through
+`store.Open` and calls the real HTTP handler, covering health, lists, encoded
+list URLs, setup status, bearer auth, CORS, and the Python fallback.
 
 ## Build the image
 

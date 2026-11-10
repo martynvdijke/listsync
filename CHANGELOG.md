@@ -1,3 +1,10 @@
+## [1.6.2](https://github.com/martynvdijke/listsync/compare/v1.6.1...v1.6.2) (2026-11-10)
+
+
+### Bug Fixes
+
+* **renovate:** disable platform automerge so Renovate merges green PRs itself ([996010b](https://github.com/martynvdijke/listsync/commit/996010b7feac64f70c3f3365d4c984d96ce5b9fd))
+
 ## [1.6.1](https://github.com/martynvdijke/listsync/compare/v1.6.0...v1.6.1) (2026-11-05)
 
 # [1.6.0](https://github.com/martynvdijke/listsync/compare/v1.5.0...v1.6.0) (2026-11-04)

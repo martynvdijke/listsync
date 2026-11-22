@@ -1,3 +1,10 @@
+## [1.6.8](https://github.com/martynvdijke/listsync/compare/v1.6.7...v1.6.8) (2026-11-22)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#49](https://github.com/martynvdijke/listsync/issues/49)) ([7946ddb](https://github.com/martynvdijke/listsync/commit/7946ddbdd3d4579d15e93ef6c016597d9bc0e8bb))
+
 ## [1.6.7](https://github.com/martynvdijke/listsync/compare/v1.6.6...v1.6.7) (2026-11-22)
 
 ## [1.6.6](https://github.com/martynvdijke/listsync/compare/v1.6.5...v1.6.6) (2026-11-15)
